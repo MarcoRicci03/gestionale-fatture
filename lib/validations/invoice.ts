@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseDateInput } from "@/lib/utils/date";
+import { MESI } from "@/lib/constants/mesi";
 
 export const invoiceSchema = z.object({
   id_Pagante: z.coerce.number().int().positive("Seleziona un pagante"),
@@ -26,7 +27,9 @@ export const invoiceSchema = z.object({
     .optional(),
   commento: z.string().optional(),
   n_fattura: z.coerce.number().int().positive("Numero fattura non valido"),
-  mese: z.string().min(1),
+  mesi: z
+    .array(z.enum(MESI))
+    .min(1, "Seleziona almeno un mese"),
   citta: z.string().min(1, "La città è obbligatoria"),
   cap: z.string().min(1, "Il CAP è obbligatorio"),
 });

@@ -6,12 +6,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getAnnualRevenue, getMonthlyRevenue } from "@/lib/data/invoices";
 
 export const metadata: Metadata = {
   title: "Dashboard",
 };
 
-export default function DashboardPage() {
+function formatCurrency(amount: number) {
+  return amount.toLocaleString("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  });
+}
+
+export default async function DashboardPage() {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const [annualRevenue, monthlyRevenue] = await Promise.all([
+    getAnnualRevenue(currentYear),
+    getMonthlyRevenue(currentYear, currentMonth),
+  ]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -26,7 +43,7 @@ export default function DashboardPage() {
             <CardDescription>Anno in corso</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-8 w-1/2 rounded bg-muted animate-pulse" />
+            <p className="text-2xl font-bold">{formatCurrency(annualRevenue)}</p>
           </CardContent>
         </Card>
 
@@ -36,17 +53,7 @@ export default function DashboardPage() {
             <CardDescription>Mese in corso</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-8 w-1/2 rounded bg-muted animate-pulse" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Ultime Fatture</CardTitle>
-            <CardDescription>Ultimi documenti emessi</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-8 w-2/3 rounded bg-muted animate-pulse" />
+            <p className="text-2xl font-bold">{formatCurrency(monthlyRevenue)}</p>
           </CardContent>
         </Card>
       </div>

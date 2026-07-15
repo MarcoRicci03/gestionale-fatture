@@ -19,12 +19,14 @@ import {
   updateInvoice,
   getNextInvoiceNumberForYear,
 } from "@/lib/actions/invoices";
+import { MESI, type Mese } from "@/lib/constants/mesi";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
-import type { Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
 type InvoiceFormProps = {
   invoice?: Pagamento & {
+    mesi: FatturaMese[];
     pagante?: Pagante | null;
     paziente?: Paziente | null;
   };
@@ -62,7 +64,9 @@ export function InvoiceForm({
       sedute: invoice?.sedute ?? "",
       commento: invoice?.commento ?? "",
       n_fattura: invoice?.n_fattura ?? nextInvoiceNumber,
-      mese: invoice?.mese ?? "",
+      mesi:
+        (invoice?.mesi.map((m) => m.mese as Mese) as Mese[]) ??
+        ([format(new Date(), "MMMM", { locale: it }).toUpperCase() as Mese]),
       citta: invoice?.citta ?? "",
       cap: invoice?.cap ?? "",
     },
@@ -83,14 +87,6 @@ export function InvoiceForm({
     setValue("citta", payer.citta);
     setValue("cap", payer.cap);
   }, [selectedPayerId, payers, setValue]);
-
-  useEffect(() => {
-    if (!selectedDate) return;
-    const date = new Date(selectedDate);
-    if (!isNaN(date.getTime())) {
-      setValue("mese", format(date, "MMMM", { locale: it }).toUpperCase());
-    }
-  }, [selectedDate, setValue]);
 
   useEffect(() => {
     if (invoice) return;
@@ -155,7 +151,28 @@ export function InvoiceForm({
         </div>
       </div>
 
-      <input type="hidden" {...register("mese")} />
+      <div className="space-y-2">
+        <Label>Mesi di riferimento</Label>
+        <div className="grid grid-cols-3 gap-3 rounded-lg border border-input p-3 sm:grid-cols-4">
+          {MESI.map((m) => (
+            <label
+              key={m}
+              className="flex items-center gap-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                value={m}
+                {...register("mesi")}
+                className="h-4 w-4 rounded border-input"
+              />
+              {m}
+            </label>
+          ))}
+        </div>
+        {errors.mesi && (
+          <p className="text-sm text-destructive">{errors.mesi.message}</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">

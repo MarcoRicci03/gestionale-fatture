@@ -1,17 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { format } from "date-fns";
-import { it } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 
 export type InvoiceActionState = { success: true } | { error: string };
-
-function deriveMonth(date: Date): string {
-  return format(date, "MMMM", { locale: it }).toUpperCase();
-}
 
 function yearRange(year: number) {
   return {
@@ -98,6 +92,7 @@ export async function createInvoice(
     sedute,
     commento,
     n_fattura,
+    mesi,
     citta,
     cap,
   } = parsed.data;
@@ -130,9 +125,11 @@ export async function createInvoice(
         sedute: sedute ?? null,
         commento: commento || null,
         n_fattura,
-        mese: deriveMonth(invoiceDate),
         citta,
         cap,
+        mesi: {
+          create: mesi.map((mese) => ({ mese })),
+        },
       },
     });
   } catch {
@@ -163,6 +160,7 @@ export async function updateInvoice(
     sedute,
     commento,
     n_fattura,
+    mesi,
     citta,
     cap,
   } = parsed.data;
@@ -195,9 +193,12 @@ export async function updateInvoice(
         sedute: sedute ?? null,
         commento: commento || null,
         n_fattura,
-        mese: deriveMonth(invoiceDate),
         citta,
         cap,
+        mesi: {
+          deleteMany: {},
+          create: mesi.map((mese) => ({ mese })),
+        },
       },
     });
   } catch {

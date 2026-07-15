@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgres"
 }
 
 model Utente {
@@ -61,25 +61,36 @@ model Paziente {
 }
 
 model Pagamento {
-  id            Int      @id @default(autoincrement())
+  id            Int           @id @default(autoincrement())
   id_Utente     Int
   id_Pagante    Int
   id_Paziente   Int
   prezzo_totale Float
-  mod_pag       String   // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
+  mod_pag       String         // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
   sedute        Int?
   commento      String?
   n_fattura     Int
   data          DateTime
-  mese          String   // Convertito da ENUM a String per SQLite
   citta         String
-  cap           String   @default("")
+  cap           String         @default("")
 
-  utente        Utente   @relation(fields: [id_Utente], references: [id])
-  pagante       Pagante  @relation(fields: [id_Pagante], references: [id])
-  paziente      Paziente @relation(fields: [id_Paziente], references: [id])
+  utente        Utente         @relation(fields: [id_Utente], references: [id])
+  pagante       Pagante        @relation(fields: [id_Pagante], references: [id])
+  paziente      Paziente       @relation(fields: [id_Paziente], references: [id])
+  mesi          FatturaMese[]
 
   @@map("pagamenti")
+}
+
+model FatturaMese {
+  id           Int       @id @default(autoincrement())
+  id_Pagamento Int
+  mese         String
+
+  pagamento    Pagamento @relation(fields: [id_Pagamento], references: [id], onDelete: Cascade)
+
+  @@unique([id_Pagamento, mese])
+  @@map("fattura_mesi")
 }
 
 model Seduta {

@@ -1,10 +1,11 @@
 import { renderToStream } from "@react-pdf/renderer";
 import { InvoicePDFDocument } from "@/components/invoices/invoice-pdf-document";
-import type { Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
 type InvoiceWithRelations = Pagamento & {
   pagante: Pagante;
   paziente: Paziente;
+  mesi: FatturaMese[];
 };
 
 export async function generateInvoicePdf(

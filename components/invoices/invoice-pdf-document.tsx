@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { formatDateDisplay } from "@/lib/utils/date";
-import type { Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
 const styles = StyleSheet.create({
   page: {
@@ -35,6 +35,7 @@ const styles = StyleSheet.create({
 type InvoiceWithRelations = Pagamento & {
   pagante: Pagante;
   paziente: Paziente;
+  mesi: FatturaMese[];
 };
 
 export function InvoicePDFDocument({
@@ -49,7 +50,10 @@ export function InvoicePDFDocument({
 
         <View style={styles.section}>
           <Text>Data: {formatDateDisplay(invoice.data)}</Text>
-          <Text>Mese di riferimento: {invoice.mese}</Text>
+          <Text>
+            Mesi di riferimento:{" "}
+            {invoice.mesi.map((m) => m.mese).join(", ")}
+          </Text>
         </View>
 
         <View style={styles.section}>

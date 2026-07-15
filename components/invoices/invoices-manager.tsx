@@ -24,13 +24,16 @@ import { InvoiceForm } from "./invoice-form";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateDisplay } from "@/lib/utils/date";
-import type { Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+
+type InvoiceWithRelations = Pagamento & {
+  mesi: FatturaMese[];
+  pagante: Pagante | null;
+  paziente: Paziente | null;
+};
 
 type InvoicesManagerProps = {
-  invoices: (Pagamento & {
-    pagante: Pagante | null;
-    paziente: Paziente | null;
-  })[];
+  invoices: InvoiceWithRelations[];
   payers: Pagante[];
   patients: (Paziente & { pagante: Pagante | null })[];
   nextInvoiceNumber: number;
@@ -43,18 +46,8 @@ export function InvoicesManager({
   nextInvoiceNumber,
 }: InvoicesManagerProps) {
   const [open, setOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<
-    (Pagamento & {
-      pagante: Pagante | null;
-      paziente: Paziente | null;
-    }) | null
-  >(null);
-  const [viewingInvoice, setViewingInvoice] = useState<
-    (Pagamento & {
-      pagante: Pagante | null;
-      paziente: Paziente | null;
-    }) | null
-  >(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<InvoiceWithRelations | null>(null);
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
   const [viewingPatient, setViewingPatient] = useState<
     (Paziente & { pagante: Pagante | null }) | null
@@ -65,22 +58,12 @@ export function InvoicesManager({
     setOpen(true);
   };
 
-  const handleOpenEdit = (
-    invoice: Pagamento & {
-      pagante: Pagante | null;
-      paziente: Paziente | null;
-    }
-  ) => {
+  const handleOpenEdit = (invoice: InvoiceWithRelations) => {
     setEditingInvoice(invoice);
     setOpen(true);
   };
 
-  const handleOpenView = (
-    invoice: Pagamento & {
-      pagante: Pagante | null;
-      paziente: Paziente | null;
-    }
-  ) => {
+  const handleOpenView = (invoice: InvoiceWithRelations) => {
     setViewingInvoice(invoice);
   };
 
@@ -226,8 +209,10 @@ export function InvoicesManager({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Mese</p>
-                  <p className="font-medium">{viewingInvoice.mese}</p>
+                  <p className="text-sm text-muted-foreground">Mesi</p>
+                  <p className="font-medium">
+                    {viewingInvoice.mesi.map((m) => m.mese).join(", ") || "—"}
+                  </p>
                 </div>
               </div>
 

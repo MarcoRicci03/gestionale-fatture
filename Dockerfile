@@ -6,8 +6,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Strumenti necessari per compilare moduli nativi (better-sqlite3)
-RUN apk add --no-cache python3 make g++ libstdc++ libc-dev
+# L'engine di Prisma richiede openssl su Alpine
+RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -15,7 +15,7 @@ RUN npm ci
 # Prisma: schema + config per generare il client
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-ENV DATABASE_URL="file:./build.db"
+# (Il generatore di Prisma non ha bisogno di un URL reale durante la build)
 RUN npx prisma generate
 
 # Copia sorgenti e builda Next.js in modalità standalone
@@ -31,16 +31,12 @@ RUN npm prune --omit=dev
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Libreria runtime necessaria ai moduli nativi compilati
-RUN apk add --no-cache libstdc++
+# Necessario per eseguire l'engine di Prisma al runtime
+RUN apk add --no-cache openssl
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-ENV DATABASE_URL="file:/app/data/dev.db"
-
-# Directory per il volume SQLite
-RUN mkdir -p /app/data
 
 # Copia l'applicazione standalone e le dipendenze di produzione
 COPY --from=builder /app/node_modules ./node_modules
@@ -49,6 +45,10 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 
+# Copia la cartella Prisma per eseguire le migrazioni in produzione
+COPY --from=builder /app/prisma ./prisma
+
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Esegue prima le migrazioni su Postgres, poi avvia Next.js
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]

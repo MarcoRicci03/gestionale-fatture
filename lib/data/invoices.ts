@@ -9,7 +9,7 @@ export async function getInvoices() {
       pagante: { eliminato: false },
       paziente: { eliminato: false },
     },
-    include: { pagante: true, paziente: true },
+    include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },
   });
 }
@@ -23,7 +23,7 @@ export async function getInvoiceById(id: number) {
       pagante: { eliminato: false },
       paziente: { eliminato: false },
     },
-    include: { pagante: true, paziente: true },
+    include: { pagante: true, paziente: true, mesi: true },
   });
 }
 
@@ -56,4 +56,52 @@ export async function getPayersAndPatients() {
     }),
   ]);
   return { payers, patients };
+}
+
+function yearRange(year: number) {
+  return {
+    gte: new Date(year, 0, 1),
+    lt: new Date(year + 1, 0, 1),
+  };
+}
+
+export async function getAnnualRevenue(year: number) {
+  const userId = await requireUserId();
+  const result = await prisma.pagamento.aggregate({
+    where: {
+      id_Utente: userId,
+      data: yearRange(year),
+    },
+    _sum: { prezzo_totale: true },
+  });
+  return result._sum.prezzo_totale ?? 0;
+}
+
+export async function getMonthlyRevenue(year: number, month: number) {
+  const userId = await requireUserId();
+  const result = await prisma.pagamento.aggregate({
+    where: {
+      id_Utente: userId,
+      data: {
+        gte: new Date(year, month - 1, 1),
+        lt: new Date(year, month, 1),
+      },
+    },
+    _sum: { prezzo_totale: true },
+  });
+  return result._sum.prezzo_totale ?? 0;
+}
+
+export async function getLatestInvoices(limit: number) {
+  const userId = await requireUserId();
+  return prisma.pagamento.findMany({
+    where: {
+      id_Utente: userId,
+      pagante: { eliminato: false },
+      paziente: { eliminato: false },
+    },
+    include: { pagante: true, paziente: true, mesi: true },
+    orderBy: { data: "desc" },
+    take: limit,
+  });
 }
