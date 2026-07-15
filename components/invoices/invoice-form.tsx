@@ -1,0 +1,315 @@
+"use client";
+
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { format } from "date-fns";
+import { it } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  invoiceSchema,
+  type InvoiceFormInput,
+  type InvoiceFormData,
+} from "@/lib/validations/invoice";
+import {
+  createInvoice,
+  updateInvoice,
+  getNextInvoiceNumberForYear,
+} from "@/lib/actions/invoices";
+import { formatDateInput, parseDateInput } from "@/lib/utils/date";
+import { cn } from "@/lib/utils";
+import type { Pagamento, Pagante, Paziente } from "@prisma/client";
+
+type InvoiceFormProps = {
+  invoice?: Pagamento & {
+    pagante?: Pagante | null;
+    paziente?: Paziente | null;
+  };
+  payers: Pagante[];
+  patients: (Paziente & { pagante?: Pagante | null })[];
+  nextInvoiceNumber: number;
+  onSuccess?: () => void;
+};
+
+export function InvoiceForm({
+  invoice,
+  payers,
+  patients,
+  nextInvoiceNumber,
+  onSuccess,
+}: InvoiceFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    setValue,
+    formState: { errors },
+  } = useForm<InvoiceFormInput, unknown, InvoiceFormData>({
+    resolver: zodResolver(invoiceSchema),
+    defaultValues: {
+      id_Pagante: invoice?.id_Pagante ?? "",
+      id_Paziente: invoice?.id_Paziente ?? "",
+      data: formatDateInput(invoice?.data) || formatDateInput(new Date()),
+      prezzo_totale: invoice?.prezzo_totale ?? "",
+      mod_pag: invoice?.mod_pag ?? "",
+      sedute: invoice?.sedute ?? "",
+      commento: invoice?.commento ?? "",
+      n_fattura: invoice?.n_fattura ?? nextInvoiceNumber,
+      mese: invoice?.mese ?? "",
+      citta: invoice?.citta ?? "",
+      cap: invoice?.cap ?? "",
+    },
+  });
+
+  const selectedPayerId = useWatch({ control, name: "id_Pagante" });
+  const selectedDate = useWatch({ control, name: "data" });
+
+  const filteredPatients = useMemo(() => {
+    if (!selectedPayerId) return patients;
+    return patients.filter((p) => p.id_Pagante === Number(selectedPayerId));
+  }, [selectedPayerId, patients]);
+
+  useEffect(() => {
+    if (!selectedPayerId) return;
+    const payer = payers.find((p) => p.id === Number(selectedPayerId));
+    if (!payer) return;
+    setValue("citta", payer.citta);
+    setValue("cap", payer.cap);
+  }, [selectedPayerId, payers, setValue]);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const date = new Date(selectedDate);
+    if (!isNaN(date.getTime())) {
+      setValue("mese", format(date, "MMMM", { locale: it }).toUpperCase());
+    }
+  }, [selectedDate, setValue]);
+
+  useEffect(() => {
+    if (invoice) return;
+    if (!selectedDate || typeof selectedDate !== "string") return;
+    const date = parseDateInput(selectedDate);
+    const year = date.getFullYear();
+    getNextInvoiceNumberForYear(year).then((nextNumber) => {
+      setValue("n_fattura", nextNumber);
+    });
+  }, [selectedDate, invoice, setValue]);
+
+  const onSubmit = (data: InvoiceFormData) => {
+    setServerError(null);
+    startTransition(async () => {
+      const result = invoice
+        ? await updateInvoice(invoice.id, data)
+        : await createInvoice(data);
+
+      if ("error" in result) {
+        setServerError(result.error);
+        return;
+      }
+
+      router.refresh();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push("/invoices");
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="n_fattura">N. Fattura</Label>
+          <Input
+            id="n_fattura"
+            type="number"
+            {...register("n_fattura")}
+            aria-invalid={!!errors.n_fattura}
+          />
+          {errors.n_fattura && (
+            <p className="text-sm text-destructive">
+              {errors.n_fattura.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="data">Data</Label>
+          <Input
+            id="data"
+            type="date"
+            {...register("data")}
+            aria-invalid={!!errors.data}
+          />
+          {errors.data && (
+            <p className="text-sm text-destructive">{errors.data.message}</p>
+          )}
+        </div>
+      </div>
+
+      <input type="hidden" {...register("mese")} />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="id_Pagante">Pagante</Label>
+          <select
+            id="id_Pagante"
+            {...register("id_Pagante")}
+            className={cn(
+              "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+              errors.id_Pagante && "border-destructive"
+            )}
+          >
+            <option value="">Seleziona pagante</option>
+            {payers.map((payer) => (
+              <option key={payer.id} value={payer.id}>
+                {payer.cognome} {payer.nome}
+              </option>
+            ))}
+          </select>
+          {errors.id_Pagante && (
+            <p className="text-sm text-destructive">
+              {errors.id_Pagante.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="id_Paziente">Paziente</Label>
+          <select
+            id="id_Paziente"
+            {...register("id_Paziente")}
+            className={cn(
+              "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+              errors.id_Paziente && "border-destructive"
+            )}
+          >
+            <option value="">Seleziona paziente</option>
+            {filteredPatients.map((patient) => (
+              <option key={patient.id} value={patient.id}>
+                {patient.cognome} {patient.nome}
+              </option>
+            ))}
+          </select>
+          {errors.id_Paziente && (
+            <p className="text-sm text-destructive">
+              {errors.id_Paziente.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="citta">Città</Label>
+          <Input
+            id="citta"
+            {...register("citta")}
+            aria-invalid={!!errors.citta}
+          />
+          {errors.citta && (
+            <p className="text-sm text-destructive">{errors.citta.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cap">CAP</Label>
+          <Input
+            id="cap"
+            {...register("cap")}
+            aria-invalid={!!errors.cap}
+          />
+          {errors.cap && (
+            <p className="text-sm text-destructive">{errors.cap.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="prezzo_totale">Importo totale (€)</Label>
+          <Input
+            id="prezzo_totale"
+            type="number"
+            step="0.01"
+            min="0.01"
+            {...register("prezzo_totale")}
+            aria-invalid={!!errors.prezzo_totale}
+          />
+          {errors.prezzo_totale && (
+            <p className="text-sm text-destructive">
+              {errors.prezzo_totale.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="mod_pag">Modalità di pagamento</Label>
+          <select
+            id="mod_pag"
+            {...register("mod_pag")}
+            className={cn(
+              "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+              errors.mod_pag && "border-destructive"
+            )}
+          >
+            <option value="">Seleziona</option>
+            <option value="CONTANTI">Contanti</option>
+            <option value="CARTA">Carta</option>
+            <option value="BONIFICO">Bonifico</option>
+          </select>
+          {errors.mod_pag && (
+            <p className="text-sm text-destructive">
+              {errors.mod_pag.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="sedute">N. sedute</Label>
+          <Input
+            id="sedute"
+            type="number"
+            min="0"
+            {...register("sedute")}
+            aria-invalid={!!errors.sedute}
+          />
+          {errors.sedute && (
+            <p className="text-sm text-destructive">
+              {errors.sedute.message}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="commento">Commento</Label>
+          <Input id="commento" {...register("commento")} />
+        </div>
+      </div>
+
+      {serverError && (
+        <p className="text-sm text-destructive" role="alert">
+          {serverError}
+        </p>
+      )}
+
+      <Button type="submit" disabled={isPending}>
+        {isPending
+          ? "Salvataggio..."
+          : invoice
+            ? "Aggiorna fattura"
+            : "Crea fattura"}
+      </Button>
+    </form>
+  );
+}
