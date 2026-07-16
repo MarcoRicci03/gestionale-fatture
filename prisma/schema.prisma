@@ -7,18 +7,25 @@ datasource db {
 }
 
 model Utente {
-  id            Int         @id @default(autoincrement())
-  username      String      @unique
-  passwordHash  String
-  nome          String?
-  cognome       String?
-  isAdmin       Boolean     @default(false)
-  abilitato     Boolean     @default(true)
-  createdAt     DateTime    @default(now())
+  id               Int         @id @default(autoincrement())
+  username         String      @unique
+  passwordHash     String
+  nome             String?
+  cognome          String?
+  pIva             String?
+  cf               String?
+  via              String?
+  citta            String?
+  provincia        String?
+  titolo           String?
+  specializzazione String?
+  isAdmin          Boolean     @default(false)
+  abilitato        Boolean     @default(true)
+  createdAt        DateTime    @default(now())
 
-  paganti       Pagante[]
-  pazienti      Paziente[]
-  pagamenti     Pagamento[]
+  paganti          Pagante[]
+  pazienti         Paziente[]
+  pagamenti        Pagamento[]
 
   @@map("utenti")
 }

@@ -23,7 +23,7 @@ export async function getInvoiceById(id: number) {
       pagante: { eliminato: false },
       paziente: { eliminato: false },
     },
-    include: { pagante: true, paziente: true, mesi: true },
+    include: { pagante: true, paziente: true, mesi: true, utente: true },
   });
 }
 

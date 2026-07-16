@@ -13,7 +13,7 @@ export async function GET(
   }
 
   const invoice = await getInvoiceById(invoiceId);
-  if (!invoice || !invoice.pagante || !invoice.paziente) {
+  if (!invoice || !invoice.pagante || !invoice.paziente || !invoice.utente) {
     return new Response("Fattura non trovata", { status: 404 });
   }
 

@@ -1,26 +1,23 @@
 import { z } from "zod";
 
-export const userCreateSchema = z.object({
+const userCommonSchema = {
   username: z
     .string()
     .min(3, "L'username deve avere almeno 3 caratteri")
     .max(50, "L'username deve avere al massimo 50 caratteri"),
   nome: z.string().optional(),
   cognome: z.string().optional(),
-  password: z.string().min(8, "La password deve avere almeno 8 caratteri"),
   isAdmin: z.boolean(),
   abilitato: z.boolean(),
+} as const;
+
+export const userCreateSchema = z.object({
+  ...userCommonSchema,
+  password: z.string().min(8, "La password deve avere almeno 8 caratteri"),
 });
 
 export const userUpdateSchema = z.object({
-  username: z
-    .string()
-    .min(3, "L'username deve avere almeno 3 caratteri")
-    .max(50, "L'username deve avere al massimo 50 caratteri"),
-  nome: z.string().optional(),
-  cognome: z.string().optional(),
-  isAdmin: z.boolean(),
-  abilitato: z.boolean(),
+  ...userCommonSchema,
 });
 
 export const resetPasswordSchema = z.object({

@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { formatDateDisplay } from "@/lib/utils/date";
-import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagamento, Pagante, Paziente, Utente } from "@prisma/client";
 
 const styles = StyleSheet.create({
   page: {
@@ -36,6 +36,7 @@ type InvoiceWithRelations = Pagamento & {
   pagante: Pagante;
   paziente: Paziente;
   mesi: FatturaMese[];
+  utente: Utente;
 };
 
 export function InvoicePDFDocument({
@@ -54,6 +55,27 @@ export function InvoicePDFDocument({
             Mesi di riferimento:{" "}
             {invoice.mesi.map((m) => m.mese).join(", ")}
           </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Mittente</Text>
+          <Text>
+            {invoice.utente.titolo ? `${invoice.utente.titolo} ` : ""}
+            {invoice.utente.nome} {invoice.utente.cognome}
+            {invoice.utente.specializzazione
+              ? ` – ${invoice.utente.specializzazione}`
+              : ""}
+          </Text>
+          {invoice.utente.via && <Text>{invoice.utente.via}</Text>}
+          {(invoice.utente.citta || invoice.utente.provincia) && (
+            <Text>
+              {invoice.utente.citta}
+              {invoice.utente.citta && invoice.utente.provincia ? " " : ""}
+              {invoice.utente.provincia && `(${invoice.utente.provincia})`}
+            </Text>
+          )}
+          {invoice.utente.cf && <Text>CF: {invoice.utente.cf}</Text>}
+          {invoice.utente.pIva && <Text>P.IVA: {invoice.utente.pIva}</Text>}
         </View>
 
         <View style={styles.section}>
