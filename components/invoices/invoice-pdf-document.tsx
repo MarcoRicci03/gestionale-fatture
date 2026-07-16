@@ -1,139 +1,137 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { formatDateDisplay } from "@/lib/utils/date";
-import type { FatturaMese, Pagamento, Pagante, Paziente, Utente } from "@prisma/client";
+import { resolvePlaceholders } from "@/lib/pdf/placeholders";
+import { parseInlineFormatting } from "@/lib/pdf/formatting";
+import type { PdfLayout, InvoiceWithRelations, TextAlign } from "@/lib/pdf/types";
 
-const styles = StyleSheet.create({
-  page: {
-    padding: 40,
-    fontSize: 12,
-    fontFamily: "Helvetica",
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 20,
-    fontFamily: "Helvetica-Bold",
-  },
-  section: {
-    marginBottom: 16,
-  },
-  label: {
-    fontFamily: "Helvetica-Bold",
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  total: {
-    marginTop: 20,
-    fontSize: 14,
-    fontFamily: "Helvetica-Bold",
-  },
-});
-
-type InvoiceWithRelations = Pagamento & {
-  pagante: Pagante;
-  paziente: Paziente;
-  mesi: FatturaMese[];
-  utente: Utente;
+type InvoicePDFDocumentProps = {
+  invoice: InvoiceWithRelations;
+  settings: PdfLayout;
 };
+
+function getFontFamily(
+  base: string,
+  { bold, italic }: { bold?: boolean; italic?: boolean }
+) {
+  const isBold = bold ?? false;
+  const isItalic = italic ?? false;
+
+  if (base === "Helvetica") {
+    if (isBold && isItalic) return "Helvetica-BoldOblique";
+    if (isBold) return "Helvetica-Bold";
+    if (isItalic) return "Helvetica-Oblique";
+    return "Helvetica";
+  }
+  if (base === "Times-Roman") {
+    if (isBold && isItalic) return "Times-BoldItalic";
+    if (isBold) return "Times-Bold";
+    if (isItalic) return "Times-Italic";
+    return "Times-Roman";
+  }
+  if (base === "Courier") {
+    if (isBold && isItalic) return "Courier-BoldOblique";
+    if (isBold) return "Courier-Bold";
+    if (isItalic) return "Courier-Oblique";
+    return "Courier";
+  }
+  if (isBold && isItalic) return `${base}-BoldItalic`;
+  if (isBold) return `${base}-Bold`;
+  if (isItalic) return `${base}-Italic`;
+  return base;
+}
+
+function alignToJustify(align: TextAlign): "flex-start" | "center" | "flex-end" {
+  if (align === "center") return "center";
+  if (align === "right") return "flex-end";
+  return "flex-start";
+}
 
 export function InvoicePDFDocument({
   invoice,
-}: {
-  invoice: InvoiceWithRelations;
-}) {
+  settings,
+}: InvoicePDFDocumentProps) {
+  const pageStyle = StyleSheet.create({
+    page: {
+      width: settings.pageWidth,
+      height: settings.pageHeight,
+      paddingTop: settings.marginTop,
+      paddingRight: settings.marginRight,
+      paddingBottom: settings.marginBottom,
+      paddingLeft: settings.marginLeft,
+      fontFamily: settings.fontFamily,
+      fontSize: settings.fontSizeBase,
+      position: "relative",
+    },
+  }).page;
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Fattura n. {invoice.n_fattura}</Text>
+      <Page size={[settings.pageWidth, settings.pageHeight]} style={pageStyle}>
+        {settings.blocchi
+          .filter((b) => b.visible)
+          .map((blocco) => {
+            const text = resolvePlaceholders(
+              (blocco.testo ?? "").replace(/\t/g, "    "),
+              invoice
+            );
 
-        <View style={styles.section}>
-          <Text>Data: {formatDateDisplay(invoice.data)}</Text>
-          <Text>
-            Mesi di riferimento:{" "}
-            {invoice.mesi.map((m) => m.mese).join(", ")}
-          </Text>
-        </View>
+            const textStyle = StyleSheet.create({
+              base: {
+                fontSize: blocco.fontSize,
+                fontFamily: getFontFamily(settings.fontFamily, {
+                  bold: blocco.fontWeight === "bold",
+                }),
+                color: blocco.color ?? "#000000",
+                whiteSpace: "pre-wrap",
+                wordWrap: "break-word",
+              },
+            }).base;
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Mittente</Text>
-          <Text>
-            {invoice.utente.titolo ? `${invoice.utente.titolo} ` : ""}
-            {invoice.utente.nome} {invoice.utente.cognome}
-            {invoice.utente.specializzazione
-              ? ` – ${invoice.utente.specializzazione}`
-              : ""}
-          </Text>
-          {invoice.utente.via && <Text>{invoice.utente.via}</Text>}
-          {(invoice.utente.citta || invoice.utente.provincia) && (
-            <Text>
-              {invoice.utente.citta}
-              {invoice.utente.citta && invoice.utente.provincia ? " " : ""}
-              {invoice.utente.provincia && `(${invoice.utente.provincia})`}
-            </Text>
-          )}
-          {invoice.utente.cf && <Text>CF: {invoice.utente.cf}</Text>}
-          {invoice.utente.pIva && <Text>P.IVA: {invoice.utente.pIva}</Text>}
-        </View>
+            const containerStyle = StyleSheet.create({
+              block: {
+                position: "absolute",
+                left: blocco.x,
+                top: blocco.y,
+                width: blocco.width,
+                height: blocco.height,
+                paddingTop: blocco.paddingTop ?? 0,
+                paddingRight: blocco.paddingRight ?? 0,
+                paddingBottom: blocco.paddingBottom ?? 0,
+                paddingLeft: blocco.paddingLeft ?? 0,
+              },
+            }).block;
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Intestatario fattura (Pagante)</Text>
-          <Text>
-            {invoice.pagante.cognome} {invoice.pagante.nome}
-          </Text>
-          <Text>{invoice.pagante.via}</Text>
-          <Text>
-            {invoice.pagante.cap} {invoice.pagante.citta}
-          </Text>
-          {invoice.pagante.cf && <Text>CF: {invoice.pagante.cf}</Text>}
-          {invoice.pagante.piva && <Text>P.IVA: {invoice.pagante.piva}</Text>}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Paziente</Text>
-          <Text>
-            {invoice.paziente.cognome} {invoice.paziente.nome}
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Dettagli pagamento</Text>
-          <View style={styles.row}>
-            <Text>Importo totale:</Text>
-            <Text>
-              {invoice.prezzo_totale.toLocaleString("it-IT", {
-                style: "currency",
-                currency: "EUR",
-              })}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text>Modalità:</Text>
-            <Text>{invoice.mod_pag}</Text>
-          </View>
-          {invoice.sedute != null && (
-            <View style={styles.row}>
-              <Text>N. sedute:</Text>
-              <Text>{invoice.sedute}</Text>
-            </View>
-          )}
-          {invoice.commento && (
-            <View style={styles.row}>
-              <Text>Note:</Text>
-              <Text>{invoice.commento}</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.total}>
-          Totale fattura:{" "}
-          {invoice.prezzo_totale.toLocaleString("it-IT", {
-            style: "currency",
-            currency: "EUR",
+            return (
+              <View key={blocco.id} style={containerStyle}>
+                {text.split("\n").map((line, lineIndex) => (
+                  <View
+                    key={lineIndex}
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      justifyContent: alignToJustify(blocco.align),
+                    }}
+                  >
+                    {parseInlineFormatting(line).map((segment, segIndex) => (
+                      <Text
+                        key={segIndex}
+                        style={{
+                          ...textStyle,
+                          fontFamily: getFontFamily(settings.fontFamily, {
+                            bold:
+                              blocco.fontWeight === "bold" || segment.bold,
+                            italic: segment.italic,
+                          }),
+                          color: segment.gray ? "#9ca3af" : textStyle.color,
+                        }}
+                      >
+                        {segment.text}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            );
           })}
-        </Text>
       </Page>
     </Document>
   );

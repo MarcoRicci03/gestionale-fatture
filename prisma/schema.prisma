@@ -7,8 +7,8 @@ datasource db {
 }
 
 model Utente {
-  id               Int         @id @default(autoincrement())
-  username         String      @unique
+  id               Int              @id @default(autoincrement())
+  username         String           @unique
   passwordHash     String
   nome             String?
   cognome          String?
@@ -16,16 +16,18 @@ model Utente {
   cf               String?
   via              String?
   citta            String?
+  cap              String?
   provincia        String?
   titolo           String?
   specializzazione String?
-  isAdmin          Boolean     @default(false)
-  abilitato        Boolean     @default(true)
-  createdAt        DateTime    @default(now())
+  isAdmin          Boolean          @default(false)
+  abilitato        Boolean          @default(true)
+  createdAt        DateTime         @default(now())
 
   paganti          Pagante[]
   pazienti         Paziente[]
   pagamenti        Pagamento[]
+  impostazioniPdf  ImpostazioniPdf?
 
   @@map("utenti")
 }
@@ -68,25 +70,46 @@ model Paziente {
 }
 
 model Pagamento {
-  id            Int           @id @default(autoincrement())
-  id_Utente     Int
-  id_Pagante    Int
-  id_Paziente   Int
-  prezzo_totale Float
-  mod_pag       String         // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
-  sedute        Int?
-  commento      String?
-  n_fattura     Int
-  data          DateTime
-  citta         String
-  cap           String         @default("")
+  id                  Int           @id @default(autoincrement())
+  id_Utente           Int
+  id_Pagante          Int
+  id_Paziente         Int
+  prezzo_totale       Float
+  mod_pag             String         // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
+  sedute              Int?
+  commento            String?
+  n_fattura           Int
+  data                DateTime
+  citta               String
+  cap                 String         @default("")
+  pdfLayoutSnapshot   Json?
 
-  utente        Utente         @relation(fields: [id_Utente], references: [id])
-  pagante       Pagante        @relation(fields: [id_Pagante], references: [id])
-  paziente      Paziente       @relation(fields: [id_Paziente], references: [id])
-  mesi          FatturaMese[]
+  utente              Utente         @relation(fields: [id_Utente], references: [id])
+  pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
+  paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
+  mesi                FatturaMese[]
 
   @@map("pagamenti")
+}
+
+model ImpostazioniPdf {
+  id           Int      @id @default(autoincrement())
+  id_Utente    Int      @unique
+  pageWidth    Int      @default(595)
+  pageHeight   Int      @default(842)
+  marginTop    Int      @default(40)
+  marginRight  Int      @default(40)
+  marginBottom Int      @default(40)
+  marginLeft   Int      @default(40)
+  fontFamily   String   @default("Helvetica")
+  fontSizeBase Int      @default(11)
+  blocchi      Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  utente       Utente   @relation(fields: [id_Utente], references: [id])
+
+  @@map("impostazioni_pdf")
 }
 
 model FatturaMese {

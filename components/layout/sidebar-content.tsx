@@ -9,6 +9,7 @@ import {
   FileText,
   Settings,
   UserCircle,
+  FileType,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,21 @@ export function SidebarContent({ session }: SidebarContentProps) {
       </nav>
 
       <div className="mt-4 space-y-3 border-t border-sidebar-border pt-4">
+        <Link
+          href="/settings/pdf"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            pathname === "/settings/pdf" || pathname.startsWith("/settings/")
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          )}
+        >
+          <FileType className="h-5 w-5 shrink-0" />
+          <div className="flex flex-col">
+            <span className="leading-none">Impostazioni PDF</span>
+          </div>
+        </Link>
+
         <Link
           href="/account"
           className={cn(

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { PlusCircle, Pencil, FileText, Eye } from "lucide-react";
+import { useState, useTransition } from "react";
+import { PlusCircle, Pencil, FileText, Eye, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,9 @@ import {
 import { InvoiceForm } from "./invoice-form";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay } from "@/lib/utils/date";
+import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
 type InvoiceWithRelations = Pagamento & {
@@ -52,6 +54,9 @@ export function InvoicesManager({
   const [viewingPatient, setViewingPatient] = useState<
     (Paziente & { pagante: Pagante | null }) | null
   >(null);
+  const [refreshInvoiceId, setRefreshInvoiceId] = useState<number | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const handleOpenNew = () => {
     setEditingInvoice(null);
@@ -134,6 +139,19 @@ export function InvoicesManager({
                         aria-label="Visualizza dettagli fattura"
                       >
                         <Eye className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="Aggiorna layout PDF">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setRefreshError(null);
+                          setRefreshInvoiceId(invoice.id);
+                        }}
+                        aria-label="Aggiorna layout PDF"
+                      >
+                        <RefreshCw className="h-4 w-4" />
                       </Button>
                     </Tooltip>
                     <Tooltip content="Scarica PDF">
@@ -302,6 +320,33 @@ export function InvoicesManager({
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={refreshInvoiceId !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setRefreshInvoiceId(null);
+        }}
+        title="Aggiorna layout PDF"
+        description="La fattura verrà renderizzata con il layout attuale. Sei sicuro?"
+        confirmLabel="Aggiorna"
+        isPending={isPending}
+        onConfirm={() => {
+          if (refreshInvoiceId == null) return;
+          startTransition(async () => {
+            const result = await refreshInvoicePdfLayout(refreshInvoiceId);
+            if (!result.success) {
+              setRefreshError(result.error);
+            }
+            setRefreshInvoiceId(null);
+          });
+        }}
+      />
+
+      {refreshError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {refreshError}
+        </p>
+      )}
 
       <Dialog
         open={!!viewingPayer}

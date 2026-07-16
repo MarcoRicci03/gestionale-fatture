@@ -21,6 +21,7 @@ export const profileUpdateSchema = z.object({
     .optional(),
   via: z.string().optional(),
   citta: z.string().optional(),
+  cap: z.string().optional(),
   provincia: z
     .union([
       z.string().regex(/^[A-Za-z]{2}$/, "Provincia non valida (sigla di 2 lettere)"),

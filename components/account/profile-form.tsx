@@ -37,6 +37,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
       cf: user.cf ?? "",
       via: user.via ?? "",
       citta: user.citta ?? "",
+      cap: user.cap ?? "",
       provincia: user.provincia ?? "",
       titolo: user.titolo ?? "",
       specializzazione: user.specializzazione ?? "",
@@ -111,10 +112,14 @@ export function ProfileForm({ user }: ProfileFormProps) {
         <Input id="via" {...register("via")} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="citta">Città</Label>
           <Input id="citta" {...register("citta")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cap">CAP</Label>
+          <Input id="cap" {...register("cap")} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="provincia">Provincia (sigla)</Label>
