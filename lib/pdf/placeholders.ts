@@ -19,6 +19,44 @@ function formatDate(date: Date): string {
   });
 }
 
+function meseToLabel(mese: string): string {
+  if (!mese) return "";
+  // Mese in maiuscolo (es. "GENNAIO") → "Gennaio"; altri formati restano invariati
+  if (mese === mese.toUpperCase() && mese !== mese.toLowerCase()) {
+    return mese.charAt(0) + mese.slice(1).toLowerCase();
+  }
+  return mese;
+}
+
+/**
+ * Espande i blocchi `{{#each fattura.mesi}}...{{/each}}`.
+ * Per ogni mese di `invoice.mesi` ripete il contenuto del blocco sostituendo:
+ *   {{this.mese}}           -> nome del mese (es. "GENNAIO", ma label non modificata)
+ *   {{this.meseLabel}}       -> nome del mese capitalizzato (es. "Gennaio")
+ *   {{this.prezzo}}          -> prezzo formattato valuta (es. "50,00 €")
+ *   {{this.prezzoNumero}}    -> prezzo come numero raw (es. "50")
+ * Le iterazioni sono joinate con `\n` così ogni riga resta sulla propria linea.
+ */
+function expandEachLoops(template: string, invoice: InvoiceWithRelations): string {
+  const eachRegex = /\{\{#each\s+(fattura\.mesi)\s*\}\}([\s\S]*?)\{\{\/each\}\}/g;
+  return template.replace(eachRegex, (_match, _collection: string, body: string) => {
+    const rendered = invoice.mesi.map((m) => {
+      const lineReplacements: Record<string, string> = {
+        "{{this.mese}}": m.mese,
+        "{{this.meseLabel}}": meseToLabel(m.mese),
+        "{{this.prezzo}}": formatCurrency(m.prezzo),
+        "{{this.prezzoNumero}}": String(m.prezzo),
+      };
+      return body.replace(/\{\{[^}]+\}\}/g, (token) =>
+        lineReplacements[token] ?? ""
+      );
+    });
+    return rendered
+      .map((r) => r.replace(/\n+$/, ""))
+      .join("\n");
+  });
+}
+
 export function resolvePlaceholders(
   template: string,
   invoice: InvoiceWithRelations
@@ -26,6 +64,9 @@ export function resolvePlaceholders(
   const u = invoice.utente;
   const p = invoice.pagante;
   const z = invoice.paziente;
+
+  // Prima espande i blocchi `#each` (multilinea) sui mesi
+  const expanded = expandEachLoops(template, invoice);
 
   const replacements: Record<string, string> = {
     // Mittente
@@ -100,12 +141,23 @@ export function resolvePlaceholders(
     "{{fattura.cap}}": invoice.cap,
     "{{fattura.mesi}}": invoice.mesi.map((m) => m.mese).join(", "),
 
+    // Dettaglio prezzi per mese
+    "{{fattura.mesiConPrezzo}}": invoice.mesi
+      .map((m) => `${meseToLabel(m.mese)}: ${formatCurrency(m.prezzo)}`)
+      .join(", "),
+    "{{fattura.dettaglioMesi}}": [
+      ...invoice.mesi.map(
+        (m) => `${meseToLabel(m.mese)}: ${formatCurrency(m.prezzo)}`
+      ),
+      `Totale: ${formatCurrency(invoice.prezzo_totale)}`,
+    ].join("\n"),
+
     // Mesi singoli (alias)
     "{{mese.nome}}": invoice.mesi.map((m) => m.mese).join(", "),
     "{{mese.anno}}": String(invoice.data.getFullYear()),
   };
 
-  return template.replace(/\{\{[^}]+\}\}/g, (match) => {
+  return expanded.replace(/\{\{[^}]+\}\}/g, (match) => {
     if (match in replacements) {
       return replacements[match];
     }
@@ -152,7 +204,10 @@ export function buildMockInvoice(
       cognome: "Rossi",
       eliminato: false,
     },
-    mesi: [{ id: 1, id_Pagamento: 1, mese: "Giugno 2026" }],
+    mesi: [
+      { id: 1, id_Pagamento: 1, mese: "GIUGNO", prezzo: 75 },
+      { id: 2, id_Pagamento: 1, mese: "LUGLIO", prezzo: 75 },
+    ],
     utente: {
       id: 1,
       username: "dottore",

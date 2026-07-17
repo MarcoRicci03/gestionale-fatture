@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -22,19 +22,45 @@ import {
 import { MESI, type Mese } from "@/lib/constants/mesi";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
-import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagante, Paziente } from "@prisma/client";
+
+type InvoiceWithRelations = {
+  id: number;
+  id_Utente: number;
+  id_Pagante: number;
+  id_Paziente: number;
+  prezzo_totale: number;
+  mod_pag: string;
+  sedute: number | null;
+  commento: string | null;
+  n_fattura: number;
+  data: Date;
+  citta: string;
+  cap: string;
+  pdfLayoutSnapshot: unknown;
+  mesi: FatturaMese[];
+  pagante?: Pagante | null;
+  paziente?: Paziente | null;
+};
 
 type InvoiceFormProps = {
-  invoice?: Pagamento & {
-    mesi: FatturaMese[];
-    pagante?: Pagante | null;
-    paziente?: Paziente | null;
-  };
+  invoice?: InvoiceWithRelations;
   payers: Pagante[];
   patients: (Paziente & { pagante?: Pagante | null })[];
   nextInvoiceNumber: number;
   onSuccess?: () => void;
 };
+
+function formatCurrency(amount: number): string {
+  return amount.toLocaleString("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  });
+}
+
+function meseToLabel(mese: Mese): string {
+  return mese.charAt(0) + mese.slice(1).toLowerCase();
+}
 
 export function InvoiceForm({
   invoice,
@@ -47,6 +73,7 @@ export function InvoiceForm({
   const [isPending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
+  const inv = invoice as InvoiceWithRelations | undefined;
   const {
     register,
     handleSubmit,
@@ -56,24 +83,47 @@ export function InvoiceForm({
   } = useForm<InvoiceFormInput, unknown, InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      id_Pagante: invoice?.id_Pagante ?? "",
-      id_Paziente: invoice?.id_Paziente ?? "",
-      data: formatDateInput(invoice?.data) || formatDateInput(new Date()),
-      prezzo_totale: invoice?.prezzo_totale ?? "",
-      mod_pag: invoice?.mod_pag ?? "",
-      sedute: invoice?.sedute ?? "",
-      commento: invoice?.commento ?? "",
-      n_fattura: invoice?.n_fattura ?? nextInvoiceNumber,
-      mesi:
-        (invoice?.mesi.map((m) => m.mese as Mese) as Mese[]) ??
-        ([format(new Date(), "MMMM", { locale: it }).toUpperCase() as Mese]),
-      citta: invoice?.citta ?? "",
-      cap: invoice?.cap ?? "",
+      id_Pagante: inv?.id_Pagante ?? "",
+      id_Paziente: inv?.id_Paziente ?? "",
+      data: formatDateInput(inv?.data) || formatDateInput(new Date()),
+      mod_pag: inv?.mod_pag ?? "",
+      sedute: inv?.sedute ?? "",
+      commento: inv?.commento ?? "",
+      n_fattura: inv?.n_fattura ?? nextInvoiceNumber,
+      mesi: inv
+        ? inv.mesi.map((m) => ({
+            mese: m.mese as Mese,
+            prezzo: String(m.prezzo),
+          }))
+        : [
+            {
+              mese: format(new Date(), "MMMM", { locale: it }).toUpperCase() as Mese,
+              prezzo: "",
+            },
+          ],
+      citta: inv?.citta ?? "",
+      cap: inv?.cap ?? "",
     },
+  });
+
+  const { fields, append, remove } = useFieldArray<InvoiceFormInput, "mesi">({
+    control,
+    name: "mesi",
   });
 
   const selectedPayerId = useWatch({ control, name: "id_Pagante" });
   const selectedDate = useWatch({ control, name: "data" });
+  const mesiValues = useWatch({ control, name: "mesi" }) ?? [];
+
+  const totale = useMemo(
+    () => mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0),
+    [mesiValues]
+  );
+
+  const mesiSelezionati = useMemo(
+    () => new Set(mesiValues.map((m) => m.mese)),
+    [mesiValues]
+  );
 
   const filteredPatients = useMemo(() => {
     if (!selectedPayerId) return patients;
@@ -97,6 +147,15 @@ export function InvoiceForm({
       setValue("n_fattura", nextNumber);
     });
   }, [selectedDate, invoice, setValue]);
+
+  const toggleMese = (mese: Mese, checked: boolean) => {
+    if (checked) {
+      append({ mese, prezzo: "" });
+    } else {
+      const index = fields.findIndex((f) => f.mese === mese);
+      if (index !== -1) remove(index);
+    }
+  };
 
   const onSubmit = (data: InvoiceFormData) => {
     setServerError(null);
@@ -154,24 +213,67 @@ export function InvoiceForm({
       <div className="space-y-2">
         <Label>Mesi di riferimento</Label>
         <div className="grid grid-cols-3 gap-3 rounded-lg border border-input p-3 sm:grid-cols-4">
-          {MESI.map((m) => (
-            <label
-              key={m}
-              className="flex items-center gap-2 text-sm"
-            >
-              <input
-                type="checkbox"
-                value={m}
-                {...register("mesi")}
-                className="h-4 w-4 rounded border-input"
-              />
-              {m}
-            </label>
-          ))}
+          {MESI.map((m) => {
+            const selezionato = mesiSelezionati.has(m);
+            return (
+              <label
+                key={m}
+                className="flex items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={selezionato}
+                  onChange={(e) => toggleMese(m, e.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                {meseToLabel(m)}
+              </label>
+            );
+          })}
         </div>
-        {errors.mesi && (
+        {errors.mesi && typeof errors.mesi.message === "string" && (
           <p className="text-sm text-destructive">{errors.mesi.message}</p>
         )}
+      </div>
+
+      {fields.length > 0 && (
+        <div className="space-y-2">
+          <Label>Importo per ogni mese (€)</Label>
+          <div className="space-y-2">
+            {fields.map((field, index) => (
+              <div key={field.id} className="flex items-center gap-3">
+                <input
+                  type="hidden"
+                  {...register(`mesi.${index}.mese` as const)}
+                  value={field.mese}
+                />
+                <span className="w-28 text-sm">{meseToLabel(field.mese)}</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  aria-label={`Importo per ${meseToLabel(field.mese)}`}
+                  {...register(`mesi.${index}.prezzo` as const)}
+                  className="max-w-32"
+                />
+                <span className="text-sm text-muted-foreground">€</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-input bg-muted/30 p-3">
+        <div className="flex items-center justify-between">
+          <Label>Totale fattura</Label>
+          <span className="text-lg font-semibold">
+            {formatCurrency(totale)}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Il totale è la somma degli importi dei singoli mesi.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -252,23 +354,6 @@ export function InvoiceForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="prezzo_totale">Importo totale (€)</Label>
-          <Input
-            id="prezzo_totale"
-            type="number"
-            step="0.01"
-            min="0.01"
-            {...register("prezzo_totale")}
-            aria-invalid={!!errors.prezzo_totale}
-          />
-          {errors.prezzo_totale && (
-            <p className="text-sm text-destructive">
-              {errors.prezzo_totale.message}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="mod_pag">Modalità di pagamento</Label>
           <select
             id="mod_pag"
@@ -289,9 +374,7 @@ export function InvoiceForm({
             </p>
           )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="sedute">N. sedute</Label>
           <Input
@@ -307,11 +390,11 @@ export function InvoiceForm({
             </p>
           )}
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="commento">Commento</Label>
-          <Input id="commento" {...register("commento")} />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="commento">Commento</Label>
+        <Input id="commento" {...register("commento")} />
       </div>
 
       {serverError && (

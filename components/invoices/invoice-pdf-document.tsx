@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { resolvePlaceholders } from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
-import type { PdfLayout, InvoiceWithRelations, TextAlign } from "@/lib/pdf/types";
+import type { PdfLayout, InvoiceWithRelations } from "@/lib/pdf/types";
 
 type InvoicePDFDocumentProps = {
   invoice: InvoiceWithRelations;
@@ -37,12 +37,6 @@ function getFontFamily(
   if (isBold) return `${base}-Bold`;
   if (isItalic) return `${base}-Italic`;
   return base;
-}
-
-function alignToJustify(align: TextAlign): "flex-start" | "center" | "flex-end" {
-  if (align === "center") return "center";
-  if (align === "right") return "flex-end";
-  return "flex-start";
 }
 
 export function InvoicePDFDocument({
@@ -81,6 +75,7 @@ export function InvoicePDFDocument({
                   bold: blocco.fontWeight === "bold",
                 }),
                 color: blocco.color ?? "#000000",
+                lineHeight: 1,
                 whiteSpace: "pre-wrap",
                 wordWrap: "break-word",
               },
@@ -102,33 +97,36 @@ export function InvoicePDFDocument({
 
             return (
               <View key={blocco.id} style={containerStyle}>
-                {text.split("\n").map((line, lineIndex) => (
-                  <View
-                    key={lineIndex}
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      justifyContent: alignToJustify(blocco.align),
-                    }}
-                  >
-                    {parseInlineFormatting(line).map((segment, segIndex) => (
-                      <Text
-                        key={segIndex}
-                        style={{
-                          ...textStyle,
-                          fontFamily: getFontFamily(settings.fontFamily, {
-                            bold:
-                              blocco.fontWeight === "bold" || segment.bold,
-                            italic: segment.italic,
-                          }),
-                          color: segment.gray ? "#9ca3af" : textStyle.color,
-                        }}
-                      >
-                        {segment.text}
-                      </Text>
-                    ))}
-                  </View>
-                ))}
+                <Text
+                  style={{
+                    ...textStyle,
+                    textAlign: blocco.align,
+                  }}
+                >
+                  {text.split("\n").flatMap((line, lineIndex) => {
+                    const segments = parseInlineFormatting(line);
+                    return [
+                      ...(lineIndex > 0 ? ["\n"] : []),
+                      ...segments.map((segment, segIndex) => (
+                        <Text
+                          key={`${lineIndex}-${segIndex}`}
+                          style={{
+                            fontFamily: getFontFamily(settings.fontFamily, {
+                              bold:
+                                blocco.fontWeight === "bold" || segment.bold,
+                              italic: segment.italic,
+                            }),
+                            color: segment.gray
+                              ? "#9ca3af"
+                              : textStyle.color,
+                          }}
+                        >
+                          {segment.text}
+                        </Text>
+                      )),
+                    ];
+                  })}
+                </Text>
               </View>
             );
           })}

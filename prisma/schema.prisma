@@ -116,6 +116,7 @@ model FatturaMese {
   id           Int       @id @default(autoincrement())
   id_Pagamento Int
   mese         String
+  prezzo       Float
 
   pagamento    Pagamento @relation(fields: [id_Pagamento], references: [id], onDelete: Cascade)
 

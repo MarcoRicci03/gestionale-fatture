@@ -12,9 +12,6 @@ export const invoiceSchema = z.object({
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida")
       .transform((val) => parseDateInput(val)),
   ]),
-  prezzo_totale: z.coerce
-    .number()
-    .positive("L'importo deve essere maggiore di 0"),
   mod_pag: z
     .string()
     .refine(
@@ -28,8 +25,23 @@ export const invoiceSchema = z.object({
   commento: z.string().optional(),
   n_fattura: z.coerce.number().int().positive("Numero fattura non valido"),
   mesi: z
-    .array(z.enum(MESI))
-    .min(1, "Seleziona almeno un mese"),
+    .array(
+      z.object({
+        mese: z.enum(MESI),
+        prezzo: z
+          .union([z.literal(""), z.string(), z.coerce.number().nonnegative()])
+          .transform((val) => {
+            if (val === "") return 0;
+            const n = typeof val === "number" ? val : Number(val);
+            return Number.isFinite(n) ? n : 0;
+          }),
+      })
+    )
+    .min(1, "Seleziona almeno un mese")
+    .refine(
+      (mesi) => mesi.reduce((somma, m) => somma + m.prezzo, 0) > 0,
+      "L'importo totale deve essere maggiore di 0"
+    ),
   citta: z.string().min(1, "La città è obbligatoria"),
   cap: z.string().min(1, "Il CAP è obbligatorio"),
 });

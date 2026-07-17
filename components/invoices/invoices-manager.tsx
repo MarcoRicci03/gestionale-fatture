@@ -231,6 +231,33 @@ export function InvoicesManager({
                   <p className="font-medium">
                     {viewingInvoice.mesi.map((m) => m.mese).join(", ") || "—"}
                   </p>
+                  {viewingInvoice.mesi.length > 0 && (
+                    <ul className="mt-1 space-y-0.5 text-sm">
+                      {viewingInvoice.mesi.map((m) => (
+                        <li
+                          key={m.id}
+                          className="flex justify-between gap-2"
+                        >
+                          <span className="text-muted-foreground">{m.mese}</span>
+                          <span>
+                            {m.prezzo.toLocaleString("it-IT", {
+                              style: "currency",
+                              currency: "EUR",
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                      <li className="mt-1 flex justify-between gap-2 border-t border-border pt-1 font-medium">
+                        <span>Totale</span>
+                        <span>
+                          {viewingInvoice.prezzo_totale.toLocaleString("it-IT", {
+                            style: "currency",
+                            currency: "EUR",
+                          })}
+                        </span>
+                      </li>
+                    </ul>
+                  )}
                 </div>
               </div>
 

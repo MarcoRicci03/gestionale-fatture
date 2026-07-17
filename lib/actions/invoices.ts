@@ -87,7 +87,6 @@ export async function createInvoice(
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
-    prezzo_totale,
     mod_pag,
     sedute,
     commento,
@@ -113,6 +112,8 @@ export async function createInvoice(
     };
   }
 
+  const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
+
   try {
     await prisma.pagamento.create({
       data: {
@@ -128,7 +129,7 @@ export async function createInvoice(
         citta,
         cap,
         mesi: {
-          create: mesi.map((mese) => ({ mese })),
+          create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
       },
     });
@@ -155,7 +156,6 @@ export async function updateInvoice(
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
-    prezzo_totale,
     mod_pag,
     sedute,
     commento,
@@ -181,6 +181,8 @@ export async function updateInvoice(
     };
   }
 
+  const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
+
   try {
     await prisma.pagamento.update({
       where: { id, id_Utente: userId },
@@ -197,7 +199,7 @@ export async function updateInvoice(
         cap,
         mesi: {
           deleteMany: {},
-          create: mesi.map((mese) => ({ mese })),
+          create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
       },
     });
