@@ -7,9 +7,18 @@ const tipoBloccoValues: TipoBlocco[] = [
   "paziente",
   "pagamento",
   "testo",
+  "mesi",
 ];
 
 const textAlignValues: TextAlign[] = ["left", "center", "right"];
+
+export const meseConfigSchema = z.object({
+  titolo: z.string().max(200).optional(),
+  descrizioneTemplate: z.string().max(300),
+  valoreTemplate: z.string().max(300),
+  mostraTotale: z.boolean(),
+  totaleLabel: z.string().max(100).optional(),
+});
 
 export const bloccoSchema = z.object({
   id: z.string().min(1),
@@ -22,6 +31,7 @@ export const bloccoSchema = z.object({
   align: z.enum(textAlignValues as [TextAlign, ...TextAlign[]]),
   visible: z.boolean(),
   testo: z.string().optional(),
+  meseConfig: meseConfigSchema.optional(),
   paddingTop: z.number().int().min(0).max(100).optional(),
   paddingRight: z.number().int().min(0).max(100).optional(),
   paddingBottom: z.number().int().min(0).max(100).optional(),

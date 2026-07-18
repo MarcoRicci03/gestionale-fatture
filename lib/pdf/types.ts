@@ -5,9 +5,19 @@ export type TipoBlocco =
   | "intestatario"
   | "paziente"
   | "pagamento"
-  | "testo";
+  | "testo"
+  | "mesi";
 
 export type TextAlign = "left" | "center" | "right";
+
+/** Solo per tipo 'mesi': una riga per mese, con descrizione a sinistra e valore allineato a destra */
+export type MeseConfig = {
+  titolo?: string;
+  descrizioneTemplate: string;
+  valoreTemplate: string;
+  mostraTotale: boolean;
+  totaleLabel?: string;
+};
 
 export type Blocco = {
   id: string;
@@ -21,6 +31,8 @@ export type Blocco = {
   visible: boolean;
   /** Solo per tipo 'testo': contenuto con placeholder {{...}} */
   testo?: string;
+  /** Solo per tipo 'mesi': configurazione riga descrizione/valore per mese */
+  meseConfig?: MeseConfig;
   /** Padding interno opzionale in pt */
   paddingTop?: number;
   paddingRight?: number;
@@ -71,7 +83,20 @@ export function isTipoBlocco(value: unknown): value is TipoBlocco {
     value === "intestatario" ||
     value === "paziente" ||
     value === "pagamento" ||
-    value === "testo"
+    value === "testo" ||
+    value === "mesi"
+  );
+}
+
+export function isMeseConfig(value: unknown): value is MeseConfig {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.titolo === undefined || typeof v.titolo === "string") &&
+    typeof v.descrizioneTemplate === "string" &&
+    typeof v.valoreTemplate === "string" &&
+    typeof v.mostraTotale === "boolean" &&
+    (v.totaleLabel === undefined || typeof v.totaleLabel === "string")
   );
 }
 
@@ -90,6 +115,7 @@ export function isBlocco(value: unknown): value is Blocco {
     isTextAlign(v.align) &&
     typeof v.visible === "boolean" &&
     (v.testo === undefined || typeof v.testo === "string") &&
+    (v.meseConfig === undefined || isMeseConfig(v.meseConfig)) &&
     (v.color === undefined || typeof v.color === "string") &&
     (v.fontWeight === undefined ||
       v.fontWeight === "normal" ||

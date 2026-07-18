@@ -89,7 +89,7 @@ export const LAYOUT_DEFAULT: PdfLayout = {
     },
     {
       id: "dettaglio-mesi",
-      tipo: "testo",
+      tipo: "mesi",
       x: 40,
       y: 470,
       width: 515,
@@ -97,7 +97,13 @@ export const LAYOUT_DEFAULT: PdfLayout = {
       fontSize: 12,
       align: "left",
       visible: true,
-      testo: "Dettaglio mesi\n{{#each fattura.mesi}}{{this.meseLabel}}:    {{this.prezzo}}{{/each}}\nTotale:    {{fattura.prezzoTotale}}",
+      meseConfig: {
+        titolo: "Dettaglio mesi",
+        descrizioneTemplate: "{{riga.meseLabel}}",
+        valoreTemplate: "{{riga.prezzo}}",
+        mostraTotale: true,
+        totaleLabel: "Totale",
+      },
     },
     {
       id: "totale",

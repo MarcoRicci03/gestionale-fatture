@@ -1,4 +1,4 @@
-import type { InvoiceWithRelations } from "./types";
+import type { InvoiceWithRelations, MeseConfig } from "./types";
 
 export type PlaceholderContext = {
   invoice: InvoiceWithRelations;
@@ -57,16 +57,25 @@ function expandEachLoops(template: string, invoice: InvoiceWithRelations): strin
   });
 }
 
-export function resolvePlaceholders(
+function applyReplacements(
   template: string,
-  invoice: InvoiceWithRelations
+  replacements: Record<string, string>
 ): string {
+  return template.replace(/\{\{[^}]+\}\}/g, (match) => {
+    if (match in replacements) {
+      return replacements[match];
+    }
+    // Placeholder sconosciuto → rimosso per evitare token visibili
+    return "";
+  });
+}
+
+export function buildReplacements(
+  invoice: InvoiceWithRelations
+): Record<string, string> {
   const u = invoice.utente;
   const p = invoice.pagante;
   const z = invoice.paziente;
-
-  // Prima espande i blocchi `#each` (multilinea) sui mesi
-  const expanded = expandEachLoops(template, invoice);
 
   const replacements: Record<string, string> = {
     // Mittente
@@ -157,13 +166,52 @@ export function resolvePlaceholders(
     "{{mese.anno}}": String(invoice.data.getFullYear()),
   };
 
-  return expanded.replace(/\{\{[^}]+\}\}/g, (match) => {
-    if (match in replacements) {
-      return replacements[match];
-    }
-    // Placeholder sconosciuto → rimosso per evitare token visibili
-    return "";
+  return replacements;
+}
+
+export function resolvePlaceholders(
+  template: string,
+  invoice: InvoiceWithRelations
+): string {
+  // Prima espande i blocchi `#each` (multilinea) sui mesi
+  const expanded = expandEachLoops(template, invoice);
+  return applyReplacements(expanded, buildReplacements(invoice));
+}
+
+/**
+ * Genera le righe del blocco `tipo: "mesi"`: per ogni mese di `invoice.mesi`
+ * risolve `descrizioneTemplate`/`valoreTemplate` con i placeholder standard
+ * più i token di riga `{{riga.mese}}`, `{{riga.meseLabel}}`, `{{riga.prezzo}}`,
+ * `{{riga.prezzoNumero}}`. Aggiunge una riga totale finale se richiesto.
+ */
+export function renderMesiRows(
+  config: MeseConfig,
+  invoice: InvoiceWithRelations
+): { descrizione: string; valore: string }[] {
+  const base = buildReplacements(invoice);
+
+  const rows = invoice.mesi.map((m) => {
+    const rowReplacements: Record<string, string> = {
+      ...base,
+      "{{riga.mese}}": m.mese,
+      "{{riga.meseLabel}}": meseToLabel(m.mese),
+      "{{riga.prezzo}}": formatCurrency(m.prezzo),
+      "{{riga.prezzoNumero}}": String(m.prezzo),
+    };
+    return {
+      descrizione: applyReplacements(config.descrizioneTemplate, rowReplacements),
+      valore: applyReplacements(config.valoreTemplate, rowReplacements),
+    };
   });
+
+  if (config.mostraTotale) {
+    rows.push({
+      descrizione: config.totaleLabel ?? "Totale",
+      valore: applyReplacements("{{fattura.prezzoTotale}}", base),
+    });
+  }
+
+  return rows;
 }
 
 export function buildMockInvoice(

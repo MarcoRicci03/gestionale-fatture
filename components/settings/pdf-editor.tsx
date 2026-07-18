@@ -13,6 +13,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bold,
+  CalendarDays,
   Copy,
   Eye,
   EyeOff,
@@ -47,11 +48,17 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { updatePdfSettings } from "@/lib/actions/settings";
 import { LAYOUT_DEFAULT, DEFAULT_BLOCCO } from "@/lib/pdf/layout-default";
-import { buildMockInvoice, resolvePlaceholders } from "@/lib/pdf/placeholders";
+import {
+  buildMockInvoice,
+  resolvePlaceholders,
+  renderMesiRows,
+} from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
+import { PdfEditorMesiPanel } from "@/components/settings/pdf-editor-mesi-panel";
 import type {
   Blocco,
   ImpostazioniPdf,
+  MeseConfig,
   PdfSettingsInput,
   TipoBlocco,
 } from "@/lib/pdf/types";
@@ -68,9 +75,17 @@ const SNAP_THRESHOLD = 8;
 type GuideLines = { x?: number; y?: number };
 type DraggingState = { id: string; x: number; y: number };
 
+const DEFAULT_MESE_CONFIG: MeseConfig = {
+  titolo: "Dettaglio mesi",
+  descrizioneTemplate: "{{riga.meseLabel}}",
+  valoreTemplate: "{{riga.prezzo}}",
+  mostraTotale: true,
+  totaleLabel: "Totale",
+};
+
 const PRESETS: Record<
   TipoBlocco,
-  { label: string; icon: React.ElementType; defaultText: string }
+  { label: string; icon: React.ElementType; defaultText?: string }
 > = {
   mittente: {
     label: "Mittente",
@@ -100,9 +115,13 @@ const PRESETS: Record<
     icon: Type,
     defaultText: "Testo libero",
   },
+  mesi: {
+    label: "Mesi/Voci",
+    icon: CalendarDays,
+  },
 };
 
-const PLACEHOLDER_GROUPS: {
+export const PLACEHOLDER_GROUPS: {
   label: string;
   items: { label: string; value: string }[];
 }[] = [
@@ -363,7 +382,9 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
         fontSize: DEFAULT_BLOCCO.fontSize,
         align: DEFAULT_BLOCCO.align,
         visible: true,
-        testo: preset.defaultText,
+        ...(tipo === "mesi"
+          ? { meseConfig: { ...DEFAULT_MESE_CONFIG } }
+          : { testo: preset.defaultText }),
       };
       return { ...prev, blocchi: [...prev.blocchi, newBlock] };
     });
@@ -1049,76 +1070,90 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Label htmlFor="testo">Contenuto</Label>
-                <div className="flex flex-wrap gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => wrapText("<b>", "</b>")}
-                    title="Grassetto"
-                  >
-                    <Bold className="mr-1 h-3.5 w-3.5" />
-                    Grassetto
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => wrapText("<i>", "</i>")}
-                    title="Corsivo"
-                  >
-                    <Italic className="mr-1 h-3.5 w-3.5" />
-                    Corsivo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => wrapText("<note>", "</note>")}
-                    title="Nota grigia"
-                  >
-                    Nota
-                  </Button>
-                </div>
-                <Textarea
-                  ref={testoRef}
-                  id="testo"
-                  rows={5}
-                  value={selectedBlock.testo ?? ""}
-                  onChange={(e) =>
-                    updateBlock(selectedBlock.id, { testo: e.target.value })
+              {selectedBlock.tipo === "mesi" ? (
+                <PdfEditorMesiPanel
+                  meseConfig={selectedBlock.meseConfig ?? DEFAULT_MESE_CONFIG}
+                  onChange={(patch) =>
+                    updateBlock(selectedBlock.id, {
+                      meseConfig: {
+                        ...(selectedBlock.meseConfig ?? DEFAULT_MESE_CONFIG),
+                        ...patch,
+                      },
+                    })
                   }
                 />
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    Inserisci valore dinamico
-                  </p>
+              ) : (
+                <div className="space-y-3">
+                  <Label htmlFor="testo">Contenuto</Label>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => wrapText("<b>", "</b>")}
+                      title="Grassetto"
+                    >
+                      <Bold className="mr-1 h-3.5 w-3.5" />
+                      Grassetto
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => wrapText("<i>", "</i>")}
+                      title="Corsivo"
+                    >
+                      <Italic className="mr-1 h-3.5 w-3.5" />
+                      Corsivo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => wrapText("<note>", "</note>")}
+                      title="Nota grigia"
+                    >
+                      Nota
+                    </Button>
+                  </div>
+                  <Textarea
+                    ref={testoRef}
+                    id="testo"
+                    rows={5}
+                    value={selectedBlock.testo ?? ""}
+                    onChange={(e) =>
+                      updateBlock(selectedBlock.id, { testo: e.target.value })
+                    }
+                  />
                   <div className="space-y-2">
-                    {PLACEHOLDER_GROUPS.map((group) => (
-                      <div key={group.label}>
-                        <p className="text-[10px] uppercase text-muted-foreground">
-                          {group.label}
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {group.items.map((item) => (
-                            <Button
-                              key={item.value}
-                              variant="secondary"
-                              size="sm"
-                              className="h-6 text-xs"
-                              onClick={() => insertPlaceholder(item.value)}
-                            >
-                              {item.label}
-                            </Button>
-                          ))}
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Inserisci valore dinamico
+                    </p>
+                    <div className="space-y-2">
+                      {PLACEHOLDER_GROUPS.map((group) => (
+                        <div key={group.label}>
+                          <p className="text-[10px] uppercase text-muted-foreground">
+                            {group.label}
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {group.items.map((item) => (
+                              <Button
+                                key={item.value}
+                                variant="secondary"
+                                size="sm"
+                                className="h-6 text-xs"
+                                onClick={() => insertPlaceholder(item.value)}
+                              >
+                                {item.label}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -1244,6 +1279,21 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   );
 }
 
+function renderFormattedSegments(text: string, keyPrefix: string) {
+  return parseInlineFormatting(text).map((segment, idx) => (
+    <span
+      key={`${keyPrefix}-${idx}`}
+      style={{
+        fontWeight: segment.bold ? 700 : undefined,
+        fontStyle: segment.italic ? "italic" : undefined,
+        color: segment.gray ? "#9ca3af" : undefined,
+      }}
+    >
+      {segment.text}
+    </span>
+  ));
+}
+
 function Block({
   blocco,
   isSelected,
@@ -1273,6 +1323,10 @@ function Block({
   const displayText = isPreview
     ? resolvePlaceholders(blocco.testo ?? "", mockInvoice)
     : blocco.testo ?? "";
+  const mesiRows = useMemo(() => {
+    if (blocco.tipo !== "mesi" || !blocco.meseConfig) return null;
+    return renderMesiRows(blocco.meseConfig, mockInvoice);
+  }, [blocco.tipo, blocco.meseConfig, mockInvoice]);
 
   const position = useMemo(
     () => dragPosition ?? { x: blocco.x, y: blocco.y },
@@ -1388,18 +1442,24 @@ function Block({
         paddingLeft: blocco.paddingLeft ?? 0,
       }}
     >
-      {parseInlineFormatting(displayText).map((segment, idx) => (
-        <span
-          key={idx}
-          style={{
-            fontWeight: segment.bold ? 700 : undefined,
-            fontStyle: segment.italic ? "italic" : undefined,
-            color: segment.gray ? "#9ca3af" : undefined,
-          }}
-        >
-          {segment.text}
-        </span>
-      ))}
+      {mesiRows ? (
+        <div className="w-full">
+          {blocco.meseConfig?.titolo && (
+            <div style={{ fontWeight: 700 }}>{blocco.meseConfig.titolo}</div>
+          )}
+          {mesiRows.map((row, idx) => (
+            <div
+              key={idx}
+              style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
+            >
+              <span>{renderFormattedSegments(row.descrizione, `d-${idx}`)}</span>
+              <span>{renderFormattedSegments(row.valore, `v-${idx}`)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        renderFormattedSegments(displayText, "seg")
+      )}
       {!isPreview && blocco.tipo !== "testo" && (
         <span className="pointer-events-none absolute right-1 top-1 rounded bg-muted px-1 text-[10px] text-muted-foreground">
           {PRESETS[blocco.tipo].label}

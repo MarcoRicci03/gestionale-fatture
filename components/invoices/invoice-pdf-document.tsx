@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { resolvePlaceholders } from "@/lib/pdf/placeholders";
+import { resolvePlaceholders, renderMesiRows } from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
 import type { PdfLayout, InvoiceWithRelations } from "@/lib/pdf/types";
 
@@ -39,6 +39,29 @@ function getFontFamily(
   return base;
 }
 
+function renderTextSegments(
+  text: string,
+  keyPrefix: string,
+  fontFamilyBase: string,
+  bold: boolean,
+  color: string
+) {
+  return parseInlineFormatting(text).map((segment, segIndex) => (
+    <Text
+      key={`${keyPrefix}-${segIndex}`}
+      style={{
+        fontFamily: getFontFamily(fontFamilyBase, {
+          bold: bold || segment.bold,
+          italic: segment.italic,
+        }),
+        color: segment.gray ? "#9ca3af" : color,
+      }}
+    >
+      {segment.text}
+    </Text>
+  ));
+}
+
 export function InvoicePDFDocument({
   invoice,
   settings,
@@ -63,11 +86,6 @@ export function InvoicePDFDocument({
         {settings.blocchi
           .filter((b) => b.visible)
           .map((blocco) => {
-            const text = resolvePlaceholders(
-              (blocco.testo ?? "").replace(/\t/g, "    "),
-              invoice
-            );
-
             const textStyle = StyleSheet.create({
               base: {
                 fontSize: blocco.fontSize,
@@ -95,6 +113,59 @@ export function InvoicePDFDocument({
               },
             }).block;
 
+            if (blocco.tipo === "mesi" && blocco.meseConfig) {
+              const rows = renderMesiRows(blocco.meseConfig, invoice);
+              return (
+                <View key={blocco.id} style={containerStyle}>
+                  {blocco.meseConfig.titolo && (
+                    <Text
+                      style={{
+                        ...textStyle,
+                        fontFamily: getFontFamily(settings.fontFamily, {
+                          bold: true,
+                        }),
+                      }}
+                    >
+                      {blocco.meseConfig.titolo}
+                    </Text>
+                  )}
+                  {rows.map((row, rowIndex) => (
+                    <View
+                      key={rowIndex}
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text style={textStyle}>
+                        {renderTextSegments(
+                          row.descrizione,
+                          `d-${rowIndex}`,
+                          settings.fontFamily,
+                          blocco.fontWeight === "bold",
+                          textStyle.color
+                        )}
+                      </Text>
+                      <Text style={{ ...textStyle, textAlign: "right" }}>
+                        {renderTextSegments(
+                          row.valore,
+                          `v-${rowIndex}`,
+                          settings.fontFamily,
+                          blocco.fontWeight === "bold",
+                          textStyle.color
+                        )}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            }
+
+            const text = resolvePlaceholders(
+              (blocco.testo ?? "").replace(/\t/g, "    "),
+              invoice
+            );
+
             return (
               <View key={blocco.id} style={containerStyle}>
                 <Text
@@ -103,29 +174,16 @@ export function InvoicePDFDocument({
                     textAlign: blocco.align,
                   }}
                 >
-                  {text.split("\n").flatMap((line, lineIndex) => {
-                    const segments = parseInlineFormatting(line);
-                    return [
-                      ...(lineIndex > 0 ? ["\n"] : []),
-                      ...segments.map((segment, segIndex) => (
-                        <Text
-                          key={`${lineIndex}-${segIndex}`}
-                          style={{
-                            fontFamily: getFontFamily(settings.fontFamily, {
-                              bold:
-                                blocco.fontWeight === "bold" || segment.bold,
-                              italic: segment.italic,
-                            }),
-                            color: segment.gray
-                              ? "#9ca3af"
-                              : textStyle.color,
-                          }}
-                        >
-                          {segment.text}
-                        </Text>
-                      )),
-                    ];
-                  })}
+                  {text.split("\n").flatMap((line, lineIndex) => [
+                    ...(lineIndex > 0 ? ["\n"] : []),
+                    ...renderTextSegments(
+                      line,
+                      `${lineIndex}`,
+                      settings.fontFamily,
+                      blocco.fontWeight === "bold",
+                      textStyle.color
+                    ),
+                  ])}
                 </Text>
               </View>
             );
