@@ -48,8 +48,12 @@ model Pagante {
   pazienti  Paziente[]
   pagamenti Pagamento[]
 
-  @@unique([id_Utente, cf])
-  @@unique([id_Utente, piva])
+  // cf/piva sono univoci per utente SOLO tra i paganti attivi (eliminato =
+  // false): applicato con indici unique parziali in
+  // prisma/migrations/<timestamp>_paganti_partial_unique_active_only/migration.sql,
+  // non rappresentabili con @@unique nel DSL di Prisma. NON riaggiungere
+  // @@unique([id_Utente, cf]) / @@unique([id_Utente, piva]) qui: `prisma
+  // migrate dev` li reintrodurrebbe come vincoli pieni, riaprendo il bug.
   @@index([id_Utente, eliminato])
   @@map("paganti")
 }
