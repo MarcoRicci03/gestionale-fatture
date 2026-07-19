@@ -54,6 +54,11 @@ model Pagante {
   // non rappresentabili con @@unique nel DSL di Prisma. NON riaggiungere
   // @@unique([id_Utente, cf]) / @@unique([id_Utente, piva]) qui: `prisma
   // migrate dev` li reintrodurrebbe come vincoli pieni, riaprendo il bug.
+  // Questi indici parziali non sono introspettabili da Prisma: un futuro
+  // `prisma migrate dev` potrebbe segnalarli come drift non dichiarato nello
+  // schema. È atteso, non un'indicazione di rigenerare la migration. Se in
+  // futuro si usa `prisma db push` in dev, questi indici andrebbero
+  // ricreati manualmente (db push non replica migration SQL custom).
   @@index([id_Utente, eliminato])
   @@map("paganti")
 }
