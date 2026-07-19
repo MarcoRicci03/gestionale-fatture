@@ -1,1 +1,0 @@
-ALTER TABLE "utenti" ADD COLUMN "cap" TEXT;
