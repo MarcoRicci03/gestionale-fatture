@@ -3,7 +3,7 @@ import { requireUserId } from "@/lib/auth/session";
 
 export async function getInvoices() {
   const userId = await requireUserId();
-  return prisma.pagamento.findMany({
+  const invoices = await prisma.pagamento.findMany({
     where: {
       id_Utente: userId,
       pagante: { eliminato: false },
@@ -12,11 +12,18 @@ export async function getInvoices() {
     include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },
   });
+  // Prisma.Decimal non è serializzabile attraverso il boundary Server -> Client
+  // Component: va convertito a number prima di restituire i dati.
+  return invoices.map((invoice) => ({
+    ...invoice,
+    prezzo_totale: invoice.prezzo_totale.toNumber(),
+    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
+  }));
 }
 
 export async function getInvoiceById(id: number) {
   const userId = await requireUserId();
-  return prisma.pagamento.findFirst({
+  const invoice = await prisma.pagamento.findFirst({
     where: {
       id,
       id_Utente: userId,
@@ -25,6 +32,12 @@ export async function getInvoiceById(id: number) {
     },
     include: { pagante: true, paziente: true, mesi: true, utente: true },
   });
+  if (!invoice) return null;
+  return {
+    ...invoice,
+    prezzo_totale: invoice.prezzo_totale.toNumber(),
+    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
+  };
 }
 
 export async function getNextInvoiceNumber(year: number) {
@@ -74,7 +87,7 @@ export async function getAnnualRevenue(year: number) {
     },
     _sum: { prezzo_totale: true },
   });
-  return result._sum.prezzo_totale ?? 0;
+  return result._sum.prezzo_totale?.toNumber() ?? 0;
 }
 
 export async function getMonthlyRevenue(year: number, month: number) {
@@ -89,12 +102,12 @@ export async function getMonthlyRevenue(year: number, month: number) {
     },
     _sum: { prezzo_totale: true },
   });
-  return result._sum.prezzo_totale ?? 0;
+  return result._sum.prezzo_totale?.toNumber() ?? 0;
 }
 
 export async function getLatestInvoices(limit: number) {
   const userId = await requireUserId();
-  return prisma.pagamento.findMany({
+  const invoices = await prisma.pagamento.findMany({
     where: {
       id_Utente: userId,
       pagante: { eliminato: false },
@@ -104,4 +117,9 @@ export async function getLatestInvoices(limit: number) {
     orderBy: { data: "desc" },
     take: limit,
   });
+  return invoices.map((invoice) => ({
+    ...invoice,
+    prezzo_totale: invoice.prezzo_totale.toNumber(),
+    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
+  }));
 }

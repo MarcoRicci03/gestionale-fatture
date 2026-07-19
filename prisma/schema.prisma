@@ -74,11 +74,12 @@ model Pagamento {
   id_Utente           Int
   id_Pagante          Int
   id_Paziente         Int
-  prezzo_totale       Float
+  prezzo_totale       Decimal        @db.Decimal(10, 2)
   mod_pag             String         // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
   sedute              Int?
   commento            String?
   n_fattura           Int
+  anno                Int
   data                DateTime
   citta               String
   cap                 String         @default("")
@@ -90,6 +91,7 @@ model Pagamento {
   paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
   mesi                FatturaMese[]
 
+  @@unique([id_Utente, n_fattura, anno])
   @@map("pagamenti")
 }
 
@@ -117,7 +119,7 @@ model FatturaMese {
   id           Int       @id @default(autoincrement())
   id_Pagamento Int
   mese         String
-  prezzo       Float
+  prezzo       Decimal   @db.Decimal(10, 2)
 
   pagamento    Pagamento @relation(fields: [id_Pagamento], references: [id], onDelete: Cascade)
 

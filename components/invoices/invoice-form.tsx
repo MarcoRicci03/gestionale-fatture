@@ -41,7 +41,7 @@ type InvoiceWithRelations = {
   cap: string;
   pdfLayoutSnapshot: unknown;
   bolloCodice: string | null;
-  mesi: FatturaMese[];
+  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante?: Pagante | null;
   paziente?: Paziente | null;
 };

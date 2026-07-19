@@ -36,8 +36,11 @@ import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
-type InvoiceWithRelations = Pagamento & {
-  mesi: FatturaMese[];
+// prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
+// (vedi serializeInvoice in lib/data/invoices.ts).
+type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
+  prezzo_totale: number;
+  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante: Pagante | null;
   paziente: Paziente | null;
 };

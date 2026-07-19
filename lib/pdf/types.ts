@@ -76,10 +76,14 @@ export type ImpostazioniPdf = PdfLayout & {
 
 export type PdfSettingsInput = PdfLayout;
 
-export type InvoiceWithRelations = Pagamento & {
+// prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
+// (vedi serializeInvoice in lib/data/invoices.ts): il tipo va allineato di
+// conseguenza, non ereditato direttamente dal client Prisma.
+export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
+  prezzo_totale: number;
   pagante: Pagante;
   paziente: Paziente;
-  mesi: FatturaMese[];
+  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   utente: Utente;
 };
 

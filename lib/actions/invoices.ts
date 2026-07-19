@@ -9,13 +9,48 @@ import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
 
+// Con l'adapter @prisma/adapter-pg (driver adapter, non l'engine binario) i
+// nomi dei campi in violazione di un vincolo P2002 non sono in error.meta.target
+// (che qui resta undefined) ma annidati in error.meta.driverAdapterError.cause
+// .constraint.fields, con eventuali virgolette attorno agli identificatori
+// case-sensitive di Postgres (es. `"id_Utente"`).
+function isUniqueViolationOnField(error: unknown, fieldName: string): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    error.code !== "P2002"
+  ) {
+    return false;
+  }
+
+  const meta = error.meta as
+    | {
+        target?: unknown;
+        driverAdapterError?: {
+          cause?: { constraint?: { fields?: unknown } };
+        };
+      }
+    | undefined;
+
+  if (Array.isArray(meta?.target) && meta.target.includes(fieldName)) {
+    return true;
+  }
+
+  const fields = meta?.driverAdapterError?.cause?.constraint?.fields;
+  if (Array.isArray(fields)) {
+    return fields.some(
+      (f) => typeof f === "string" && f.replace(/"/g, "") === fieldName
+    );
+  }
+
+  return false;
+}
+
 function isBolloCodiceUniqueViolation(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002" &&
-    Array.isArray(error.meta?.target) &&
-    error.meta.target.includes("bolloCodice")
-  );
+  return isUniqueViolationOnField(error, "bolloCodice");
+}
+
+function isInvoiceNumberUniqueViolation(error: unknown): boolean {
+  return isUniqueViolationOnField(error, "n_fattura");
 }
 
 export type InvoiceActionState = { success: true } | { error: string };
@@ -37,7 +72,7 @@ async function isInvoiceNumberTaken(
     where: {
       id_Utente: userId,
       n_fattura,
-      data: yearRange(year),
+      anno: year,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
   });
@@ -143,7 +178,10 @@ export async function createInvoice(
     return { error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 
-  const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
+  const prezzo_totale = mesi.reduce(
+    (somma, m) => somma.add(new Prisma.Decimal(m.prezzo)),
+    new Prisma.Decimal(0)
+  );
 
   try {
     await prisma.pagamento.create({
@@ -152,6 +190,7 @@ export async function createInvoice(
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        anno: year,
         prezzo_totale,
         mod_pag,
         sedute: sedute ?? null,
@@ -168,6 +207,11 @@ export async function createInvoice(
   } catch (error) {
     if (isBolloCodiceUniqueViolation(error)) {
       return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    }
+    if (isInvoiceNumberUniqueViolation(error)) {
+      return {
+        error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
+      };
     }
     return { error: "Errore durante la creazione della fattura" };
   }
@@ -221,7 +265,10 @@ export async function updateInvoice(
     return { error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 
-  const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
+  const prezzo_totale = mesi.reduce(
+    (somma, m) => somma.add(new Prisma.Decimal(m.prezzo)),
+    new Prisma.Decimal(0)
+  );
 
   try {
     await prisma.pagamento.update({
@@ -230,6 +277,7 @@ export async function updateInvoice(
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        anno: year,
         prezzo_totale,
         mod_pag,
         sedute: sedute ?? null,
@@ -247,6 +295,11 @@ export async function updateInvoice(
   } catch (error) {
     if (isBolloCodiceUniqueViolation(error)) {
       return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    }
+    if (isInvoiceNumberUniqueViolation(error)) {
+      return {
+        error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
+      };
     }
     return { error: "Errore durante l'aggiornamento della fattura" };
   }

@@ -1,1 +1,32 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 @AGENTS.md
+
+## Comandi
+
+- `npm run dev` — avvia il dev server (Next.js 16, Turbopack).
+- `npm run build` / `npm run start` — build di produzione e avvio.
+- `npm run lint` — ESLint (flat config in `eslint.config.mjs`).
+- `npx tsc --noEmit` — type-check (nessuno script dedicato in `package.json`).
+- `npm run verify:rich-text` — unico test automatico presente nel repo: verifica il round-trip testo↔rich-content dell'editor blocchi PDF (`scripts/verify-rich-text-bridge.ts`). Non esiste un test runner (jest/vitest/playwright) configurato.
+- `npx prisma generate` / `npx prisma migrate dev` / `npx prisma studio` — gestione schema/DB, nessuno script npm dedicato.
+- `docker compose -f docker-compose.dev.yml up -d` — avvia Postgres locale (container `postgres-dev`, db `gestionale`, utente `admin`).
+- Variabili d'ambiente richieste (in `.env`, non versionato): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`.
+
+## Architettura
+
+**Multi-tenancy per utente singolo studio.** Ogni `Utente` (il professionista) possiede i propri `Pagante` (chi paga la fattura), `Paziente`, `Pagamento` (fattura) e `ImpostazioniPdf` (template PDF), tutti collegati via FK `id_Utente`. Ogni query in `lib/data/*.ts` e `lib/actions/*.ts` deve filtrare esplicitamente per `id_Utente` (vedi `requireUserId()` in `lib/auth/session.ts`) — non c'è un livello di row-level-security nel DB, l'isolamento tra utenti è responsabilità del codice applicativo. `Pagante`/`Paziente` usano soft-delete (`eliminato: boolean`), mai cancellazione fisica.
+
+**Separazione data/actions/validations.** `lib/data/*.ts` contiene solo query di lettura (Server Components), sempre scoped all'utente corrente. `lib/actions/*.ts` contiene le Server Action (`"use server"`) per le mutazioni, che validano l'input con gli schema Zod condivisi in `lib/validations/*.ts` (usati anche lato client da `react-hook-form` via `@hookform/resolvers/zod`).
+
+**Autenticazione custom via JWT in cookie.** Nessun provider esterno (no NextAuth): `lib/auth/jwt.ts` firma/verifica un JWT (jose) con solo `sub` (id utente); `lib/auth/session.ts` lo legge dal cookie httpOnly `session_token` ed espone `getSession`/`requireSession`/`requireUserId`/`requireAdmin`. Il login/logout sono Server Action in `lib/actions/auth.ts`. La route protection per le richieste GET è centralizzata in **`proxy.ts`** nella root — **non `middleware.ts`**: in questa versione di Next.js il file convention si chiama `proxy.ts` ed esporta una funzione `proxy` (vedi `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`). Le Server Action (richieste non-GET) non passano dal proxy e verificano la sessione autonomamente tramite `requireUserId`/`requireSession`.
+
+**Prisma con adapter `pg`, non l'engine di default.** `lib/prisma.ts` istanzia `PrismaClient` con `@prisma/adapter-pg` sopra un `Pool` di `pg`, con singleton su `globalThis` in sviluppo per evitare di esaurire le connessioni con l'hot-reload.
+
+**Motore di template PDF custom (la parte più complessa del codebase).** `components/settings/pdf-editor.tsx` è un editor WYSIWYG drag-and-drop (canvas a dimensione fissa A4, 595×842pt) che produce un layout `Blocco[]` (posizione, dimensione, tipo, testo con placeholder `{{...}}`) salvato come JSON in `ImpostazioniPdf.blocchi`. Tipi di blocco (`mittente`, `intestatario`, `paziente`, `pagamento`, `testo`, `mesi`) e placeholder disponibili sono in `lib/pdf/types.ts` e `lib/pdf/placeholder-catalog.ts`. Al momento della generazione, `lib/pdf/placeholders.ts` risolve i placeholder sui dati reali della fattura e `lib/pdf/invoices.tsx` (via `@react-pdf/renderer`) renderizza il PDF, esposto da `app/api/invoices/[id]/pdf/route.ts`. Ogni fattura salva uno **snapshot** del layout al momento della creazione (`Pagamento.pdfLayoutSnapshot`), così le fatture già emesse non cambiano se l'utente modifica il template in seguito — per riallinearle esplicitamente esiste l'azione "Aggiorna layout PDF" (`refreshInvoicePdfLayout` in `lib/actions/settings.ts`).
+
+Il testo dei blocchi ha una doppia rappresentazione che deve restare sincronizzata: `Blocco.testo` (stringa con placeholder, l'unica letta dalla pipeline di generazione PDF) e `Blocco.richContent` (stato Tiptap per l'editing WYSIWYG). Il ponte tra le due è in `lib/pdf/rich-text.ts` (`parseTestoToRichContent`/`serializeRichContentToTesto`); `npm run verify:rich-text` verifica il round-trip su un set di fixture prima di modificare quel bridge.
+
+**UI: Tailwind v4 + shadcn/ui, nessun file `tailwind.config.*`.** La config è CSS-based in `app/globals.css` (`@theme inline`). `components.json` usa lo style `base-nova` su `@base-ui/react` (non Radix) — i primitivi sono in `components/ui/`. Convenzioni responsive (breakpoint, pattern griglia, pattern tabella/card) sono documentate in `AGENTS.md`.
