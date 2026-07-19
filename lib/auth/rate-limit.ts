@@ -11,8 +11,14 @@ type AttemptRecord = {
 
 const attempts = new Map<string, AttemptRecord>();
 
-function normalizeKey(username: string): string {
-  return username.trim().toLowerCase();
+// Chiave composita username+IP: con la sola username, un attaccante potrebbe
+// bloccare per LOCKOUT_MS l'accesso di un utente legittimo semplicemente
+// fallendo il login MAX_ATTEMPTS volte con quel dato username da un IP
+// qualsiasi. Con l'IP nella chiave, il lockout resta isolato alla coppia
+// (username, IP) dell'attaccante: l'utente legittimo, connesso da un IP
+// diverso, ha un contatore separato e non viene bloccato.
+function buildKey(username: string, ip: string): string {
+  return `${username.trim().toLowerCase()}::${ip}`;
 }
 
 function isExpired(record: AttemptRecord, now: number): boolean {
@@ -30,7 +36,10 @@ function sweepExpired(now: number): void {
   }
 }
 
-export function checkLoginRateLimit(username: string): {
+export function checkLoginRateLimit(
+  username: string,
+  ip: string
+): {
   allowed: boolean;
   retryAfterMinutes?: number;
 } {
@@ -39,7 +48,7 @@ export function checkLoginRateLimit(username: string): {
     sweepExpired(now);
   }
 
-  const key = normalizeKey(username);
+  const key = buildKey(username, ip);
   const record = attempts.get(key);
   if (!record) {
     return { allowed: true };
@@ -60,9 +69,9 @@ export function checkLoginRateLimit(username: string): {
   return { allowed: true };
 }
 
-export function recordFailedLogin(username: string): void {
+export function recordFailedLogin(username: string, ip: string): void {
   const now = Date.now();
-  const key = normalizeKey(username);
+  const key = buildKey(username, ip);
   const record = attempts.get(key);
 
   if (!record || isExpired(record, now)) {
@@ -80,9 +89,13 @@ export function recordFailedLogin(username: string): void {
     return;
   }
 
-  attempts.set(key, { count, windowStart: record.windowStart, lockedUntil: null });
+  attempts.set(key, {
+    count,
+    windowStart: record.windowStart,
+    lockedUntil: null,
+  });
 }
 
-export function recordSuccessfulLogin(username: string): void {
-  attempts.delete(normalizeKey(username));
+export function recordSuccessfulLogin(username: string, ip: string): void {
+  attempts.delete(buildKey(username, ip));
 }
