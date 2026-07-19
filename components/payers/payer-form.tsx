@@ -65,7 +65,7 @@ export function PayerForm({ payer, onSuccess }: PayerFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="nome">Nome</Label>
           <Input
@@ -101,7 +101,7 @@ export function PayerForm({ payer, onSuccess }: PayerFormProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="citta">Città</Label>
           <Input
@@ -123,7 +123,7 @@ export function PayerForm({ payer, onSuccess }: PayerFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="cf">Codice Fiscale</Label>
           <Input id="cf" {...register("cf")} aria-invalid={!!errors.cf} />

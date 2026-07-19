@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Bold,
@@ -837,6 +838,14 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
         </div>
       )}
 
+      <div className="flex items-start gap-2 rounded-lg border border-amber-600/30 bg-amber-600/10 px-4 py-3 text-sm text-amber-800 lg:hidden dark:text-amber-400">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          L&apos;editor del layout è ottimizzato per schermi grandi. Per una
+          modifica precisa, usa un tablet in orizzontale o un computer.
+        </p>
+      </div>
+
       <div className="flex flex-col gap-4 lg:h-[calc(100vh-340px)] lg:flex-row lg:items-start">
         {/* Toolbar sinistra */}
         <div className="order-2 flex flex-col gap-2 lg:order-1 lg:w-44 lg:max-h-full lg:overflow-auto">
@@ -905,7 +914,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
         {/* Canvas */}
         <div
           ref={canvasRef}
-          className="order-1 flex h-[calc(100vh-340px)] flex-1 cursor-grab justify-center overflow-auto rounded-lg border bg-muted/20 p-4 active:cursor-grabbing lg:order-2"
+          className="order-1 flex h-[70vh] flex-1 cursor-grab justify-center overflow-auto rounded-lg border bg-muted/20 p-4 active:cursor-grabbing lg:order-2 lg:h-[calc(100vh-340px)]"
           onMouseEnter={() => {
             isMouseOverCanvas.current = true;
           }}
@@ -1027,7 +1036,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                   <p className="text-xs font-semibold uppercase text-muted-foreground">
                     Margini foglio
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
                       <Label htmlFor="marginTop">Alto</Label>
                       <Input
@@ -1307,7 +1316,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor="x">X</Label>
                   <Input
@@ -1388,7 +1397,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
 
               <div className="space-y-2">
                 <Label>Padding blocco</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label htmlFor="paddingTop" className="text-xs text-muted-foreground">Alto</Label>
                     <Input

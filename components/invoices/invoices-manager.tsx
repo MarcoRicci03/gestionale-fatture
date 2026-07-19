@@ -101,107 +101,202 @@ export function InvoicesManager({
       {invoices.length === 0 ? (
         <p className="text-muted-foreground">Nessuna fattura emessa.</p>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>N. Fattura</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Pagante</TableHead>
-                <TableHead>Paziente</TableHead>
-                <TableHead>Importo</TableHead>
-                <TableHead>Modalità</TableHead>
-                <TableHead className="w-32 text-right">Azioni</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="font-medium">
-                    {invoice.n_fattura}
-                  </TableCell>
-                  <TableCell>{formatDateDisplay(invoice.data)}</TableCell>
-                  <TableCell>
+        <>
+          <div className="hidden rounded-lg border lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>N. Fattura</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Pagante</TableHead>
+                  <TableHead>Paziente</TableHead>
+                  <TableHead>Importo</TableHead>
+                  <TableHead>Modalità</TableHead>
+                  <TableHead className="w-32 text-right">Azioni</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invoices.map((invoice) => (
+                  <TableRow key={invoice.id}>
+                    <TableCell className="font-medium">
+                      {invoice.n_fattura}
+                    </TableCell>
+                    <TableCell>{formatDateDisplay(invoice.data)}</TableCell>
+                    <TableCell>
+                      {invoice.pagante
+                        ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      {invoice.paziente
+                        ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-1.5">
+                        {invoice.prezzo_totale.toLocaleString("it-IT", {
+                          style: "currency",
+                          currency: "EUR",
+                        })}
+                        {invoice.prezzo_totale > SOGLIA_BOLLO &&
+                          !invoice.bolloCodice && (
+                            <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
+                              <AlertTriangle
+                                className="h-4 w-4 text-amber-600"
+                                aria-label="Marca da bollo dovuta: codice non ancora inserito"
+                              />
+                            </Tooltip>
+                          )}
+                      </span>
+                    </TableCell>
+                    <TableCell>{invoice.mod_pag}</TableCell>
+                    <TableCell className="flex justify-end gap-1">
+                      <Tooltip content="Visualizza dettagli fattura">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenView(invoice)}
+                          aria-label="Visualizza dettagli fattura"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Aggiorna layout PDF">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setRefreshError(null);
+                            setRefreshInvoiceId(invoice.id);
+                          }}
+                          aria-label="Aggiorna layout PDF"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Scarica PDF">
+                        <Link
+                          href={`/api/invoices/${invoice.id}/pdf`}
+                          target="_blank"
+                          className={cn(
+                            buttonVariants({ variant: "ghost", size: "icon" })
+                          )}
+                          aria-label="Scarica PDF"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Link>
+                      </Tooltip>
+                      <Tooltip content="Modifica fattura">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(invoice)}
+                          aria-label="Modifica fattura"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <DeleteInvoiceButton id={invoice.id} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <ul className="space-y-3 lg:hidden">
+            {invoices.map((invoice) => (
+              <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">N. {invoice.n_fattura}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateDisplay(invoice.data)}
+                    </p>
+                  </div>
+                  <span className="flex items-center gap-1.5 font-medium">
+                    {invoice.prezzo_totale.toLocaleString("it-IT", {
+                      style: "currency",
+                      currency: "EUR",
+                    })}
+                    {invoice.prezzo_totale > SOGLIA_BOLLO &&
+                      !invoice.bolloCodice && (
+                        <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
+                          <AlertTriangle
+                            className="h-4 w-4 text-amber-600"
+                            aria-label="Marca da bollo dovuta: codice non ancora inserito"
+                          />
+                        </Tooltip>
+                      )}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                  <p>
+                    Pagante:{" "}
                     {invoice.pagante
                       ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
                       : "-"}
-                  </TableCell>
-                  <TableCell>
+                  </p>
+                  <p>
+                    Paziente:{" "}
                     {invoice.paziente
                       ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
                       : "-"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-1.5">
-                      {invoice.prezzo_totale.toLocaleString("it-IT", {
-                        style: "currency",
-                        currency: "EUR",
-                      })}
-                      {invoice.prezzo_totale > SOGLIA_BOLLO &&
-                        !invoice.bolloCodice && (
-                          <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
-                            <AlertTriangle
-                              className="h-4 w-4 text-amber-600"
-                              aria-label="Marca da bollo dovuta: codice non ancora inserito"
-                            />
-                          </Tooltip>
-                        )}
-                    </span>
-                  </TableCell>
-                  <TableCell>{invoice.mod_pag}</TableCell>
-                  <TableCell className="flex justify-end gap-1">
-                    <Tooltip content="Visualizza dettagli fattura">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(invoice)}
-                        aria-label="Visualizza dettagli fattura"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Aggiorna layout PDF">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setRefreshError(null);
-                          setRefreshInvoiceId(invoice.id);
-                        }}
-                        aria-label="Aggiorna layout PDF"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Scarica PDF">
-                      <Link
-                        href={`/api/invoices/${invoice.id}/pdf`}
-                        target="_blank"
-                        className={cn(
-                          buttonVariants({ variant: "ghost", size: "icon" })
-                        )}
-                        aria-label="Scarica PDF"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </Link>
-                    </Tooltip>
-                    <Tooltip content="Modifica fattura">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(invoice)}
-                        aria-label="Modifica fattura"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <DeleteInvoiceButton id={invoice.id} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  </p>
+                  <p>Modalità: {invoice.mod_pag}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 border-t pt-3">
+                  <Tooltip content="Visualizza dettagli fattura">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(invoice)}
+                      aria-label="Visualizza dettagli fattura"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Aggiorna layout PDF">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setRefreshError(null);
+                        setRefreshInvoiceId(invoice.id);
+                      }}
+                      aria-label="Aggiorna layout PDF"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Scarica PDF">
+                    <Link
+                      href={`/api/invoices/${invoice.id}/pdf`}
+                      target="_blank"
+                      className={cn(
+                        buttonVariants({ variant: "ghost", size: "icon" })
+                      )}
+                      aria-label="Scarica PDF"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Link>
+                  </Tooltip>
+                  <Tooltip content="Modifica fattura">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(invoice)}
+                      aria-label="Modifica fattura"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <DeleteInvoiceButton id={invoice.id} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -234,7 +329,7 @@ export function InvoicesManager({
           </DialogHeader>
           {viewingInvoice && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-sm text-muted-foreground">N. Fattura</p>
                   <p className="font-medium">{viewingInvoice.n_fattura}</p>
@@ -290,7 +385,7 @@ export function InvoicesManager({
                     {viewingInvoice.pagante.via}, {viewingInvoice.pagante.citta}{" "}
                     {viewingInvoice.pagante.cap}
                   </p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
                     <div>CF: {viewingInvoice.pagante.cf ?? "-"}</div>
                     <div>P.IVA: {viewingInvoice.pagante.piva ?? "-"}</div>
                   </div>
@@ -325,7 +420,7 @@ export function InvoicesManager({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Importo</p>
                   <p className="font-medium">
@@ -355,7 +450,7 @@ export function InvoicesManager({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Sedute</p>
                   <p className="font-medium">{viewingInvoice.sedute ?? "-"}</p>
@@ -421,7 +516,7 @@ export function InvoicesManager({
           </DialogHeader>
           {viewingPayer && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Cognome</p>
                   <p className="font-medium">{viewingPayer.cognome}</p>
@@ -437,7 +532,7 @@ export function InvoicesManager({
                   {viewingPayer.via}, {viewingPayer.citta} {viewingPayer.cap}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Codice Fiscale</p>
                   <p>{viewingPayer.cf ?? "-"}</p>
@@ -465,7 +560,7 @@ export function InvoicesManager({
           </DialogHeader>
           {viewingPatient && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Cognome</p>
                   <p className="font-medium">{viewingPatient.cognome}</p>
@@ -479,7 +574,7 @@ export function InvoicesManager({
               {viewingPatient.pagante ? (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Pagante associato</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">Cognome</p>
                       <p className="font-medium">
@@ -500,7 +595,7 @@ export function InvoicesManager({
                       {viewingPatient.pagante.cap}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">CF</p>
                       <p>{viewingPatient.pagante.cf ?? "-"}</p>

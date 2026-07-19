@@ -66,77 +66,142 @@ export function UsersManager({ users }: UsersManagerProps) {
       {users.length === 0 ? (
         <p className="text-muted-foreground">Nessun utente presente.</p>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Ruolo</TableHead>
-                <TableHead>Stato</TableHead>
-                <TableHead className="w-48 text-right">Azioni</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.username}</TableCell>
-                  <TableCell>
-                    {[user.nome, user.cognome].filter(Boolean).join(" ") || "-"}
-                  </TableCell>
-                  <TableCell>{user.isAdmin ? "Admin" : "Utente"}</TableCell>
-                  <TableCell>
-                    {user.abilitato ? (
-                      <span className="inline-flex items-center gap-1 text-green-600">
-                        <CheckCircle className="h-4 w-4" /> Abilitato
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-destructive">
-                        <Ban className="h-4 w-4" /> Disabilitato
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="flex justify-end gap-1">
-                    <Tooltip content="Reset password">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setResettingUser(user)}
-                        aria-label="Reset password"
-                      >
-                        <KeyRound className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica utente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(user)}
-                        aria-label="Modifica utente"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <form
-                      action={async () => {
-                        await toggleUserEnabled(user.id, !user.abilitato);
-                      }}
-                    >
-                      <Button
-                        type="submit"
-                        variant="ghost"
-                        size="sm"
-                        className={user.abilitato ? "text-destructive" : "text-green-600"}
-                      >
-                        {user.abilitato ? "Disabilita" : "Abilita"}
-                      </Button>
-                    </form>
-                  </TableCell>
+        <>
+          <div className="hidden rounded-lg border md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Ruolo</TableHead>
+                  <TableHead>Stato</TableHead>
+                  <TableHead className="w-48 text-right">Azioni</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.username}</TableCell>
+                    <TableCell>
+                      {[user.nome, user.cognome].filter(Boolean).join(" ") || "-"}
+                    </TableCell>
+                    <TableCell>{user.isAdmin ? "Admin" : "Utente"}</TableCell>
+                    <TableCell>
+                      {user.abilitato ? (
+                        <span className="inline-flex items-center gap-1 text-green-600">
+                          <CheckCircle className="h-4 w-4" /> Abilitato
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-destructive">
+                          <Ban className="h-4 w-4" /> Disabilitato
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="flex justify-end gap-1">
+                      <Tooltip content="Reset password">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setResettingUser(user)}
+                          aria-label="Reset password"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Modifica utente">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(user)}
+                          aria-label="Modifica utente"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <form
+                        action={async () => {
+                          await toggleUserEnabled(user.id, !user.abilitato);
+                        }}
+                      >
+                        <Button
+                          type="submit"
+                          variant="ghost"
+                          size="sm"
+                          className={user.abilitato ? "text-destructive" : "text-green-600"}
+                        >
+                          {user.abilitato ? "Disabilita" : "Abilita"}
+                        </Button>
+                      </form>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <ul className="space-y-3 md:hidden">
+            {users.map((user) => (
+              <li key={user.id} className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{user.username}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {[user.nome, user.cognome].filter(Boolean).join(" ") || "-"}
+                    </p>
+                  </div>
+                  {user.abilitato ? (
+                    <span className="inline-flex items-center gap-1 text-sm text-green-600">
+                      <CheckCircle className="h-4 w-4" /> Abilitato
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-sm text-destructive">
+                      <Ban className="h-4 w-4" /> Disabilitato
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Ruolo: {user.isAdmin ? "Admin" : "Utente"}
+                </p>
+                <div className="flex flex-wrap items-center gap-1 border-t pt-3">
+                  <Tooltip content="Reset password">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setResettingUser(user)}
+                      aria-label="Reset password"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Modifica utente">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(user)}
+                      aria-label="Modifica utente"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <form
+                    action={async () => {
+                      await toggleUserEnabled(user.id, !user.abilitato);
+                    }}
+                  >
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      size="sm"
+                      className={user.abilitato ? "text-destructive" : "text-green-600"}
+                    >
+                      {user.abilitato ? "Disabilita" : "Abilita"}
+                    </Button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

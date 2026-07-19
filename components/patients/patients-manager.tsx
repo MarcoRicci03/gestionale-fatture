@@ -77,56 +77,99 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
       {patients.length === 0 ? (
         <p className="text-muted-foreground">Nessun paziente registrato.</p>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cognome</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Pagante</TableHead>
-                <TableHead className="w-24 text-right">Azioni</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {patients.map((patient) => (
-                <TableRow key={patient.id}>
-                  <TableCell className="font-medium">
-                    {patient.cognome}
-                  </TableCell>
-                  <TableCell>{patient.nome}</TableCell>
-                  <TableCell>
+        <>
+          <div className="hidden rounded-lg border md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cognome</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Pagante</TableHead>
+                  <TableHead className="w-24 text-right">Azioni</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patients.map((patient) => (
+                  <TableRow key={patient.id}>
+                    <TableCell className="font-medium">
+                      {patient.cognome}
+                    </TableCell>
+                    <TableCell>{patient.nome}</TableCell>
+                    <TableCell>
+                      {patient.pagante
+                        ? `${patient.pagante.cognome} ${patient.pagante.nome}`
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="flex justify-end gap-1">
+                      <Tooltip content="Visualizza dettagli paziente">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenView(patient)}
+                          aria-label="Visualizza dettagli paziente"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Modifica paziente">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(patient)}
+                          aria-label="Modifica paziente"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <DeletePatientButton id={patient.id} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <ul className="space-y-3 md:hidden">
+            {patients.map((patient) => (
+              <li key={patient.id} className="rounded-lg border p-4 space-y-3">
+                <div>
+                  <p className="font-medium">
+                    {patient.cognome} {patient.nome}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Pagante:{" "}
                     {patient.pagante
                       ? `${patient.pagante.cognome} ${patient.pagante.nome}`
                       : "-"}
-                  </TableCell>
-                  <TableCell className="flex justify-end gap-1">
-                    <Tooltip content="Visualizza dettagli paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(patient)}
-                        aria-label="Visualizza dettagli paziente"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(patient)}
-                        aria-label="Modifica paziente"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <DeletePatientButton id={patient.id} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 border-t pt-3">
+                  <Tooltip content="Visualizza dettagli paziente">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(patient)}
+                      aria-label="Visualizza dettagli paziente"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Modifica paziente">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(patient)}
+                      aria-label="Modifica paziente"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <DeletePatientButton id={patient.id} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -157,7 +200,7 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
           </DialogHeader>
           {viewingPatient && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Cognome</p>
                   <p className="font-medium">{viewingPatient.cognome}</p>
@@ -171,7 +214,7 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
               {viewingPatient.pagante ? (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Pagante associato</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">Cognome</p>
                       <p className="font-medium">
@@ -192,7 +235,7 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
                       {viewingPatient.pagante.cap}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-sm text-muted-foreground">CF</p>
                       <p>{viewingPatient.pagante.cf ?? "-"}</p>
@@ -231,7 +274,7 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
           </DialogHeader>
           {viewingPayer && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Cognome</p>
                   <p className="font-medium">{viewingPayer.cognome}</p>
@@ -247,7 +290,7 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
                   {viewingPayer.via}, {viewingPayer.citta} {viewingPayer.cap}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Codice Fiscale</p>
                   <p>{viewingPayer.cf ?? "-"}</p>

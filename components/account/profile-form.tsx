@@ -60,7 +60,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="nome">Nome</Label>
           <Input id="nome" {...register("nome")} />
@@ -71,7 +71,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="titolo">Titolo</Label>
           <Input
@@ -90,7 +90,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="pIva">P.IVA</Label>
           <Input id="pIva" placeholder="11 cifre" {...register("pIva")} />
@@ -112,7 +112,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
         <Input id="via" {...register("via")} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="citta">Città</Label>
           <Input id="citta" {...register("citta")} />

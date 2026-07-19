@@ -71,56 +71,100 @@ export function PayersManager({ payers }: PayersManagerProps) {
       {payers.length === 0 ? (
         <p className="text-muted-foreground">Nessun pagante registrato.</p>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cognome</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Città</TableHead>
-                <TableHead>CAP</TableHead>
-                <TableHead>CF</TableHead>
-                <TableHead>P.IVA</TableHead>
-                <TableHead className="w-24 text-right">Azioni</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payers.map((payer) => (
-                <TableRow key={payer.id}>
-                  <TableCell className="font-medium">{payer.cognome}</TableCell>
-                  <TableCell>{payer.nome}</TableCell>
-                  <TableCell>{payer.citta}</TableCell>
-                  <TableCell>{payer.cap}</TableCell>
-                  <TableCell>{payer.cf ?? "-"}</TableCell>
-                  <TableCell>{payer.piva ?? "-"}</TableCell>
-                  <TableCell className="flex justify-end gap-1">
-                    <Tooltip content="Visualizza dettagli pagante">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(payer)}
-                        aria-label="Visualizza dettagli pagante"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica pagante">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(payer)}
-                        aria-label="Modifica pagante"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <DeletePayerButton id={payer.id} />
-                  </TableCell>
+        <>
+          <div className="hidden rounded-lg border lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cognome</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Città</TableHead>
+                  <TableHead>CAP</TableHead>
+                  <TableHead>CF</TableHead>
+                  <TableHead>P.IVA</TableHead>
+                  <TableHead className="w-24 text-right">Azioni</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {payers.map((payer) => (
+                  <TableRow key={payer.id}>
+                    <TableCell className="font-medium">{payer.cognome}</TableCell>
+                    <TableCell>{payer.nome}</TableCell>
+                    <TableCell>{payer.citta}</TableCell>
+                    <TableCell>{payer.cap}</TableCell>
+                    <TableCell>{payer.cf ?? "-"}</TableCell>
+                    <TableCell>{payer.piva ?? "-"}</TableCell>
+                    <TableCell className="flex justify-end gap-1">
+                      <Tooltip content="Visualizza dettagli pagante">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenView(payer)}
+                          aria-label="Visualizza dettagli pagante"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip content="Modifica pagante">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(payer)}
+                          aria-label="Modifica pagante"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
+                      <DeletePayerButton id={payer.id} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <ul className="space-y-3 lg:hidden">
+            {payers.map((payer) => (
+              <li key={payer.id} className="rounded-lg border p-4 space-y-3">
+                <div>
+                  <p className="font-medium">
+                    {payer.cognome} {payer.nome}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {payer.citta} {payer.cap}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                  <p>CF: {payer.cf ?? "-"}</p>
+                  <p>P.IVA: {payer.piva ?? "-"}</p>
+                </div>
+                <div className="flex items-center gap-1 border-t pt-3">
+                  <Tooltip content="Visualizza dettagli pagante">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(payer)}
+                      aria-label="Visualizza dettagli pagante"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Modifica pagante">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(payer)}
+                      aria-label="Modifica pagante"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <DeletePayerButton id={payer.id} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -147,7 +191,7 @@ export function PayersManager({ payers }: PayersManagerProps) {
           </DialogHeader>
           {viewingPayer && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Cognome</p>
                   <p className="font-medium">{viewingPayer.cognome}</p>
@@ -163,7 +207,7 @@ export function PayersManager({ payers }: PayersManagerProps) {
                   {viewingPayer.via}, {viewingPayer.citta} {viewingPayer.cap}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Codice Fiscale</p>
                   <p>{viewingPayer.cf ?? "-"}</p>
