@@ -24,7 +24,7 @@ import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
-import type { FatturaMese, Pagante, Paziente } from "@prisma/client";
+import type { FatturaMese, Pagante, Paziente, $Enums } from "@prisma/client";
 
 type InvoiceWithRelations = {
   id: number;
@@ -32,7 +32,7 @@ type InvoiceWithRelations = {
   id_Pagante: number;
   id_Paziente: number;
   prezzo_totale: number;
-  mod_pag: string;
+  mod_pag: $Enums.ModalitaPagamento;
   sedute: number | null;
   commento: string | null;
   n_fattura: number;

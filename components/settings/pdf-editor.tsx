@@ -82,6 +82,7 @@ type PdfEditorProps = {
 const PAGE_W = 595;
 const PAGE_H = 842;
 const SNAP_THRESHOLD = 8;
+const MAX_HISTORY_LENGTH = 50;
 
 type GuideLines = { x?: number; y?: number };
 type DraggingState = { id: string; x: number; y: number };
@@ -174,11 +175,17 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
             ? (next as (prev: ImpostazioniPdf) => ImpostazioniPdf)(current)
             : next;
         if (resolved === current) return state;
-        const nextHistory = [
+        let nextHistory = [
           ...state.history.slice(0, state.index + 1),
           resolved,
         ];
-        return { history: nextHistory, index: state.index + 1 };
+        let nextIndex = state.index + 1;
+        if (nextHistory.length > MAX_HISTORY_LENGTH) {
+          const overflow = nextHistory.length - MAX_HISTORY_LENGTH;
+          nextHistory = nextHistory.slice(overflow);
+          nextIndex -= overflow;
+        }
+        return { history: nextHistory, index: nextIndex };
       });
     },
     []
@@ -1605,6 +1612,10 @@ function Block({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [resizing, setResizing] = useState(false);
+  const [resizeDimensions, setResizeDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const mockInvoice = useMemo(() => buildMockInvoice(), []);
   const displayText = isPreview
     ? resolvePlaceholders(blocco.testo ?? "", mockInvoice)
@@ -1678,11 +1689,12 @@ function Block({
       const startW = blocco.width;
       const startH = blocco.height;
       setResizing(true);
+      setResizeDimensions({ width: startW, height: startH });
 
       const handleMove = (ev: PointerEvent) => {
         const mx = (ev.clientX - rect.left) / zoom;
         const my = (ev.clientY - rect.top) / zoom;
-        onUpdate({
+        setResizeDimensions({
           width: clamp(startW + (mx - startX), 10, PAGE_W - position.x),
           height: clamp(startH + (my - startY), 10, PAGE_H - position.y),
         });
@@ -1692,6 +1704,10 @@ function Block({
         setResizing(false);
         document.removeEventListener("pointermove", handleMove);
         document.removeEventListener("pointerup", handleUp);
+        setResizeDimensions((current) => {
+          if (current) onUpdate({ width: current.width, height: current.height });
+          return null;
+        });
       };
 
       document.addEventListener("pointermove", handleMove);
@@ -1707,7 +1723,17 @@ function Block({
   return (
     <div
       ref={ref}
+      role="button"
+      tabIndex={isPreview ? -1 : 0}
+      aria-label={`Blocco ${PRESETS[blocco.tipo].label}${isSelected ? ", selezionato" : ""}`}
       onPointerDown={handlePointerDown}
+      onKeyDown={(e) => {
+        if (isPreview) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       onDoubleClick={() => {
         if (isPreview || !canRichEdit) return;
         onStartEditing();
@@ -1724,8 +1750,8 @@ function Block({
       style={{
         left: position.x,
         top: position.y,
-        width: blocco.width,
-        height: blocco.height,
+        width: resizeDimensions?.width ?? blocco.width,
+        height: resizeDimensions?.height ?? blocco.height,
       }}
     >
       {!isPreview && isSelected && (
@@ -1809,6 +1835,9 @@ function Block({
       {!isPreview && (
         <div
           data-resize
+          role="button"
+          tabIndex={isPreview ? -1 : 0}
+          aria-label="Ridimensiona blocco"
           onPointerDown={handleResizeDown}
           className="absolute bottom-0 right-0 z-10 h-3 w-3 cursor-se-resize bg-primary opacity-0 transition-opacity group-hover:opacity-100"
           title="Ridimensiona"

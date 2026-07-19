@@ -134,7 +134,7 @@ export function PayersManager({ payers }: PayersManagerProps) {
                     {payer.citta} {payer.cap}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <p>CF: {payer.cf ?? "-"}</p>
                   <p>P.IVA: {payer.piva ?? "-"}</p>
                 </div>

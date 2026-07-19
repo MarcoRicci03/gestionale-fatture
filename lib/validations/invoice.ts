@@ -14,11 +14,10 @@ export const invoiceSchema = z.object({
       .transform((val) => parseDateInput(val)),
   ]),
   mod_pag: z
-    .string()
-    .refine(
-      (val) => ["CONTANTI", "CARTA", "BONIFICO"].includes(val),
-      "Seleziona una modalità di pagamento"
-    ),
+    .union([z.literal(""), z.enum(["CONTANTI", "CARTA", "BONIFICO"])])
+    .refine((val): val is "CONTANTI" | "CARTA" | "BONIFICO" => val !== "", {
+      message: "Seleziona una modalità di pagamento",
+    }),
   sedute: z
     .union([z.literal(""), z.coerce.number().int().nonnegative()])
     .transform((val) => (val === "" ? undefined : val))

@@ -94,6 +94,9 @@ export function buildReplacements(
       .filter(Boolean)
       .join(" ")
       .trim(),
+    // Casing "pIva" intenzionale: rispecchia il nome del campo Utente.pIva
+    // nello schema Prisma (diverso da Pagante.piva più sotto, minuscolo) —
+    // non è un refuso, non uniformare.
     "{{mittente.pIva}}": u.pIva ?? "",
     "{{mittente.cf}}": u.cf ?? "",
     "{{mittente.via}}": u.via ?? "",
@@ -126,6 +129,8 @@ export function buildReplacements(
     "{{intestatario.cap}}": p.cap,
     "{{intestatario.capCitta}}": [p.cap, p.citta].filter(Boolean).join(" "),
     "{{intestatario.cf}}": p.cf ?? "",
+    // Casing "piva" (minuscolo) intenzionale: rispecchia Pagante.piva nello
+    // schema Prisma, diverso da Utente.pIva sopra — non è un refuso.
     "{{intestatario.piva}}": p.piva ?? "",
     "{{intestatario.cfOppurePiva}}":
       p.cf && p.cf.trim() !== ""

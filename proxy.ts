@@ -10,7 +10,12 @@ export const config = {
 
 export async function proxy(request: NextRequest) {
   // Lascia passare richieste non-GET (es. Server Actions) senza interferire:
-  // ogni Server Action verifica autonomamente la sessione.
+  // ogni Server Action verifica autonomamente la sessione. Non c'è modo di
+  // intercettare le Server Action qui con la stessa granularità delle route
+  // GET in questa versione di Next.js — l'invariante "ogni action esportata
+  // chiama requireUserId/requireSession/requireAdmin" è garantita da
+  // `npm run verify:actions-auth` (scripts/verify-actions-auth.ts), non da
+  // questo proxy.
   if (request.method !== "GET") {
     return NextResponse.next();
   }

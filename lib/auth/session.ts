@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { verifySession } from "./jwt";
+import { verifySession, getSessionMaxAgeSeconds } from "./jwt";
 import type { Utente } from "@prisma/client";
 
 const COOKIE_NAME = "session_token";
@@ -76,7 +76,7 @@ export async function setSessionCookie(token: string): Promise<void> {
     secure: isProduction,
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 giorni
+    maxAge: getSessionMaxAgeSeconds(),
   });
 }
 

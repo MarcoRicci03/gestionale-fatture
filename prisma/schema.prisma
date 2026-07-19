@@ -50,6 +50,7 @@ model Pagante {
 
   @@unique([id_Utente, cf])
   @@unique([id_Utente, piva])
+  @@index([id_Utente, eliminato])
   @@map("paganti")
 }
 
@@ -66,6 +67,7 @@ model Paziente {
   sedute     Seduta[]
   pagamenti  Pagamento[]
 
+  @@index([id_Utente, eliminato])
   @@map("pazienti")
 }
 
@@ -75,14 +77,14 @@ model Pagamento {
   id_Pagante          Int
   id_Paziente         Int
   prezzo_totale       Decimal        @db.Decimal(10, 2)
-  mod_pag             String         // Convertito da ENUM ('CONTANTI','CARTA','BONIFICO') a String per SQLite
+  mod_pag             ModalitaPagamento
   sedute              Int?
   commento            String?
   n_fattura           Int
   anno                Int
   data                DateTime
   citta               String
-  cap                 String         @default("")
+  cap                 String
   pdfLayoutSnapshot   Json?
   bolloCodice         String?        @unique
 
@@ -92,6 +94,7 @@ model Pagamento {
   mesi                FatturaMese[]
 
   @@unique([id_Utente, n_fattura, anno])
+  @@index([id_Utente, data])
   @@map("pagamenti")
 }
 
@@ -125,6 +128,12 @@ model FatturaMese {
 
   @@unique([id_Pagamento, mese])
   @@map("fattura_mesi")
+}
+
+enum ModalitaPagamento {
+  CONTANTI
+  CARTA
+  BONIFICO
 }
 
 model Seduta {
