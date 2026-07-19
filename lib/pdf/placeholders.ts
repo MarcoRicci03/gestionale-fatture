@@ -1,4 +1,5 @@
 import type { InvoiceWithRelations, MeseConfig } from "./types";
+import { IMPORTO_BOLLO } from "@/lib/constants/bollo";
 
 export type PlaceholderContext = {
   invoice: InvoiceWithRelations;
@@ -149,6 +150,16 @@ export function buildReplacements(
     "{{fattura.citta}}": invoice.citta,
     "{{fattura.cap}}": invoice.cap,
     "{{fattura.mesi}}": invoice.mesi.map((m) => m.mese).join(", "),
+    "{{fattura.bolloCodice}}": invoice.bolloCodice ?? "",
+    "{{fattura.bolloImporto}}": invoice.bolloCodice
+      ? formatCurrency(IMPORTO_BOLLO)
+      : "",
+    "{{fattura.bolloRiga}}": invoice.bolloCodice
+      ? `Imposta di bollo assolta in modo virtuale sull'originale per importi superiori a € 77,47 - Codice identificativo: ${invoice.bolloCodice} - Importo: ${formatCurrency(IMPORTO_BOLLO)}`
+      : "",
+    "{{fattura.totaleConBollo}}": formatCurrency(
+      invoice.prezzo_totale + (invoice.bolloCodice ? IMPORTO_BOLLO : 0)
+    ),
 
     // Dettaglio prezzi per mese
     "{{fattura.mesiConPrezzo}}": invoice.mesi
@@ -232,6 +243,7 @@ export function buildMockInvoice(
     citta: "Roma",
     cap: "00100",
     pdfLayoutSnapshot: null,
+    bolloCodice: "01234567890123",
     pagante: {
       id: 1,
       id_Utente: 1,

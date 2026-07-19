@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseDateInput } from "@/lib/utils/date";
 import { MESI } from "@/lib/constants/mesi";
+import { BOLLO_CODICE_REGEX } from "@/lib/constants/bollo";
 
 export const invoiceSchema = z.object({
   id_Pagante: z.coerce.number().int().positive("Seleziona un pagante"),
@@ -44,6 +45,15 @@ export const invoiceSchema = z.object({
     ),
   citta: z.string().min(1, "La città è obbligatoria"),
   cap: z.string().min(1, "Il CAP è obbligatorio"),
+  bolloCodice: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .regex(BOLLO_CODICE_REGEX, "Il codice deve contenere esattamente 14 cifre numeriche"),
+    ])
+    .transform((val) => (val === "" ? undefined : val))
+    .optional(),
 });
 
 export type InvoiceFormInput = z.input<typeof invoiceSchema>;

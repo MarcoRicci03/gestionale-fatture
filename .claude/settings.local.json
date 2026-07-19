@@ -14,23 +14,12 @@
       "Bash(docker exec *)",
       "Bash(curl -s -o /dev/null -w \"status via LAN ip: %{http_code}\\\\n\" http://192.168.0.56:3000/login)",
       "Read(//mnt/wsl/**)",
-      "Bash(ip route *)"
+      "Bash(ip route *)",
+      "Bash(\"/mnt/c/Program Files/nodejs/node.exe\" --version)",
+      "Bash(\"/mnt/c/Program Files/nodejs/npm.cmd\" --version)",
+      "Bash(cmd.exe /c \"npm --version\")",
+      "Bash(cmd.exe /c \"where npm\")",
+      "Bash(cmd.exe *)"
     ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"C:\\\\Users\\\\marco\\\\.claude\\\\skills\\\\impeccable\\\\scripts\\\\hook.mjs\"",
-            "timeout": 5,
-            "statusMessage": "Checking UI changes"
-          }
-        ]
-      }
-    ]
-  },
-  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders."
+  }
 }

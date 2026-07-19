@@ -1,9 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
+
+const BOLLO_CODICE_DUPLICATO_ERROR =
+  "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
+
+function isBolloCodiceUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002" &&
+    Array.isArray(error.meta?.target) &&
+    error.meta.target.includes("bolloCodice")
+  );
+}
 
 export type InvoiceActionState = { success: true } | { error: string };
 
@@ -25,6 +38,19 @@ async function isInvoiceNumberTaken(
       id_Utente: userId,
       n_fattura,
       data: yearRange(year),
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
+    },
+  });
+  return existing !== null;
+}
+
+async function isBolloCodiceTaken(
+  bolloCodice: string,
+  excludeId?: number
+): Promise<boolean> {
+  const existing = await prisma.pagamento.findFirst({
+    where: {
+      bolloCodice,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
   });
@@ -94,6 +120,7 @@ export async function createInvoice(
     mesi,
     citta,
     cap,
+    bolloCodice,
   } = parsed.data;
 
   const relationError = await validateInvoiceRelations(
@@ -112,6 +139,10 @@ export async function createInvoice(
     };
   }
 
+  if (bolloCodice && (await isBolloCodiceTaken(bolloCodice))) {
+    return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+  }
+
   const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
 
   try {
@@ -128,12 +159,16 @@ export async function createInvoice(
         n_fattura,
         citta,
         cap,
+        bolloCodice: bolloCodice ?? null,
         mesi: {
           create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
       },
     });
-  } catch {
+  } catch (error) {
+    if (isBolloCodiceUniqueViolation(error)) {
+      return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    }
     return { error: "Errore durante la creazione della fattura" };
   }
 
@@ -163,6 +198,7 @@ export async function updateInvoice(
     mesi,
     citta,
     cap,
+    bolloCodice,
   } = parsed.data;
 
   const relationError = await validateInvoiceRelations(
@@ -181,6 +217,10 @@ export async function updateInvoice(
     };
   }
 
+  if (bolloCodice && (await isBolloCodiceTaken(bolloCodice, id))) {
+    return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+  }
+
   const prezzo_totale = mesi.reduce((somma, m) => somma + m.prezzo, 0);
 
   try {
@@ -197,13 +237,17 @@ export async function updateInvoice(
         n_fattura,
         citta,
         cap,
+        bolloCodice: bolloCodice ?? null,
         mesi: {
           deleteMany: {},
           create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
       },
     });
-  } catch {
+  } catch (error) {
+    if (isBolloCodiceUniqueViolation(error)) {
+      return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    }
     return { error: "Errore durante l'aggiornamento della fattura" };
   }
 

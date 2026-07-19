@@ -18,6 +18,10 @@ export const meseConfigSchema = z.object({
   valoreTemplate: z.string().max(300),
   mostraTotale: z.boolean(),
   totaleLabel: z.string().max(100).optional(),
+  // Stato ricco (editor WYSIWYG): blob opaco, non validato in profondità.
+  // La fonte di verità per l'integrità resta descrizioneTemplate/valoreTemplate.
+  descrizioneRichContent: z.unknown().optional(),
+  valoreRichContent: z.unknown().optional(),
 });
 
 export const bloccoSchema = z.object({
@@ -31,6 +35,10 @@ export const bloccoSchema = z.object({
   align: z.enum(textAlignValues as [TextAlign, ...TextAlign[]]),
   visible: z.boolean(),
   testo: z.string().optional(),
+  // Stato ricco (editor WYSIWYG) di `testo`: blob opaco, non validato in
+  // profondità per non accoppiare la validazione server-side alla struttura
+  // interna della libreria di rich-text. La fonte di verità resta `testo`.
+  richContent: z.unknown().optional(),
   meseConfig: meseConfigSchema.optional(),
   paddingTop: z.number().int().min(0).max(100).optional(),
   paddingRight: z.number().int().min(0).max(100).optional(),

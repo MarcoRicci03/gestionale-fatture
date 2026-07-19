@@ -14,6 +14,9 @@ import {
   ArrowUp,
   Bold,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Code2,
   Copy,
   Eye,
   EyeOff,
@@ -33,6 +36,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,11 +58,17 @@ import {
   renderMesiRows,
 } from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
+import { useTextCursorInsert } from "@/lib/hooks/use-text-cursor-insert";
+import { PLACEHOLDER_GROUPS } from "@/lib/pdf/placeholder-catalog";
+import { parseTestoToRichContent } from "@/lib/pdf/rich-text";
+import { RichTextBlockEditor } from "@/components/settings/pdf-editor-rich-block";
+import { VariableChipBadge } from "@/components/settings/pdf-editor-rich-extensions";
 import { PdfEditorMesiPanel } from "@/components/settings/pdf-editor-mesi-panel";
 import type {
   Blocco,
   ImpostazioniPdf,
   MeseConfig,
+  PdfLayout,
   PdfSettingsInput,
   TipoBlocco,
 } from "@/lib/pdf/types";
@@ -121,63 +131,6 @@ const PRESETS: Record<
   },
 };
 
-export const PLACEHOLDER_GROUPS: {
-  label: string;
-  items: { label: string; value: string }[];
-}[] = [
-  {
-    label: "Mittente",
-    items: [
-      {
-        label: "Titolo, nome, cognome, spec.",
-        value: "{{mittente.titoloNomeCognomeSpec}}",
-      },
-      { label: "Via", value: "{{mittente.via}}" },
-      { label: "CAP", value: "{{mittente.cap}}" },
-      { label: "Città e provincia", value: "{{mittente.cittaProvincia}}" },
-      { label: "CAP, città e provincia", value: "{{mittente.capCittaProvincia}}" },
-      { label: "Partita IVA", value: "{{mittente.pIva}}" },
-      { label: "Codice fiscale", value: "{{mittente.cf}}" },
-    ],
-  },
-  {
-    label: "Intestatario",
-    items: [
-      { label: "Cognome e nome", value: "{{intestatario.cognomeNome}}" },
-      { label: "Via", value: "{{intestatario.via}}" },
-      { label: "CAP e città", value: "{{intestatario.capCitta}}" },
-      { label: "CF o P.IVA", value: "{{intestatario.cfOppurePiva}}" },
-      { label: "CF", value: "{{intestatario.cf}}" },
-      { label: "P.IVA", value: "{{intestatario.piva}}" },
-    ],
-  },
-  {
-    label: "Paziente",
-    items: [{ label: "Cognome e nome", value: "{{paziente.cognomeNome}}" }],
-  },
-  {
-    label: "Fattura",
-    items: [
-      { label: "Numero", value: "{{fattura.numero}}" },
-      { label: "Data", value: "{{fattura.data}}" },
-      { label: "Importo totale", value: "{{fattura.prezzoTotale}}" },
-      { label: "Modalità pagamento", value: "{{fattura.modalitaPagamento}}" },
-      { label: "Sedute", value: "{{fattura.sedute}}" },
-      { label: "Commento", value: "{{fattura.commento}}" },
-      { label: "Città", value: "{{fattura.citta}}" },
-      { label: "CAP", value: "{{fattura.cap}}" },
-      { label: "Mesi", value: "{{fattura.mesi}}" },
-    ],
-  },
-  {
-    label: "Mese",
-    items: [
-      { label: "Nome mese/i", value: "{{mese.nome}}" },
-      { label: "Anno", value: "{{mese.anno}}" },
-    ],
-  },
-];
-
 function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -203,6 +156,9 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(0.55);
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const pushSettings = useCallback(
     (
@@ -237,6 +193,9 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
     });
     setSelectedIds(validIds);
+    setEditingBlockId((cur) =>
+      cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
+    );
   }, [editorState, selectedIds]);
 
   const redo = useCallback(() => {
@@ -249,6 +208,9 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
     });
     setSelectedIds(validIds);
+    setEditingBlockId((cur) =>
+      cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
+    );
   }, [editorState, selectedIds]);
 
   const canUndo = editorState.index > 0;
@@ -267,8 +229,24 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     return () => clearTimeout(timer);
   }, [notification]);
 
+  // Forza un re-render quando cambia la selezione/formattazione dentro
+  // l'editor attivo, così i pulsanti Grassetto/Corsivo/Nota possono riflettere
+  // lo stato "attivo" corrente (activeEditor.isActive(...)) letto al render.
+  const [, setFormatTick] = useState(0);
+  useEffect(() => {
+    if (!activeEditor) return;
+    const bump = () => setFormatTick((t) => t + 1);
+    activeEditor.on("selectionUpdate", bump);
+    activeEditor.on("transaction", bump);
+    return () => {
+      activeEditor.off("selectionUpdate", bump);
+      activeEditor.off("transaction", bump);
+    };
+  }, [activeEditor]);
+
   const [resetOpen, setResetOpen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
   const [dragging, setDragging] = useState<DraggingState | null>(null);
   const [guides, setGuides] = useState<GuideLines>({});
   const [clipboard, setClipboard] = useState<{
@@ -278,7 +256,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   const pasteCountRef = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const isMouseOverCanvas = useRef(false);
-  const testoRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedBlock = useMemo(() => {
     if (selectedIds.size !== 1) return null;
@@ -307,65 +284,60 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     }));
   }, [pushSettings]);
 
-  const insertPlaceholder = useCallback(
-    (placeholder: string) => {
+  const updateSettings = useCallback(
+    (patch: Partial<PdfLayout>) => {
+      const roundedPatch = Object.fromEntries(
+        Object.entries(patch).map(([key, value]) =>
+          typeof value === "number" ? [key, Math.round(value)] : [key, value]
+        )
+      ) as Partial<PdfLayout>;
+      pushSettings((prev) => ({ ...prev, ...roundedPatch }));
+    },
+    [pushSettings]
+  );
+
+  const handleTestoChange = useCallback(
+    (next: string) => {
       if (!selectedBlock) return;
-      const el = testoRef.current;
-      const currentText = selectedBlock.testo ?? "";
-      let newText: string;
-      let cursorPos = 0;
-      if (el) {
-        const start = el.selectionStart ?? 0;
-        const end = el.selectionEnd ?? 0;
-        newText =
-          currentText.slice(0, start) + placeholder + currentText.slice(end);
-        cursorPos = start + placeholder.length;
-      } else {
-        newText = currentText + placeholder;
-        cursorPos = newText.length;
-      }
-      updateBlock(selectedBlock.id, { testo: newText });
-      requestAnimationFrame(() => {
-        if (!el) return;
-        el.focus();
-        el.selectionStart = el.selectionEnd = cursorPos;
-      });
+      updateBlock(selectedBlock.id, { testo: next });
     },
     [selectedBlock, updateBlock]
   );
 
-  const wrapText = useCallback(
-    (prefix: string, suffix: string) => {
-      if (!selectedBlock) return;
-      const el = testoRef.current;
-      const currentText = selectedBlock.testo ?? "";
-      let newText: string;
-      let newStart = 0;
-      let newEnd = 0;
-      if (el) {
-        const start = el.selectionStart ?? 0;
-        const end = el.selectionEnd ?? 0;
-        const before = currentText.slice(0, start);
-        const selected = currentText.slice(start, end);
-        const after = currentText.slice(end);
-        newText = before + prefix + selected + suffix + after;
-        newStart = start + prefix.length;
-        newEnd = end + prefix.length;
-      } else {
-        newText = currentText + prefix + suffix;
-        newStart = newText.length - suffix.length;
-        newEnd = newStart;
-      }
-      updateBlock(selectedBlock.id, { testo: newText });
-      requestAnimationFrame(() => {
-        if (!el) return;
-        el.focus();
-        el.selectionStart = newStart;
-        el.selectionEnd = newEnd;
-      });
+  const {
+    ref: testoRef,
+    insertAtCursor: insertPlaceholder,
+    wrapSelection: wrapText,
+  } = useTextCursorInsert(selectedBlock?.testo ?? "", handleTestoChange);
+
+  const startEditing = useCallback((id: string) => {
+    setSelectedIds(new Set([id]));
+    setEditingBlockId(id);
+  }, []);
+
+  const stopEditing = useCallback(() => {
+    setEditingBlockId(null);
+    setActiveEditor(null);
+  }, []);
+
+  const insertPlaceholderChip = useCallback(
+    (value: string, label: string) => {
+      activeEditor?.chain().focus().insertVariable({ placeholder: value, label }).run();
     },
-    [selectedBlock, updateBlock]
+    [activeEditor]
   );
+
+  const toggleRichBold = useCallback(() => {
+    activeEditor?.chain().focus().toggleBold().run();
+  }, [activeEditor]);
+
+  const toggleRichItalic = useCallback(() => {
+    activeEditor?.chain().focus().toggleItalic().run();
+  }, [activeEditor]);
+
+  const toggleRichNota = useCallback(() => {
+    activeEditor?.chain().focus().toggleNota().run();
+  }, [activeEditor]);
 
   const addBlock = useCallback((tipo: TipoBlocco) => {
     const preset = PRESETS[tipo];
@@ -401,6 +373,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       next.delete(id);
       return next;
     });
+    setEditingBlockId((cur) => (cur === id ? null : cur));
   }, [pushSettings]);
 
   useEffect(() => {
@@ -754,8 +727,9 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       updatedAt: now,
     });
     setSelectedIds(new Set());
+    stopEditing();
     setResetOpen(false);
-  }, [settings.id, userId, pushSettings]);
+  }, [settings.id, userId, pushSettings, stopEditing]);
 
   return (
     <div className="relative flex flex-col gap-4">
@@ -808,6 +782,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
             onClick={() => {
               setPreviewMode((v) => !v);
               setSelectedIds(new Set());
+              stopEditing();
             }}
           >
             <Eye className="mr-1 h-4 w-4" />
@@ -946,6 +921,11 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
               zoom,
               flexShrink: 0,
             }}
+            onPointerDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              setSelectedIds(new Set());
+              stopEditing();
+            }}
           >
             {showGrid && (
               <div
@@ -958,11 +938,24 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
               />
             )}
 
+            {!previewMode && (
+              <div
+                className="pointer-events-none absolute border border-dashed border-primary/30"
+                style={{
+                  left: settings.marginLeft,
+                  top: settings.marginTop,
+                  right: settings.marginRight,
+                  bottom: settings.marginBottom,
+                }}
+              />
+            )}
+
             {settings.blocchi.map((blocco) => (
               <Block
                 key={blocco.id}
                 blocco={blocco}
                 isSelected={selectedIds.has(blocco.id)}
+                isEditing={editingBlockId === blocco.id}
                 isPreview={previewMode}
                 zoom={zoom}
                 dragPosition={
@@ -970,7 +963,15 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                     ? { x: dragging.x, y: dragging.y }
                     : undefined
                 }
-                onSelect={() => setSelectedIds(new Set([blocco.id]))}
+                onSelect={() => {
+                  setSelectedIds(new Set([blocco.id]));
+                  setEditingBlockId((cur) => (cur === blocco.id ? cur : null));
+                }}
+                onStartEditing={() => startEditing(blocco.id)}
+                onExitEditing={stopEditing}
+                onEditorReady={(editor) => {
+                  if (editingBlockId === blocco.id) setActiveEditor(editor);
+                }}
                 onDragStart={() => handleDragStart(blocco.id)}
                 onDrag={(_e, d) => handleDrag(blocco.id, d.x, d.y)}
                 onDragStop={() => handleDragStop(blocco.id)}
@@ -1006,7 +1007,92 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
         </div>
 
         {/* Pannello proprietà */}
-        <div className="order-3 w-full lg:w-72 lg:max-h-full lg:overflow-auto">
+        <div className="order-3 flex w-full flex-col gap-3 lg:w-72 lg:max-h-full lg:overflow-auto">
+          {!previewMode && (
+            <div className="rounded-lg border p-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-sm font-medium"
+                onClick={() => setPageSettingsOpen((v) => !v)}
+              >
+                <span>Impostazioni pagina</span>
+                {pageSettingsOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+              {pageSettingsOpen && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Margini foglio
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="marginTop">Alto</Label>
+                      <Input
+                        id="marginTop"
+                        type="number"
+                        min={0}
+                        max={400}
+                        value={settings.marginTop}
+                        onChange={(e) =>
+                          updateSettings({
+                            marginTop: clamp(toNumber(e.target.value), 0, 400),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="marginRight">Destra</Label>
+                      <Input
+                        id="marginRight"
+                        type="number"
+                        min={0}
+                        max={400}
+                        value={settings.marginRight}
+                        onChange={(e) =>
+                          updateSettings({
+                            marginRight: clamp(toNumber(e.target.value), 0, 400),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="marginBottom">Basso</Label>
+                      <Input
+                        id="marginBottom"
+                        type="number"
+                        min={0}
+                        max={400}
+                        value={settings.marginBottom}
+                        onChange={(e) =>
+                          updateSettings({
+                            marginBottom: clamp(toNumber(e.target.value), 0, 400),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="marginLeft">Sinistra</Label>
+                      <Input
+                        id="marginLeft"
+                        type="number"
+                        min={0}
+                        max={400}
+                        value={settings.marginLeft}
+                        onChange={(e) =>
+                          updateSettings({
+                            marginLeft: clamp(toNumber(e.target.value), 0, 400),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {selectedBlock && !previewMode ? (
             <div className="space-y-4 rounded-lg border p-4">
               <div className="flex items-center justify-between">
@@ -1084,47 +1170,108 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                 />
               ) : (
                 <div className="space-y-3">
-                  <Label htmlFor="testo">Contenuto</Label>
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => wrapText("<b>", "</b>")}
-                      title="Grassetto"
+                  <div className="flex items-center justify-between">
+                    <Label>Contenuto</Label>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                      onClick={() => setAdvancedMode((v) => !v)}
                     >
-                      <Bold className="mr-1 h-3.5 w-3.5" />
-                      Grassetto
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => wrapText("<i>", "</i>")}
-                      title="Corsivo"
-                    >
-                      <Italic className="mr-1 h-3.5 w-3.5" />
-                      Corsivo
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => wrapText("<note>", "</note>")}
-                      title="Nota grigia"
-                    >
-                      Nota
-                    </Button>
+                      <Code2 className="h-3 w-3" />
+                      {advancedMode ? "Modalità semplice" : "Modalità avanzata"}
+                    </button>
                   </div>
-                  <Textarea
-                    ref={testoRef}
-                    id="testo"
-                    rows={5}
-                    value={selectedBlock.testo ?? ""}
-                    onChange={(e) =>
-                      updateBlock(selectedBlock.id, { testo: e.target.value })
-                    }
-                  />
+
+                  {advancedMode ? (
+                    <>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => wrapText("<b>", "</b>")}
+                          title="Grassetto"
+                        >
+                          <Bold className="mr-1 h-3.5 w-3.5" />
+                          Grassetto
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => wrapText("<i>", "</i>")}
+                          title="Corsivo"
+                        >
+                          <Italic className="mr-1 h-3.5 w-3.5" />
+                          Corsivo
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => wrapText("<note>", "</note>")}
+                          title="Nota grigia"
+                        >
+                          Nota
+                        </Button>
+                      </div>
+                      <Textarea
+                        ref={testoRef}
+                        id="testo"
+                        rows={5}
+                        value={selectedBlock.testo ?? ""}
+                        onChange={(e) =>
+                          updateBlock(selectedBlock.id, {
+                            testo: e.target.value,
+                            richContent: undefined,
+                          })
+                        }
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          variant={activeEditor?.isActive("bold") ? "secondary" : "outline"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={!activeEditor}
+                          onClick={toggleRichBold}
+                          title="Grassetto"
+                        >
+                          <Bold className="mr-1 h-3.5 w-3.5" />
+                          Grassetto
+                        </Button>
+                        <Button
+                          variant={activeEditor?.isActive("italic") ? "secondary" : "outline"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={!activeEditor}
+                          onClick={toggleRichItalic}
+                          title="Corsivo"
+                        >
+                          <Italic className="mr-1 h-3.5 w-3.5" />
+                          Corsivo
+                        </Button>
+                        <Button
+                          variant={activeEditor?.isActive("nota") ? "secondary" : "outline"}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={!activeEditor}
+                          onClick={toggleRichNota}
+                          title="Nota grigia"
+                        >
+                          Nota
+                        </Button>
+                      </div>
+                      {!activeEditor && (
+                        <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                          Fai doppio clic sul blocco nel foglio per modificarne il testo.
+                        </p>
+                      )}
+                    </>
+                  )}
+
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">
                       Inserisci valore dinamico
@@ -1142,7 +1289,12 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
                                 variant="secondary"
                                 size="sm"
                                 className="h-6 text-xs"
-                                onClick={() => insertPlaceholder(item.value)}
+                                disabled={!advancedMode && !activeEditor}
+                                onClick={() =>
+                                  advancedMode
+                                    ? insertPlaceholder(item.value)
+                                    : insertPlaceholderChip(item.value, item.label)
+                                }
                               >
                                 {item.label}
                               </Button>
@@ -1235,6 +1387,72 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
               </div>
 
               <div className="space-y-2">
+                <Label>Padding blocco</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="paddingTop" className="text-xs text-muted-foreground">Alto</Label>
+                    <Input
+                      id="paddingTop"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedBlock.paddingTop ?? 0}
+                      onChange={(e) =>
+                        updateBlock(selectedBlock.id, {
+                          paddingTop: clamp(toNumber(e.target.value), 0, 100),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="paddingRight" className="text-xs text-muted-foreground">Destra</Label>
+                    <Input
+                      id="paddingRight"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedBlock.paddingRight ?? 0}
+                      onChange={(e) =>
+                        updateBlock(selectedBlock.id, {
+                          paddingRight: clamp(toNumber(e.target.value), 0, 100),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="paddingBottom" className="text-xs text-muted-foreground">Basso</Label>
+                    <Input
+                      id="paddingBottom"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedBlock.paddingBottom ?? 0}
+                      onChange={(e) =>
+                        updateBlock(selectedBlock.id, {
+                          paddingBottom: clamp(toNumber(e.target.value), 0, 100),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="paddingLeft" className="text-xs text-muted-foreground">Sinistra</Label>
+                    <Input
+                      id="paddingLeft"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={selectedBlock.paddingLeft ?? 0}
+                      onChange={(e) =>
+                        updateBlock(selectedBlock.id, {
+                          paddingLeft: clamp(toNumber(e.target.value), 0, 100),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="align">Allineamento</Label>
                 <Select
                   value={selectedBlock.align}
@@ -1294,13 +1512,68 @@ function renderFormattedSegments(text: string, keyPrefix: string) {
   ));
 }
 
+/**
+ * Render statico (blocco non in editing, non in preview) del testo grezzo con
+ * chip al posto di {{...}} in chiaro — stesso badge mostrato durante l'editing
+ * (VariableChipBadge), così il chip resta visibile anche dopo aver deselezionato
+ * il blocco, invece di tornare a mostrare la sintassi {{...}}.
+ */
+function renderRichStatic(testo: string, keyPrefix: string) {
+  const doc = parseTestoToRichContent(testo);
+  return doc.content.map((paragraph, pIdx) => {
+    const nodes = paragraph.content ?? [];
+    return (
+      <div key={`${keyPrefix}-p-${pIdx}`}>
+        {nodes.length === 0
+          ? " "
+          : nodes.map((node, nIdx) => {
+              const key = `${keyPrefix}-${pIdx}-${nIdx}`;
+              const marks = node.marks ?? [];
+              const bold = marks.some((m) => m.type === "bold");
+              const italic = marks.some((m) => m.type === "italic");
+              const nota = marks.some((m) => m.type === "nota");
+
+              if (node.type === "variable") {
+                return (
+                  <VariableChipBadge
+                    key={key}
+                    label={node.attrs.label}
+                    bold={bold}
+                    italic={italic}
+                    nota={nota}
+                  />
+                );
+              }
+
+              return (
+                <span
+                  key={key}
+                  style={{
+                    fontWeight: bold ? 700 : undefined,
+                    fontStyle: italic ? "italic" : undefined,
+                    color: nota ? "#9ca3af" : undefined,
+                  }}
+                >
+                  {node.text}
+                </span>
+              );
+            })}
+      </div>
+    );
+  });
+}
+
 function Block({
   blocco,
   isSelected,
+  isEditing,
   isPreview,
   zoom,
   dragPosition,
   onSelect,
+  onStartEditing,
+  onExitEditing,
+  onEditorReady,
   onDragStart,
   onDrag,
   onDragStop,
@@ -1308,10 +1581,14 @@ function Block({
 }: {
   blocco: Blocco;
   isSelected: boolean;
+  isEditing: boolean;
   isPreview: boolean;
   zoom: number;
   dragPosition?: { x: number; y: number };
   onSelect: () => void;
+  onStartEditing: () => void;
+  onExitEditing: () => void;
+  onEditorReady: (editor: Editor | null) => void;
   onDragStart?: () => void;
   onDrag?: (e: unknown, data: { x: number; y: number }) => void;
   onDragStop?: () => void;
@@ -1323,10 +1600,10 @@ function Block({
   const displayText = isPreview
     ? resolvePlaceholders(blocco.testo ?? "", mockInvoice)
     : blocco.testo ?? "";
-  const mesiRows = useMemo(() => {
-    if (blocco.tipo !== "mesi" || !blocco.meseConfig) return null;
+  const mesiPreviewRows = useMemo(() => {
+    if (blocco.tipo !== "mesi" || !blocco.meseConfig || !isPreview) return null;
     return renderMesiRows(blocco.meseConfig, mockInvoice);
-  }, [blocco.tipo, blocco.meseConfig, mockInvoice]);
+  }, [blocco.tipo, blocco.meseConfig, mockInvoice, isPreview]);
 
   const position = useMemo(
     () => dragPosition ?? { x: blocco.x, y: blocco.y },
@@ -1343,6 +1620,11 @@ function Block({
       if (isPreview) return;
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).dataset.resize != null) return;
+      if ((e.target as HTMLElement).closest("[data-rich-editor-content]")) {
+        // Il click cade dentro l'editor ricco montato (isEditing): lascia che
+        // TipTap gestisca il posizionamento nativo del cursore, non avviare drag.
+        return;
+      }
       e.preventDefault();
       const rect = getParentRect();
       if (!rect) return;
@@ -1411,12 +1693,18 @@ function Block({
 
   if (isPreview && !blocco.visible) return null;
 
+  const canRichEdit = blocco.tipo !== "mesi";
+
   return (
     <div
       ref={ref}
       onPointerDown={handlePointerDown}
+      onDoubleClick={() => {
+        if (isPreview || !canRichEdit) return;
+        onStartEditing();
+      }}
       className={cn(
-        "group absolute overflow-hidden border border-transparent",
+        "group absolute border border-transparent",
         !isPreview &&
           (isSelected
             ? "border-primary bg-primary/5"
@@ -1429,42 +1717,86 @@ function Block({
         top: position.y,
         width: blocco.width,
         height: blocco.height,
-        fontSize: blocco.fontSize,
-        textAlign: blocco.align,
-        fontFamily: "Helvetica, Arial, sans-serif",
-        fontWeight: blocco.fontWeight === "bold" ? 700 : 400,
-        color: blocco.color ?? "#000000",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        paddingTop: blocco.paddingTop ?? 0,
-        paddingRight: blocco.paddingRight ?? 0,
-        paddingBottom: blocco.paddingBottom ?? 0,
-        paddingLeft: blocco.paddingLeft ?? 0,
       }}
     >
-      {mesiRows ? (
+      {!isPreview && isSelected && (
+        <div
+          className="pointer-events-none absolute border border-dashed border-muted-foreground/40"
+          style={{
+            top: blocco.paddingTop ?? 0,
+            right: blocco.paddingRight ?? 0,
+            bottom: blocco.paddingBottom ?? 0,
+            left: blocco.paddingLeft ?? 0,
+          }}
+        />
+      )}
+      {!isPreview && blocco.tipo !== "testo" && (
+        <span className="pointer-events-none absolute -top-4 right-0 whitespace-nowrap rounded bg-muted px-1 text-[10px] text-muted-foreground">
+          {PRESETS[blocco.tipo].label}
+        </span>
+      )}
+      <div
+        className="h-full w-full overflow-hidden"
+        style={{
+          fontSize: blocco.fontSize,
+          textAlign: blocco.align,
+          fontFamily: "Helvetica, Arial, sans-serif",
+          fontWeight: blocco.fontWeight === "bold" ? 700 : 400,
+          color: blocco.color ?? "#000000",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          paddingTop: blocco.paddingTop ?? 0,
+          paddingRight: blocco.paddingRight ?? 0,
+          paddingBottom: blocco.paddingBottom ?? 0,
+          paddingLeft: blocco.paddingLeft ?? 0,
+        }}
+      >
+      {blocco.tipo === "mesi" ? (
         <div className="w-full">
           {blocco.meseConfig?.titolo && (
             <div style={{ fontWeight: 700 }}>{blocco.meseConfig.titolo}</div>
           )}
-          {mesiRows.map((row, idx) => (
-            <div
-              key={idx}
-              style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
-            >
-              <span>{renderFormattedSegments(row.descrizione, `d-${idx}`)}</span>
-              <span>{renderFormattedSegments(row.valore, `v-${idx}`)}</span>
-            </div>
-          ))}
+          {mesiPreviewRows ? (
+            mesiPreviewRows.map((row, idx) => (
+              <div
+                key={idx}
+                style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
+              >
+                <span>{renderFormattedSegments(row.descrizione, `d-${idx}`)}</span>
+                <span>{renderFormattedSegments(row.valore, `v-${idx}`)}</span>
+              </div>
+            ))
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div>{renderRichStatic(blocco.meseConfig?.descrizioneTemplate ?? "", "mesi-d")}</div>
+                <div>{renderRichStatic(blocco.meseConfig?.valoreTemplate ?? "", "mesi-v")}</div>
+              </div>
+              {blocco.meseConfig?.mostraTotale && (
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700 }}
+                >
+                  <span>{blocco.meseConfig.totaleLabel ?? "Totale"}</span>
+                  <div>{renderRichStatic("{{fattura.prezzoTotale}}", "mesi-tot")}</div>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      ) : (
+      ) : !isPreview && isEditing && canRichEdit ? (
+        <RichTextBlockEditor
+          testo={blocco.testo ?? ""}
+          richContent={blocco.richContent}
+          onCommit={(patch) => onUpdate(patch)}
+          onEditorReady={onEditorReady}
+          onExit={onExitEditing}
+        />
+      ) : isPreview ? (
         renderFormattedSegments(displayText, "seg")
+      ) : (
+        renderRichStatic(blocco.testo ?? "", "seg")
       )}
-      {!isPreview && blocco.tipo !== "testo" && (
-        <span className="pointer-events-none absolute right-1 top-1 rounded bg-muted px-1 text-[10px] text-muted-foreground">
-          {PRESETS[blocco.tipo].label}
-        </span>
-      )}
+      </div>
       {!isPreview && (
         <div
           data-resize

@@ -27,7 +27,10 @@ export async function updatePdfSettings(
     marginLeft: parsed.data.marginLeft,
     fontFamily: parsed.data.fontFamily,
     fontSizeBase: parsed.data.fontSizeBase,
-    blocchi: parsed.data.blocchi,
+    // richContent/descrizioneRichContent/valoreRichContent sono blob opachi
+    // (z.unknown() in Zod) non validati in profondità: cast al confine di
+    // validazione, coerente con la scelta di non accoppiarli allo schema TipTap.
+    blocchi: parsed.data.blocchi as unknown as PdfSettingsInput["blocchi"],
   };
 
   try {

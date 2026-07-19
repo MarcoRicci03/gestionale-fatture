@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { PlusCircle, Pencil, FileText, Eye, RefreshCw } from "lucide-react";
+import {
+  PlusCircle,
+  Pencil,
+  FileText,
+  Eye,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import {
   Dialog,
   DialogContent,
@@ -124,10 +132,21 @@ export function InvoicesManager({
                       : "-"}
                   </TableCell>
                   <TableCell>
-                    {invoice.prezzo_totale.toLocaleString("it-IT", {
-                      style: "currency",
-                      currency: "EUR",
-                    })}
+                    <span className="flex items-center gap-1.5">
+                      {invoice.prezzo_totale.toLocaleString("it-IT", {
+                        style: "currency",
+                        currency: "EUR",
+                      })}
+                      {invoice.prezzo_totale > SOGLIA_BOLLO &&
+                        !invoice.bolloCodice && (
+                          <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
+                            <AlertTriangle
+                              className="h-4 w-4 text-amber-600"
+                              aria-label="Marca da bollo dovuta: codice non ancora inserito"
+                            />
+                          </Tooltip>
+                        )}
+                    </span>
                   </TableCell>
                   <TableCell>{invoice.mod_pag}</TableCell>
                   <TableCell className="flex justify-end gap-1">
@@ -186,7 +205,7 @@ export function InvoicesManager({
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {editingInvoice ? "Modifica Fattura" : "Nuova Fattura"}
@@ -320,6 +339,20 @@ export function InvoicesManager({
                   <p className="text-sm text-muted-foreground">Modalità</p>
                   <p className="font-medium">{viewingInvoice.mod_pag}</p>
                 </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground">Marca da bollo</p>
+                {viewingInvoice.bolloCodice ? (
+                  <p className="font-medium">{viewingInvoice.bolloCodice}</p>
+                ) : viewingInvoice.prezzo_totale > SOGLIA_BOLLO ? (
+                  <p className="flex items-center gap-1.5 font-medium text-amber-600">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Dovuta, codice non ancora inserito
+                  </p>
+                ) : (
+                  <p className="font-medium">Non dovuta</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

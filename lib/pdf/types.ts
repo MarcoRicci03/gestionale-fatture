@@ -1,4 +1,5 @@
 import type { Pagamento, Pagante, Paziente, Utente, FatturaMese } from "@prisma/client";
+import type { RichTextDoc } from "./rich-text";
 
 export type TipoBlocco =
   | "mittente"
@@ -17,6 +18,10 @@ export type MeseConfig = {
   valoreTemplate: string;
   mostraTotale: boolean;
   totaleLabel?: string;
+  /** Stato ricco (editor WYSIWYG) di descrizioneTemplate/valoreTemplate. Opzionale:
+   * se assente viene ricostruito al volo da descrizioneTemplate/valoreTemplate. */
+  descrizioneRichContent?: RichTextDoc;
+  valoreRichContent?: RichTextDoc;
 };
 
 export type Blocco = {
@@ -31,6 +36,11 @@ export type Blocco = {
   visible: boolean;
   /** Solo per tipo 'testo': contenuto con placeholder {{...}} */
   testo?: string;
+  /** Stato ricco (editor WYSIWYG) di `testo`. Opzionale: se assente viene
+   * ricostruito al volo da `testo` (vedi lib/pdf/rich-text.ts). Non è mai
+   * letto da lib/pdf/placeholders.ts o dal generatore PDF: `testo` resta
+   * l'unica sorgente di verità per quella pipeline. */
+  richContent?: RichTextDoc;
   /** Solo per tipo 'mesi': configurazione riga descrizione/valore per mese */
   meseConfig?: MeseConfig;
   /** Padding interno opzionale in pt */

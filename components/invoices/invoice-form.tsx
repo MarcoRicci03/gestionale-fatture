@@ -6,6 +6,7 @@ import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ import {
   getNextInvoiceNumberForYear,
 } from "@/lib/actions/invoices";
 import { MESI, type Mese } from "@/lib/constants/mesi";
+import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import type { FatturaMese, Pagante, Paziente } from "@prisma/client";
@@ -38,6 +40,7 @@ type InvoiceWithRelations = {
   citta: string;
   cap: string;
   pdfLayoutSnapshot: unknown;
+  bolloCodice: string | null;
   mesi: FatturaMese[];
   pagante?: Pagante | null;
   paziente?: Paziente | null;
@@ -103,6 +106,7 @@ export function InvoiceForm({
           ],
       citta: inv?.citta ?? "",
       cap: inv?.cap ?? "",
+      bolloCodice: inv?.bolloCodice ?? "",
     },
   });
 
@@ -114,15 +118,27 @@ export function InvoiceForm({
   const selectedPayerId = useWatch({ control, name: "id_Pagante" });
   const selectedDate = useWatch({ control, name: "data" });
   const mesiValues = useWatch({ control, name: "mesi" }) ?? [];
+  const bolloCodiceValue = useWatch({ control, name: "bolloCodice" });
 
   const totale = useMemo(
     () => mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0),
     [mesiValues]
   );
 
+  const bolloRichiesto = totale > SOGLIA_BOLLO;
+  const bolloMancante = bolloRichiesto && !bolloCodiceValue;
+
   const mesiSelezionati = useMemo(
     () => new Set(mesiValues.map((m) => m.mese)),
     [mesiValues]
+  );
+
+  const mesiOrdinati = useMemo(
+    () =>
+      fields
+        .map((field, index) => ({ field, index }))
+        .sort((a, b) => MESI.indexOf(a.field.mese) - MESI.indexOf(b.field.mese)),
+    [fields]
   );
 
   const filteredPatients = useMemo(() => {
@@ -179,7 +195,7 @@ export function InvoiceForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="max-w-3xl space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="n_fattura">N. Fattura</Label>
@@ -239,15 +255,20 @@ export function InvoiceForm({
       {fields.length > 0 && (
         <div className="space-y-2">
           <Label>Importo per ogni mese (€)</Label>
-          <div className="space-y-2">
-            {fields.map((field, index) => (
-              <div key={field.id} className="flex items-center gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {mesiOrdinati.map(({ field, index }) => (
+              <div
+                key={field.id}
+                className="flex items-center gap-2 rounded-lg border border-input p-2"
+              >
                 <input
                   type="hidden"
                   {...register(`mesi.${index}.mese` as const)}
                   value={field.mese}
                 />
-                <span className="w-28 text-sm">{meseToLabel(field.mese)}</span>
+                <span className="w-16 shrink-0 truncate text-sm">
+                  {meseToLabel(field.mese)}
+                </span>
                 <Input
                   type="number"
                   step="0.01"
@@ -255,9 +276,9 @@ export function InvoiceForm({
                   placeholder="0,00"
                   aria-label={`Importo per ${meseToLabel(field.mese)}`}
                   {...register(`mesi.${index}.prezzo` as const)}
-                  className="max-w-32"
+                  className="min-w-0 flex-1"
                 />
-                <span className="text-sm text-muted-foreground">€</span>
+                <span className="shrink-0 text-sm text-muted-foreground">€</span>
               </div>
             ))}
           </div>
@@ -276,7 +297,32 @@ export function InvoiceForm({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor="bolloCodice">Codice marca da bollo (opzionale)</Label>
+        <Input
+          id="bolloCodice"
+          maxLength={14}
+          inputMode="numeric"
+          placeholder="14 cifre"
+          {...register("bolloCodice")}
+          aria-invalid={!!errors.bolloCodice}
+        />
+        {errors.bolloCodice && (
+          <p className="text-sm text-destructive">
+            {errors.bolloCodice.message}
+          </p>
+        )}
+        {bolloMancante && (
+          <p className="flex items-center gap-1.5 text-sm text-amber-600">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Il totale supera {formatCurrency(SOGLIA_BOLLO)}: è dovuta la marca
+            da bollo da {formatCurrency(IMPORTO_BOLLO)}. Inserisci il codice
+            quando disponibile.
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="id_Pagante">Pagante</Label>
           <select
@@ -324,9 +370,31 @@ export function InvoiceForm({
             </p>
           )}
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="mod_pag">Modalità di pagamento</Label>
+          <select
+            id="mod_pag"
+            {...register("mod_pag")}
+            className={cn(
+              "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
+              errors.mod_pag && "border-destructive"
+            )}
+          >
+            <option value="">Seleziona</option>
+            <option value="CONTANTI">Contanti</option>
+            <option value="CARTA">Carta</option>
+            <option value="BONIFICO">Bonifico</option>
+          </select>
+          {errors.mod_pag && (
+            <p className="text-sm text-destructive">
+              {errors.mod_pag.message}
+            </p>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="citta">Città</Label>
           <Input
@@ -348,30 +416,6 @@ export function InvoiceForm({
           />
           {errors.cap && (
             <p className="text-sm text-destructive">{errors.cap.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="mod_pag">Modalità di pagamento</Label>
-          <select
-            id="mod_pag"
-            {...register("mod_pag")}
-            className={cn(
-              "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50",
-              errors.mod_pag && "border-destructive"
-            )}
-          >
-            <option value="">Seleziona</option>
-            <option value="CONTANTI">Contanti</option>
-            <option value="CARTA">Carta</option>
-            <option value="BONIFICO">Bonifico</option>
-          </select>
-          {errors.mod_pag && (
-            <p className="text-sm text-destructive">
-              {errors.mod_pag.message}
-            </p>
           )}
         </div>
 

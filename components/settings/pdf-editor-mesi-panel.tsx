@@ -1,136 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
-import { Bold, Italic } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { buildMockInvoice, renderMesiRows } from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
-import { PLACEHOLDER_GROUPS } from "@/components/settings/pdf-editor";
+import { RichTemplateField, RIGA_MESE_GROUP } from "@/components/settings/pdf-editor-rich-template-field";
 import type { MeseConfig } from "@/lib/pdf/types";
-
-const RIGA_MESE_GROUP = {
-  label: "Riga mese",
-  items: [
-    { label: "Nome mese", value: "{{riga.meseLabel}}" },
-    { label: "Mese (maiuscolo)", value: "{{riga.mese}}" },
-    { label: "Prezzo", value: "{{riga.prezzo}}" },
-    { label: "Prezzo (numero)", value: "{{riga.prezzoNumero}}" },
-  ],
-};
-
-function TemplateField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  const insertAtCursor = useCallback(
-    (insert: string) => {
-      const el = ref.current;
-      if (!el) {
-        onChange(value + insert);
-        return;
-      }
-      const start = el.selectionStart ?? value.length;
-      const end = el.selectionEnd ?? value.length;
-      const next = value.slice(0, start) + insert + value.slice(end);
-      onChange(next);
-      requestAnimationFrame(() => {
-        el.focus();
-        el.selectionStart = el.selectionEnd = start + insert.length;
-      });
-    },
-    [value, onChange]
-  );
-
-  const wrap = useCallback(
-    (prefix: string, suffix: string) => {
-      const el = ref.current;
-      if (!el) {
-        onChange(prefix + value + suffix);
-        return;
-      }
-      const start = el.selectionStart ?? 0;
-      const end = el.selectionEnd ?? 0;
-      const before = value.slice(0, start);
-      const selected = value.slice(start, end);
-      const after = value.slice(end);
-      const newStart = start + prefix.length;
-      const newEnd = end + prefix.length;
-      onChange(before + prefix + selected + suffix + after);
-      requestAnimationFrame(() => {
-        el.focus();
-        el.selectionStart = newStart;
-        el.selectionEnd = newEnd;
-      });
-    },
-    [value, onChange]
-  );
-
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      <div className="flex flex-wrap gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => wrap("<b>", "</b>")}
-          title="Grassetto"
-        >
-          <Bold className="mr-1 h-3.5 w-3.5" />
-          Grassetto
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => wrap("<i>", "</i>")}
-          title="Corsivo"
-        >
-          <Italic className="mr-1 h-3.5 w-3.5" />
-          Corsivo
-        </Button>
-      </div>
-      <Textarea
-        ref={ref}
-        rows={2}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <div className="space-y-2">
-        {[RIGA_MESE_GROUP, ...PLACEHOLDER_GROUPS].map((group) => (
-          <div key={group.label}>
-            <p className="text-[10px] uppercase text-muted-foreground">
-              {group.label}
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {group.items.map((item) => (
-                <Button
-                  key={item.value}
-                  variant="secondary"
-                  size="sm"
-                  className="h-6 text-xs"
-                  onClick={() => insertAtCursor(item.value)}
-                >
-                  {item.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function PreviewSegments({ text }: { text: string }) {
   return (
@@ -178,16 +55,30 @@ export function PdfEditorMesiPanel({
         />
       </div>
 
-      <TemplateField
+      <RichTemplateField
         label="Descrizione riga"
-        value={meseConfig.descrizioneTemplate}
-        onChange={(next) => onChange({ descrizioneTemplate: next })}
+        testo={meseConfig.descrizioneTemplate}
+        richContent={meseConfig.descrizioneRichContent}
+        extraGroups={[RIGA_MESE_GROUP]}
+        onCommit={(patch) =>
+          onChange({
+            descrizioneTemplate: patch.testo,
+            descrizioneRichContent: patch.richContent,
+          })
+        }
       />
 
-      <TemplateField
+      <RichTemplateField
         label="Valore riga (a destra)"
-        value={meseConfig.valoreTemplate}
-        onChange={(next) => onChange({ valoreTemplate: next })}
+        testo={meseConfig.valoreTemplate}
+        richContent={meseConfig.valoreRichContent}
+        extraGroups={[RIGA_MESE_GROUP]}
+        onCommit={(patch) =>
+          onChange({
+            valoreTemplate: patch.testo,
+            valoreRichContent: patch.richContent,
+          })
+        }
       />
 
       <div className="flex items-center justify-between rounded-md border p-2">

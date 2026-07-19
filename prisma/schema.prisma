@@ -83,6 +83,7 @@ model Pagamento {
   citta               String
   cap                 String         @default("")
   pdfLayoutSnapshot   Json?
+  bolloCodice         String?        @unique
 
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
