@@ -13,10 +13,10 @@ import {
   type UserUpdateFormData,
 } from "@/lib/validations/user";
 import { createUser, updateUser } from "@/lib/actions/users";
-import type { Utente } from "@prisma/client";
+import type { SafeUtente } from "@/lib/data/user-select";
 
 type UserFormProps = {
-  user?: Utente;
+  user?: SafeUtente;
   onSuccess?: () => void;
 };
 
@@ -64,7 +64,7 @@ function UserEditForm({
   user,
   onSuccess,
 }: {
-  user: Utente;
+  user: SafeUtente;
   onSuccess?: () => void;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);

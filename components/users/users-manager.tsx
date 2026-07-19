@@ -21,23 +21,23 @@ import { UserForm } from "./user-form";
 import { ResetPasswordForm } from "./reset-password-form";
 import { Tooltip } from "@/components/ui/tooltip";
 import { toggleUserEnabled } from "@/lib/actions/users";
-import type { Utente } from "@prisma/client";
+import type { SafeUtente } from "@/lib/data/user-select";
 
 type UsersManagerProps = {
-  users: Utente[];
+  users: SafeUtente[];
 };
 
 export function UsersManager({ users }: UsersManagerProps) {
   const [open, setOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<Utente | null>(null);
-  const [resettingUser, setResettingUser] = useState<Utente | null>(null);
+  const [editingUser, setEditingUser] = useState<SafeUtente | null>(null);
+  const [resettingUser, setResettingUser] = useState<SafeUtente | null>(null);
 
   const handleOpenNew = () => {
     setEditingUser(null);
     setOpen(true);
   };
 
-  const handleOpenEdit = (user: Utente) => {
+  const handleOpenEdit = (user: SafeUtente) => {
     setEditingUser(user);
     setOpen(true);
   };

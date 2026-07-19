@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "verify:rich-text": "tsx scripts/verify-rich-text-bridge.ts",
-    "verify:actions-auth": "tsx scripts/verify-actions-auth.ts"
+    "verify:actions-auth": "tsx scripts/verify-actions-auth.ts",
+    "verify:safe-user-select": "tsx scripts/verify-safe-user-select.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
