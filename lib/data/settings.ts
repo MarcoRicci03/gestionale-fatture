@@ -95,15 +95,3 @@ export async function getPdfSettingsForUser(userId: number): Promise<PdfLayout> 
   const typed = rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
   return typed;
 }
-
-export async function refreshInvoiceLayoutSnapshot(
-  invoiceId: number,
-  userId: number
-): Promise<void> {
-  const layout = await getPdfSettingsForUser(userId);
-
-  await prisma.pagamento.update({
-    where: { id: invoiceId, id_Utente: userId },
-    data: { pdfLayoutSnapshot: layout as unknown as Prisma.InputJsonValue },
-  });
-}

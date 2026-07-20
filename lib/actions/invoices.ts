@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
+import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
@@ -185,8 +186,9 @@ export async function createInvoice(
     new Prisma.Decimal(0)
   );
 
+  let createdInvoiceId: number;
   try {
-    await prisma.pagamento.create({
+    const created = await prisma.pagamento.create({
       data: {
         id_Utente: userId,
         id_Pagante,
@@ -206,6 +208,7 @@ export async function createInvoice(
         },
       },
     });
+    createdInvoiceId = created.id;
   } catch (error) {
     if (isBolloCodiceUniqueViolation(error)) {
       return { error: BOLLO_CODICE_DUPLICATO_ERROR };
@@ -216,6 +219,14 @@ export async function createInvoice(
       };
     }
     return { error: "Errore durante la creazione della fattura" };
+  }
+
+  try {
+    await snapshotPdfLayoutForInvoice(createdInvoiceId, userId);
+  } catch (error) {
+    // Non-fatale: la fattura è creata comunque. generateInvoicePdf ha un
+    // fallback di sola lettura per il caso in cui lo snapshot resti null.
+    console.error("snapshotPdfLayoutForInvoice error", error);
   }
 
   revalidatePath("/invoices");

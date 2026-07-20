@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { requireSession } from "@/lib/auth/session";
 import { upsertPdfSettings } from "@/lib/data/settings";
 import { pdfSettingsSchema } from "@/lib/validations/pdf-settings";
@@ -49,10 +49,7 @@ export async function refreshInvoicePdfLayout(
   const session = await requireSession();
 
   try {
-    await prisma.pagamento.update({
-      where: { id: invoiceId, id_Utente: session.id },
-      data: { pdfLayoutSnapshot: { set: null } },
-    });
+    await snapshotPdfLayoutForInvoice(invoiceId, session.id);
   } catch (e) {
     console.error("refreshInvoicePdfLayout error", e);
     return { success: false, error: "Errore durante l'aggiornamento del layout" };
