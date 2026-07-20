@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
+import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 
 export type PayerActionState = { success: true } | { error: string };
@@ -66,7 +67,14 @@ export async function createPayer(
         piva: parsed.data.piva ?? null,
       },
     });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolationOnField(error, "cf")) {
+      return { error: "Codice Fiscale già presente" };
+    }
+    if (isUniqueViolationOnField(error, "piva")) {
+      return { error: "Partita IVA già presente" };
+    }
+    console.error("createPayer error", error);
     return { error: "Errore durante la creazione del pagante" };
   }
 
@@ -108,7 +116,14 @@ export async function updatePayer(
         piva: parsed.data.piva ?? null,
       },
     });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolationOnField(error, "cf")) {
+      return { error: "Codice Fiscale già presente" };
+    }
+    if (isUniqueViolationOnField(error, "piva")) {
+      return { error: "Partita IVA già presente" };
+    }
+    console.error("updatePayer error", error);
     return { error: "Errore durante l'aggiornamento del pagante" };
   }
 
@@ -125,7 +140,8 @@ export async function deletePayer(id: number): Promise<PayerActionState> {
       where: { id, id_Utente: userId },
       data: { eliminato: true },
     });
-  } catch {
+  } catch (error) {
+    console.error("deletePayer error", error);
     return { error: "Errore durante l'eliminazione del pagante" };
   }
 
