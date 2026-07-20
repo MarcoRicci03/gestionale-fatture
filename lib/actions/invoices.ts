@@ -7,6 +7,7 @@ import { requireUserId } from "@/lib/auth/session";
 import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { getNextInvoiceNumberForUserYear } from "@/lib/data/invoices";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
@@ -20,13 +21,6 @@ function isInvoiceNumberUniqueViolation(error: unknown): boolean {
 }
 
 export type InvoiceActionState = { success: true } | { error: string };
-
-function yearRange(year: number) {
-  return {
-    gte: new Date(year, 0, 1),
-    lt: new Date(year + 1, 0, 1),
-  };
-}
 
 async function isInvoiceNumberTaken(
   userId: number,
@@ -91,15 +85,7 @@ export async function getNextInvoiceNumberForYear(
   excludeId?: number
 ): Promise<number> {
   const userId = await requireUserId();
-  const last = await prisma.pagamento.findFirst({
-    where: {
-      id_Utente: userId,
-      data: yearRange(year),
-      ...(excludeId ? { NOT: { id: excludeId } } : {}),
-    },
-    orderBy: { n_fattura: "desc" },
-  });
-  return (last?.n_fattura ?? 0) + 1;
+  return getNextInvoiceNumberForUserYear(userId, year, excludeId);
 }
 
 export async function createInvoice(

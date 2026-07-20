@@ -40,19 +40,25 @@ export async function getInvoiceById(id: number) {
   };
 }
 
-export async function getNextInvoiceNumber(year: number) {
-  const userId = await requireUserId();
+export async function getNextInvoiceNumberForUserYear(
+  userId: number,
+  year: number,
+  excludeId?: number
+): Promise<number> {
   const last = await prisma.pagamento.findFirst({
     where: {
       id_Utente: userId,
-      data: {
-        gte: new Date(year, 0, 1),
-        lt: new Date(year + 1, 0, 1),
-      },
+      anno: year,
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },
     orderBy: { n_fattura: "desc" },
   });
   return (last?.n_fattura ?? 0) + 1;
+}
+
+export async function getNextInvoiceNumber(year: number): Promise<number> {
+  const userId = await requireUserId();
+  return getNextInvoiceNumberForUserYear(userId, year);
 }
 
 export async function getPayersAndPatients() {
