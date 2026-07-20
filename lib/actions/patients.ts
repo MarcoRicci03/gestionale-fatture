@@ -39,7 +39,8 @@ export async function createPatient(
         id_Pagante: parsed.data.id_Pagante ?? null,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("createPatient error", error);
     return { error: "Errore durante la creazione del paziente" };
   }
 
@@ -80,7 +81,8 @@ export async function updatePatient(
         id_Pagante: parsed.data.id_Pagante ?? null,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("updatePatient error", error);
     return { error: "Errore durante l'aggiornamento del paziente" };
   }
 
@@ -97,7 +99,8 @@ export async function deletePatient(id: number): Promise<PatientActionState> {
       where: { id, id_Utente: userId },
       data: { eliminato: true },
     });
-  } catch {
+  } catch (error) {
+    console.error("deletePatient error", error);
     return { error: "Errore durante l'eliminazione del paziente" };
   }
 

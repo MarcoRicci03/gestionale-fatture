@@ -37,7 +37,8 @@ export async function changePassword(
       where: { id: session.id },
       data: { passwordHash: await hashPassword(newPassword) },
     });
-  } catch {
+  } catch (error) {
+    console.error("changePassword error", error);
     return { error: "Errore durante il cambio password" };
   }
 
@@ -83,7 +84,8 @@ export async function updateProfile(
         specializzazione: specializzazione?.trim() || null,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("updateProfile error", error);
     return { error: "Errore durante l'aggiornamento del profilo" };
   }
 
