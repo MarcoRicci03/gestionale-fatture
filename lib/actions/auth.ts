@@ -10,6 +10,7 @@ import {
   recordFailedLogin,
   recordSuccessfulLogin,
 } from "@/lib/auth/rate-limit";
+import { getClientIp } from "@/lib/auth/client-ip";
 
 export type LoginState = {
   error?: string;
@@ -26,7 +27,9 @@ export async function login(
     return { error: "Inserire username e password" };
   }
 
-  const rateLimit = checkLoginRateLimit(username);
+  const ip = await getClientIp();
+
+  const rateLimit = checkLoginRateLimit(username, ip);
   if (!rateLimit.allowed) {
     return {
       error: `Troppi tentativi falliti. Riprova tra ${rateLimit.retryAfterMinutes} minuti.`,
@@ -38,22 +41,22 @@ export async function login(
   });
 
   if (!user) {
-    recordFailedLogin(username);
+    recordFailedLogin(username, ip);
     return { error: "Credenziali non valide" };
   }
 
   if (!user.abilitato) {
-    recordFailedLogin(username);
+    recordFailedLogin(username, ip);
     return { error: "Account disabilitato" };
   }
 
   const isValid = await verifyPassword(password, user.passwordHash);
   if (!isValid) {
-    recordFailedLogin(username);
+    recordFailedLogin(username, ip);
     return { error: "Credenziali non valide" };
   }
 
-  recordSuccessfulLogin(username);
+  recordSuccessfulLogin(username, ip);
 
   const token = await signSession(user.id);
   await setSessionCookie(token);
