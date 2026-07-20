@@ -73,7 +73,6 @@ model Paziente {
 
   utente     Utente      @relation(fields: [id_Utente], references: [id])
   pagante    Pagante?    @relation(fields: [id_Pagante], references: [id])
-  sedute     Seduta[]
   pagamenti  Pagamento[]
 
   @@index([id_Utente, eliminato])
@@ -144,16 +143,4 @@ enum ModalitaPagamento {
   CONTANTI
   CARTA
   BONIFICO
-}
-
-model Seduta {
-  id          Int      @id @default(autoincrement())
-  id_Paziente Int
-  prezzo      Float
-  data        DateTime
-  pagato      Boolean  @default(false)
-
-  paziente    Paziente @relation(fields: [id_Paziente], references: [id])
-
-  @@map("sedute")
 }
