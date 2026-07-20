@@ -9,7 +9,7 @@ import { join, relative } from "path";
 // aggiunge una nuova route.
 const API_DIR = join(__dirname, "..", "app", "api");
 const AUTH_CALLS = ["requireUserId(", "requireSession(", "requireAdmin("];
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 // Chiave "percorso/relativo/route.ts:METHOD" per handler intenzionalmente
 // pubblici (nessuno al momento).
 const PUBLIC_ROUTES = new Set<string>([]);
