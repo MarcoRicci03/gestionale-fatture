@@ -17,8 +17,13 @@ const attempts = new Map<string, AttemptRecord>();
 // qualsiasi. Con l'IP nella chiave, il lockout resta isolato alla coppia
 // (username, IP) dell'attaccante: l'utente legittimo, connesso da un IP
 // diverso, ha un contatore separato e non viene bloccato.
+// Codifica JSON (non concatenazione con separatore) perché username è input
+// utente non sanificato (può contenere "::") e gli IPv6 usano nativamente
+// "::" come shorthand: una concatenazione con separatore fisso non sarebbe
+// un round-trip univoco e potrebbe far collidere coppie (username, ip)
+// distinte sulla stessa chiave.
 function buildKey(username: string, ip: string): string {
-  return `${username.trim().toLowerCase()}::${ip}`;
+  return JSON.stringify([username.trim().toLowerCase(), ip]);
 }
 
 function isExpired(record: AttemptRecord, now: number): boolean {
