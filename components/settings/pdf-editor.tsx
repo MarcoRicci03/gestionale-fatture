@@ -930,7 +930,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
           }}
         >
           <div
-            className="relative bg-white shadow-sm"
+            className="light relative bg-white shadow-sm"
             style={{
               width: PAGE_W,
               height: PAGE_H,

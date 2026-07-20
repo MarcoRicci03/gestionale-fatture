@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { logout } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/auth/session";
@@ -110,6 +111,18 @@ export function SidebarContent({ session, collapsed = false }: SidebarContentPro
             )}
           </div>
         </Link>
+
+        <div
+          className={cn(
+            "flex items-center rounded-lg px-3 py-1",
+            collapsed ? "justify-center px-2" : "justify-between"
+          )}
+        >
+          {!collapsed && (
+            <span className="text-sm font-medium text-sidebar-foreground">Tema</span>
+          )}
+          <ThemeToggle />
+        </div>
 
         <form action={logout}>
           <Button

@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
 import { ProfileForm } from "@/components/account/profile-form";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Card,
   CardContent,
@@ -55,6 +56,19 @@ export default async function AccountPage() {
               {[user.nome, user.cognome].filter(Boolean).join(" ") || "-"}
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Aspetto</CardTitle>
+          <CardDescription>Scegli il tema dell&apos;interfaccia.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center gap-3">
+          <ThemeToggle />
+          <span className="text-sm text-muted-foreground">
+            Alterna tra chiaro, scuro e sistema.
+          </span>
         </CardContent>
       </Card>
 

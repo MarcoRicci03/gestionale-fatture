@@ -2,6 +2,7 @@
 
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sheet,
   SheetContent,
@@ -23,22 +24,25 @@ export function MobileHeader({ session }: MobileHeaderProps) {
       <span className="font-heading text-lg font-semibold">
         {session.specializzazione || "Gestionale"}
       </span>
-      <Sheet>
-        <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Apri menu" />}>
-          <Menu className="h-5 w-5" />
-        </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="px-4 pt-6 text-left">
-            <SheetTitle>{session.specializzazione || "Gestionale"}</SheetTitle>
-            <SheetDescription className="sr-only">
-              Navigazione principale
-            </SheetDescription>
-          </SheetHeader>
-          <div className="flex h-[calc(100%-5rem)] flex-col px-4 py-4">
-            <SidebarContent session={session} />
-          </div>
-        </SheetContent>
-      </Sheet>
+      <div className="flex items-center gap-1">
+        <ThemeToggle />
+        <Sheet>
+          <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Apri menu" />}>
+            <Menu className="h-5 w-5" />
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0">
+            <SheetHeader className="px-4 pt-6 text-left">
+              <SheetTitle>{session.specializzazione || "Gestionale"}</SheetTitle>
+              <SheetDescription className="sr-only">
+                Navigazione principale
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex h-[calc(100%-5rem)] flex-col px-4 py-4">
+              <SidebarContent session={session} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
     </header>
   );
 }
