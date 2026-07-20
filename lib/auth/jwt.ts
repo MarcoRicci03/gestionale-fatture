@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, decodeJwt } from "jose";
 
 const secret = process.env.JWT_SECRET;
 if (!secret) {
@@ -13,37 +13,26 @@ export type SessionPayload = {
 
 const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 giorni
 
-function parseDurationToSeconds(input: string): number {
-  const match = input.trim().match(/^(\d+)\s*([smhdw])?$/i);
-  if (!match) return DEFAULT_SESSION_MAX_AGE_SECONDS;
-
-  const value = Number(match[1]);
-  const unit = (match[2] ?? "s").toLowerCase();
-  const multipliers: Record<string, number> = {
-    s: 1,
-    m: 60,
-    h: 60 * 60,
-    d: 60 * 60 * 24,
-    w: 60 * 60 * 24 * 7,
-  };
-  return value * multipliers[unit];
-}
-
-// Usata per il maxAge del cookie di sessione (lib/auth/session.ts): deve
-// restare in sync con la scadenza del JWT firmato da signSession, altrimenti
-// il cookie sopravvive più o meno a lungo del token che contiene.
-export function getSessionMaxAgeSeconds(): number {
-  const raw = process.env.JWT_EXPIRES_IN;
-  if (!raw) return DEFAULT_SESSION_MAX_AGE_SECONDS;
-  return parseDurationToSeconds(raw);
-}
-
 export async function signSession(userId: number): Promise<string> {
   return new SignJWT({ sub: String(userId) })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(process.env.JWT_EXPIRES_IN ?? "7d")
     .sign(encodedSecret);
+}
+
+// Deriva la durata del cookie di sessione (lib/auth/session.ts) direttamente
+// dal token JWT già firmato, invece di ri-parsare JWT_EXPIRES_IN con un
+// parser separato: jose.setExpirationTime accetta molti più formati (es.
+// "2 hours", "1 year") di quanti un parser locale ne riconoscesse, quindi
+// derivare dal token reale è l'unico modo che garantisce che cookie e JWT
+// scadano sempre insieme, qualunque sia il formato usato in JWT_EXPIRES_IN.
+export function getTokenMaxAgeSeconds(token: string): number {
+  const { exp, iat } = decodeJwt(token);
+  if (typeof exp !== "number" || typeof iat !== "number") {
+    return DEFAULT_SESSION_MAX_AGE_SECONDS;
+  }
+  return Math.max(0, exp - iat);
 }
 
 export async function verifySession(
