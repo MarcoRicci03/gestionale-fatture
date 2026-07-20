@@ -10,7 +10,8 @@
     "verify:rich-text": "tsx scripts/verify-rich-text-bridge.ts",
     "verify:actions-auth": "tsx scripts/verify-actions-auth.ts",
     "verify:safe-user-select": "tsx scripts/verify-safe-user-select.ts",
-    "verify:rate-limit-ip-scope": "tsx scripts/verify-rate-limit-ip-scope.ts"
+    "verify:rate-limit-ip-scope": "tsx scripts/verify-rate-limit-ip-scope.ts",
+    "verify:api-routes-auth": "tsx scripts/verify-api-routes-auth.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

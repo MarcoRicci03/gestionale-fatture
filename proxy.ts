@@ -16,6 +16,13 @@ export async function proxy(request: NextRequest) {
   // chiama requireUserId/requireSession/requireAdmin" è garantita da
   // `npm run verify:actions-auth` (scripts/verify-actions-auth.ts), non da
   // questo proxy.
+  //
+  // Il matcher sopra esclude anche "api": un 307 verso /login non è una
+  // risposta sensata per un client API, quindi le route in
+  // app/api/**/route.ts si autenticano da sole (requireUserId/requireSession/
+  // requireAdmin nell'handler), come le Server Action. L'invariante è
+  // garantita da `npm run verify:api-routes-auth`
+  // (scripts/verify-api-routes-auth.ts).
   if (request.method !== "GET") {
     return NextResponse.next();
   }

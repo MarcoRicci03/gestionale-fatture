@@ -1,0 +1,93 @@
+import { readFileSync, readdirSync } from "fs";
+import { join, relative } from "path";
+
+// Equivalente di verify-actions-auth.ts per le route API: proxy.ts esclude
+// esplicitamente "api" dal matcher (vedi commento in proxy.ts), quindi ogni
+// handler HTTP esportato da app/api/**/route.ts è raggiungibile da un client
+// non autenticato a meno che non verifichi la sessione da sé. Questo script
+// rende l'invariante verificabile invece che affidata alla disciplina di chi
+// aggiunge una nuova route.
+const API_DIR = join(__dirname, "..", "app", "api");
+const AUTH_CALLS = ["requireUserId(", "requireSession(", "requireAdmin("];
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+// Chiave "percorso/relativo/route.ts:METHOD" per handler intenzionalmente
+// pubblici (nessuno al momento).
+const PUBLIC_ROUTES = new Set<string>([]);
+
+function extractFunctionBody(source: string, startIndex: number): string {
+  // Find the closing paren of the function signature first
+  let parenDepth = 0;
+  let parenClosing = -1;
+  for (let i = startIndex; i < source.length; i++) {
+    if (source[i] === "(") parenDepth++;
+    else if (source[i] === ")") {
+      parenDepth--;
+      if (parenDepth === 0) {
+        parenClosing = i;
+        break;
+      }
+    }
+  }
+  if (parenClosing === -1) return "";
+
+  // Now find the opening brace after the closing paren
+  const openBrace = source.indexOf("{", parenClosing);
+  if (openBrace === -1) return "";
+
+  let depth = 0;
+  for (let i = openBrace; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") {
+      depth--;
+      if (depth === 0) return source.slice(openBrace, i + 1);
+    }
+  }
+  return source.slice(openBrace);
+}
+
+function findRouteFiles(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...findRouteFiles(fullPath));
+    } else if (entry.name === "route.ts") {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+const violations: string[] = [];
+
+for (const path of findRouteFiles(API_DIR)) {
+  const source = readFileSync(path, "utf-8");
+  const relPath = relative(join(__dirname, ".."), path);
+
+  for (const method of HTTP_METHODS) {
+    const regex = new RegExp(`export\\s+async\\s+function\\s+${method}\\s*\\(`);
+    const match = regex.exec(source);
+    if (!match) continue;
+    if (PUBLIC_ROUTES.has(`${relPath}:${method}`)) continue;
+
+    const body = extractFunctionBody(source, match.index);
+    const hasAuthCheck = AUTH_CALLS.some((call) => body.includes(call));
+    if (!hasAuthCheck) {
+      violations.push(`${relPath}: ${method}()`);
+    }
+  }
+}
+
+if (violations.length > 0) {
+  console.error("Route API esportate senza controllo di sessione diretto:");
+  for (const v of violations) console.error(`  - ${v}`);
+  console.error(
+    "\nOgni handler HTTP esportato da app/api/**/route.ts è raggiungibile senza " +
+      "passare dal proxy (vedi proxy.ts): aggiungi requireUserId()/requireSession()/" +
+      "requireAdmin() direttamente nell'handler, oppure, se è intenzionalmente " +
+      "pubblico, aggiungilo a PUBLIC_ROUTES in questo script."
+  );
+  process.exit(1);
+}
+
+console.log("Tutte le route API verificano la sessione.");

@@ -1,3 +1,4 @@
+import { requireUserId } from "@/lib/auth/session";
 import { getInvoiceById } from "@/lib/data/invoices";
 import { generateInvoicePdf } from "@/lib/pdf/invoices";
 
@@ -5,6 +6,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  await requireUserId();
+
   const { id } = await params;
   const invoiceId = Number(id);
 
