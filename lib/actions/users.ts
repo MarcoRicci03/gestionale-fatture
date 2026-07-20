@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
+import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import {
   userCreateSchema,
   userUpdateSchema,
@@ -40,7 +41,11 @@ export async function createUser(
         abilitato,
       },
     });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolationOnField(error, "username")) {
+      return { error: "Username già in uso" };
+    }
+    console.error("createUser error", error);
     return { error: "Errore durante la creazione dell'utente" };
   }
 
@@ -81,7 +86,11 @@ export async function updateUser(
         abilitato,
       },
     });
-  } catch {
+  } catch (error) {
+    if (isUniqueViolationOnField(error, "username")) {
+      return { error: "Username già in uso" };
+    }
+    console.error("updateUser error", error);
     return { error: "Errore durante l'aggiornamento dell'utente" };
   }
 
@@ -109,7 +118,8 @@ export async function resetUserPassword(
       where: { id },
       data: { passwordHash: await hashPassword(parsed.data.password) },
     });
-  } catch {
+  } catch (error) {
+    console.error("resetUserPassword error", error);
     return { error: "Errore durante il reset della password" };
   }
 
@@ -132,7 +142,8 @@ export async function toggleUserEnabled(
       where: { id },
       data: { abilitato },
     });
-  } catch {
+  } catch (error) {
+    console.error("toggleUserEnabled error", error);
     return { error: "Errore durante l'aggiornamento dello stato" };
   }
 
