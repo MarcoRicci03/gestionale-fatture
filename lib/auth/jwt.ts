@@ -27,6 +27,9 @@ export async function signSession(userId: number): Promise<string> {
 // "2 hours", "1 year") di quanti un parser locale ne riconoscesse, quindi
 // derivare dal token reale è l'unico modo che garantisce che cookie e JWT
 // scadano sempre insieme, qualunque sia il formato usato in JWT_EXPIRES_IN.
+// Usa decodeJwt (non verificato): sicuro solo perché l'unico chiamante
+// (setSessionCookie) passa sempre un token appena firmato da questo server
+// via signSession, mai un token arbitrario letto da un client.
 export function getTokenMaxAgeSeconds(token: string): number {
   const { exp, iat } = decodeJwt(token);
   if (typeof exp !== "number" || typeof iat !== "number") {
