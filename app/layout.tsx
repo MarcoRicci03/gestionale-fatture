@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Gestionale Fatture - Logopedista",
+    default: "Gestionale Fatture",
     template: "%s | Gestionale Fatture",
   },
   description: "Gestionale di fatturazione per logopedisti",

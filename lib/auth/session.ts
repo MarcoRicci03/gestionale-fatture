@@ -8,7 +8,13 @@ const COOKIE_NAME = "session_token";
 
 export type Session = Pick<
   Utente,
-  "id" | "username" | "nome" | "cognome" | "isAdmin" | "abilitato"
+  | "id"
+  | "username"
+  | "nome"
+  | "cognome"
+  | "isAdmin"
+  | "abilitato"
+  | "specializzazione"
 >;
 
 export async function getSession(): Promise<Session | null> {
@@ -43,6 +49,7 @@ export async function getSession(): Promise<Session | null> {
     cognome: user.cognome,
     isAdmin: user.isAdmin,
     abilitato: user.abilitato,
+    specializzazione: user.specializzazione,
   };
 }
 

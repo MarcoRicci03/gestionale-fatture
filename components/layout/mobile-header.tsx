@@ -11,7 +11,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import type { Session } from "@/lib/auth/session";
-import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarContent } from "./sidebar-content";
 
 type MobileHeaderProps = {
@@ -21,20 +20,16 @@ type MobileHeaderProps = {
 export function MobileHeader({ session }: MobileHeaderProps) {
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-background px-4 py-3 lg:hidden">
-      <span className="font-heading text-lg font-semibold">Logopedista</span>
+      <span className="font-heading text-lg font-semibold">
+        {session.specializzazione || "Gestionale"}
+      </span>
       <Sheet>
-        <SheetTrigger
-          render={
-            <Tooltip content="Apri menu">
-              <Button variant="ghost" size="icon" aria-label="Apri menu" />
-            </Tooltip>
-          }
-        >
+        <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Apri menu" />}>
           <Menu className="h-5 w-5" />
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="px-4 pt-6 text-left">
-            <SheetTitle>Logopedista</SheetTitle>
+            <SheetTitle>{session.specializzazione || "Gestionale"}</SheetTitle>
             <SheetDescription className="sr-only">
               Navigazione principale
             </SheetDescription>

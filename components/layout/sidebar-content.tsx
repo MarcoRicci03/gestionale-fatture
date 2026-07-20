@@ -10,6 +10,7 @@ import {
   Settings,
   UserCircle,
   FileType,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,9 +35,10 @@ const navItems: NavItem[] = [
 
 type SidebarContentProps = {
   session: Session;
+  collapsed?: boolean;
 };
 
-export function SidebarContent({ session }: SidebarContentProps) {
+export function SidebarContent({ session, collapsed = false }: SidebarContentProps) {
   const pathname = usePathname();
 
   return (
@@ -55,13 +57,14 @@ export function SidebarContent({ session }: SidebarContentProps) {
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                collapsed && "justify-center gap-0 px-2",
                 isActive
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              {item.label}
+              <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
             </Link>
             );
           })}
@@ -72,13 +75,14 @@ export function SidebarContent({ session }: SidebarContentProps) {
           href="/settings/pdf"
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            collapsed && "justify-center gap-0 px-2",
             pathname === "/settings/pdf" || pathname.startsWith("/settings/")
               ? "bg-sidebar-primary text-sidebar-primary-foreground"
               : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           )}
         >
           <FileType className="h-5 w-5 shrink-0" />
-          <div className="flex flex-col">
+          <div className={cn("flex flex-col", collapsed && "sr-only")}>
             <span className="leading-none">Impostazioni PDF</span>
           </div>
         </Link>
@@ -87,13 +91,14 @@ export function SidebarContent({ session }: SidebarContentProps) {
           href="/account"
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            collapsed && "justify-center gap-0 px-2",
             pathname === "/account" || pathname.startsWith("/account/")
               ? "bg-sidebar-primary text-sidebar-primary-foreground"
               : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           )}
         >
           <UserCircle className="h-5 w-5 shrink-0" />
-          <div className="flex flex-col">
+          <div className={cn("flex flex-col", collapsed && "sr-only")}>
             <span className="leading-none">
               {[session.nome, session.cognome].filter(Boolean).join(" ") ||
                 session.username}
@@ -107,8 +112,14 @@ export function SidebarContent({ session }: SidebarContentProps) {
         </Link>
 
         <form action={logout}>
-          <Button type="submit" variant="outline" className="w-full">
-            Logout
+          <Button
+            type="submit"
+            variant="outline"
+            className={collapsed ? "w-auto mx-auto" : "w-full"}
+            aria-label="Logout"
+          >
+            {collapsed && <LogOut className="h-4 w-4" />}
+            <span className={collapsed ? "sr-only" : undefined}>Logout</span>
           </Button>
         </form>
       </div>

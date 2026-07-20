@@ -33,7 +33,7 @@ export function LoginForm() {
     <Card className="w-full max-w-sm">
       <CardHeader>
         <CardTitle>Accedi</CardTitle>
-        <CardDescription>Gestionale Fatture – Logopedista</CardDescription>
+        <CardDescription>Gestionale Fatture</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
