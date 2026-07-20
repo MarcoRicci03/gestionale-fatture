@@ -95,7 +95,7 @@ model Pagamento {
   citta               String
   cap                 String
   pdfLayoutSnapshot   Json?
-  bolloCodice         String?        @unique
+  bolloCodice         String?
 
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
@@ -104,6 +104,7 @@ model Pagamento {
 
   @@unique([id_Utente, n_fattura, anno])
   @@index([id_Utente, data])
+  @@unique([id_Utente, bolloCodice])
   @@map("pagamenti")
 }
 

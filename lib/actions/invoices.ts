@@ -83,8 +83,10 @@ async function isBolloCodiceTaken(
   bolloCodice: string,
   excludeId?: number
 ): Promise<boolean> {
+  const userId = await requireUserId();
   const existing = await prisma.pagamento.findFirst({
     where: {
+      id_Utente: userId,
       bolloCodice,
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
     },

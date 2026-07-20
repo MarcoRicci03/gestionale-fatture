@@ -16,6 +16,8 @@ export type LoginState = {
   error?: string;
 };
 
+const DUMMY_HASH = "$2b$10$wN9Q/35I9qR/V.Y.5rJ9d.fA/C7j.39/4/51r2X73456789012345";
+
 export async function login(
   _prevState: LoginState,
   formData: FormData
@@ -25,6 +27,9 @@ export async function login(
 
   if (!username || !password) {
     return { error: "Inserire username e password" };
+  }
+  if (username.length > 50 || password.length > 100) {
+    return { error: "Input non valido" };
   }
 
   const ip = await getClientIp();
@@ -42,12 +47,14 @@ export async function login(
 
   if (!user) {
     recordFailedLogin(username, ip);
+    await verifyPassword(password, DUMMY_HASH);
     return { error: "Credenziali non valide" };
   }
 
   if (!user.abilitato) {
     recordFailedLogin(username, ip);
-    return { error: "Account disabilitato" };
+    await verifyPassword(password, DUMMY_HASH);
+    return { error: "Credenziali non valide" };
   }
 
   const isValid = await verifyPassword(password, user.passwordHash);

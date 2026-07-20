@@ -46,3 +46,6 @@ next-env.d.ts
 
 .impeccable/
 .claude/
+docs/
+
+ROADMAP_FIX.md
