@@ -22,7 +22,7 @@ export const invoiceSchema = z.object({
     .union([z.literal(""), z.coerce.number().int().nonnegative()])
     .transform((val) => (val === "" ? undefined : val))
     .optional(),
-  commento: z.string().optional(),
+  commento: z.string().max(2000).optional(),
   n_fattura: z.coerce.number().int().positive("Numero fattura non valido"),
   mesi: z
     .array(
@@ -42,8 +42,8 @@ export const invoiceSchema = z.object({
       (mesi) => mesi.reduce((somma, m) => somma + m.prezzo, 0) > 0,
       "L'importo totale deve essere maggiore di 0"
     ),
-  citta: z.string().min(1, "La città è obbligatoria"),
-  cap: z.string().min(1, "Il CAP è obbligatorio"),
+  citta: z.string().min(1, "La città è obbligatoria").max(100),
+  cap: z.string().min(1, "Il CAP è obbligatorio").max(10),
   bolloCodice: z
     .union([
       z.literal(""),

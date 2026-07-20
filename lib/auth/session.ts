@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { verifySession, getTokenMaxAgeSeconds } from "./jwt";
+import { signSessionWithMaxAge, verifySession } from "./jwt";
 import type { Utente } from "@prisma/client";
 
 const COOKIE_NAME = "session_token";
@@ -42,6 +42,14 @@ export async function getSession(): Promise<Session | null> {
     return null;
   }
 
+  // Un token firmato prima dell'ultimo cambio/reset password porta un
+  // tokenVersion ormai superato: va trattato come sessione invalidata, non
+  // come utente valido (vedi il commento su Utente.tokenVersion in
+  // schema.prisma).
+  if (payload.tokenVersion !== user.tokenVersion) {
+    return null;
+  }
+
   return {
     id: user.id,
     username: user.username,
@@ -66,6 +74,16 @@ export async function requireUserId(): Promise<number> {
   return session.id;
 }
 
+// Per gli handler in app/api/**/route.ts: a differenza di requireUserId()
+// (che fa redirect("/login"), producendo un 307 con corpo HTML — una
+// risposta priva di senso per un client API), qui l'assenza di sessione
+// viene restituita come null, così il chiamante può rispondere con uno
+// status 401 esplicito (vedi SEC-13 in SECURITY_AUDIT.md).
+export async function getUserIdOrNull(): Promise<number | null> {
+  const session = await getSession();
+  return session ? session.id : null;
+}
+
 export async function requireAdmin(): Promise<Session> {
   const session = await requireSession();
   if (!session.isAdmin) {
@@ -74,7 +92,13 @@ export async function requireAdmin(): Promise<Session> {
   return session;
 }
 
-export async function setSessionCookie(token: string): Promise<void> {
+// maxAgeSeconds va sempre calcolato da signSessionWithMaxAge (lib/auth/jwt.ts)
+// insieme al token: non esiste un modo di ottenerlo separatamente da un
+// token arbitrario, per costruzione (vedi SEC-17 in SECURITY_AUDIT.md).
+async function setSessionCookie(
+  token: string,
+  maxAgeSeconds: number
+): Promise<void> {
   const cookieStore = await cookies();
   const isProduction = process.env.NODE_ENV === "production";
 
@@ -83,8 +107,22 @@ export async function setSessionCookie(token: string): Promise<void> {
     secure: isProduction,
     sameSite: "lax",
     path: "/",
-    maxAge: getTokenMaxAgeSeconds(token),
+    maxAge: maxAgeSeconds,
   });
+}
+
+// Firma e imposta il cookie di sessione per (userId, tokenVersion). Usato dal
+// login e da changePassword: in changePassword il tokenVersion è già stato
+// incrementato in DB, quindi questa chiamata riallinea subito il cookie della
+// sessione corrente al nuovo valore, mentre ogni altro token firmato in
+// precedenza (es. un cookie rubato) resta con il tokenVersion vecchio e viene
+// respinto da getSession al primo controllo.
+export async function createSessionCookie(
+  userId: number,
+  tokenVersion: number
+): Promise<void> {
+  const { token, maxAgeSeconds } = await signSessionWithMaxAge(userId, tokenVersion);
+  await setSessionCookie(token, maxAgeSeconds);
 }
 
 export async function clearSessionCookie(): Promise<void> {

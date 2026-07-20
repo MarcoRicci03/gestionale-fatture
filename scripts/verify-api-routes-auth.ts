@@ -1,14 +1,16 @@
 import { readFileSync, readdirSync } from "fs";
 import { join, relative } from "path";
+import { hasApiRouteAuthCheck } from "./lib/api-route-auth-checks";
 
 // Equivalente di verify-actions-auth.ts per le route API: proxy.ts esclude
 // esplicitamente "api" dal matcher (vedi commento in proxy.ts), quindi ogni
 // handler HTTP esportato da app/api/**/route.ts è raggiungibile da un client
 // non autenticato a meno che non verifichi la sessione da sé. Questo script
 // rende l'invariante verificabile invece che affidata alla disciplina di chi
-// aggiunge una nuova route.
+// aggiunge una nuova route. I predicati che definiscono "verifica la
+// sessione" sono in ./lib/api-route-auth-checks.ts (condivisi con
+// scripts/verify-api-route-auth-checker.ts, che li testa direttamente).
 const API_DIR = join(__dirname, "..", "app", "api");
-const AUTH_CALLS = ["requireUserId(", "requireSession(", "requireAdmin("];
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 // Chiave "percorso/relativo/route.ts:METHOD" per handler intenzionalmente
 // pubblici (nessuno al momento).
@@ -71,8 +73,7 @@ for (const path of findRouteFiles(API_DIR)) {
     if (PUBLIC_ROUTES.has(`${relPath}:${method}`)) continue;
 
     const body = extractFunctionBody(source, match.index);
-    const hasAuthCheck = AUTH_CALLS.some((call) => body.includes(call));
-    if (!hasAuthCheck) {
+    if (!hasApiRouteAuthCheck(body)) {
       violations.push(`${relPath}: ${method}()`);
     }
   }
@@ -84,8 +85,11 @@ if (violations.length > 0) {
   console.error(
     "\nOgni handler HTTP esportato da app/api/**/route.ts è raggiungibile senza " +
       "passare dal proxy (vedi proxy.ts): aggiungi requireUserId()/requireSession()/" +
-      "requireAdmin() direttamente nell'handler, oppure, se è intenzionalmente " +
-      "pubblico, aggiungilo a PUBLIC_ROUTES in questo script."
+      "requireAdmin() direttamente nell'handler (redirect a /login), oppure " +
+      "getUserIdOrNull() con un controllo esplicito `=== null` che risponda con " +
+      "status 401 (preferibile per una route API — vedi SEC-13 in " +
+      "SECURITY_AUDIT.md), oppure, se è intenzionalmente pubblico, aggiungilo a " +
+      "PUBLIC_ROUTES in questo script."
   );
   process.exit(1);
 }

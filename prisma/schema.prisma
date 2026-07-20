@@ -22,6 +22,13 @@ model Utente {
   specializzazione String?
   isAdmin          Boolean          @default(false)
   abilitato        Boolean          @default(true)
+  // Incrementato ad ogni cambio/reset password (lib/actions/account.ts,
+  // lib/actions/users.ts). Il JWT di sessione porta il valore letto al momento
+  // della firma (lib/auth/jwt.ts): se non coincide più con quello corrente in
+  // DB, getSession() tratta la sessione come invalidata (lib/auth/session.ts).
+  // Così un cambio password revoca immediatamente ogni sessione firmata prima
+  // (es. un cookie rubato), anche se il JWT non è ancora scaduto.
+  tokenVersion     Int              @default(0)
   createdAt        DateTime         @default(now())
 
   paganti          Pagante[]

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const profileUpdateSchema = z.object({
-  nome: z.string().optional(),
-  cognome: z.string().optional(),
+  nome: z.string().max(100).optional(),
+  cognome: z.string().max(100).optional(),
   pIva: z
     .union([
       z.string().regex(/^\d{11}$/, "P.IVA non valida (11 cifre)"),
@@ -19,9 +19,9 @@ export const profileUpdateSchema = z.object({
     ])
     .transform((v) => (v === "" || v === null ? null : v))
     .optional(),
-  via: z.string().optional(),
-  citta: z.string().optional(),
-  cap: z.string().optional(),
+  via: z.string().max(200).optional(),
+  citta: z.string().max(100).optional(),
+  cap: z.string().max(10).optional(),
   provincia: z
     .union([
       z.string().regex(/^[A-Za-z]{2}$/, "Provincia non valida (sigla di 2 lettere)"),
@@ -30,8 +30,8 @@ export const profileUpdateSchema = z.object({
     ])
     .transform((v) => (v === "" || v === null ? null : v.toUpperCase()))
     .optional(),
-  titolo: z.string().optional(),
-  specializzazione: z.string().optional(),
+  titolo: z.string().max(50).optional(),
+  specializzazione: z.string().max(100).optional(),
 });
 
 export type ProfileUpdateFormData = z.output<typeof profileUpdateSchema>;

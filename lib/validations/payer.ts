@@ -2,11 +2,11 @@ import { z } from "zod";
 
 export const payerSchema = z
   .object({
-    nome: z.string().min(1, "Il nome è obbligatorio"),
-    cognome: z.string().min(1, "Il cognome è obbligatorio"),
-    via: z.string().min(1, "La via è obbligatoria"),
-    citta: z.string().min(1, "La città è obbligatoria"),
-    cap: z.string().min(1, "Il CAP è obbligatorio"),
+    nome: z.string().min(1, "Il nome è obbligatorio").max(100),
+    cognome: z.string().min(1, "Il cognome è obbligatorio").max(100),
+    via: z.string().min(1, "La via è obbligatoria").max(200),
+    citta: z.string().min(1, "La città è obbligatoria").max(100),
+    cap: z.string().min(1, "Il CAP è obbligatorio").max(10),
     cf: z
       .union([z.string().min(1).max(16), z.literal(""), z.null()])
       .transform((val) => (val === "" || val === null ? null : val))

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const patientSchema = z.object({
-  nome: z.string().min(1, "Il nome è obbligatorio"),
-  cognome: z.string().min(1, "Il cognome è obbligatorio"),
+  nome: z.string().min(1, "Il nome è obbligatorio").max(100),
+  cognome: z.string().min(1, "Il cognome è obbligatorio").max(100),
   id_Pagante: z
     .union([
       z.literal(""),

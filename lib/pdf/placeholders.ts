@@ -289,6 +289,7 @@ export function buildMockInvoice(
       specializzazione: "Psicologo",
       isAdmin: false,
       abilitato: true,
+      tokenVersion: 0,
       createdAt: now,
     },
     ...override,

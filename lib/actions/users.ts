@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
+import { createRateLimiter } from "@/lib/auth/rate-limiter";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import {
   userCreateSchema,
@@ -12,6 +13,15 @@ import {
 } from "@/lib/validations/user";
 
 export type UserActionState = { success: true } | { error: string };
+
+// Senza questo limite, una sessione admin compromessa potrebbe resettare in
+// loop la password di ogni utente (vedi SEC-08 in SECURITY_AUDIT.md). Soglia
+// più larga di changePassword perché un admin legittimo può dover resettare
+// più account in sequenza (es. dopo un incidente).
+const resetPasswordLimiter = createRateLimiter({
+  maxRequests: 20,
+  windowMs: 60 * 60 * 1000, // 1 ora
+});
 
 export async function createUser(
   data: unknown
@@ -108,6 +118,14 @@ export async function resetUserPassword(
     return { error: "Non puoi resettare la tua password da qui" };
   }
 
+  const rateLimit = resetPasswordLimiter.consume(String(session.id));
+  if (!rateLimit.allowed) {
+    const retryAfterMinutes = Math.ceil((rateLimit.retryAfterSeconds ?? 0) / 60);
+    return {
+      error: `Troppi reset password consecutivi. Riprova tra ${retryAfterMinutes} minuti.`,
+    };
+  }
+
   const parsed = resetPasswordSchema.safeParse(data);
   if (!parsed.success) {
     return { error: "Dati non validi" };
@@ -116,7 +134,12 @@ export async function resetUserPassword(
   try {
     await prisma.utente.update({
       where: { id },
-      data: { passwordHash: await hashPassword(parsed.data.password) },
+      data: {
+        passwordHash: await hashPassword(parsed.data.password),
+        // Revoca ogni sessione dell'utente aperta con la vecchia password
+        // (vedi il commento su Utente.tokenVersion in schema.prisma).
+        tokenVersion: { increment: 1 },
+      },
     });
   } catch (error) {
     console.error("resetUserPassword error", error);

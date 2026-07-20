@@ -11,7 +11,18 @@
     "verify:actions-auth": "tsx scripts/verify-actions-auth.ts",
     "verify:safe-user-select": "tsx scripts/verify-safe-user-select.ts",
     "verify:rate-limit-ip-scope": "tsx scripts/verify-rate-limit-ip-scope.ts",
-    "verify:api-routes-auth": "tsx scripts/verify-api-routes-auth.ts"
+    "verify:api-routes-auth": "tsx scripts/verify-api-routes-auth.ts",
+    "verify:session-token-version": "tsx scripts/verify-session-token-version.ts",
+    "verify:jwt-secret-strength": "tsx scripts/verify-jwt-secret-strength.ts",
+    "verify:dummy-hash-cost": "tsx scripts/verify-dummy-hash-cost.ts",
+    "verify:pdf-route-cache-control": "tsx scripts/verify-pdf-route-cache-control.ts",
+    "verify:rate-limiter": "tsx scripts/verify-rate-limiter.ts",
+    "verify:input-length-limits": "tsx scripts/verify-input-length-limits.ts",
+    "verify:proxy-matcher": "tsx scripts/verify-proxy-matcher.ts",
+    "verify:api-route-auth-checker": "tsx scripts/verify-api-route-auth-checker.ts",
+    "verify:password-policy": "tsx scripts/verify-password-policy.ts",
+    "verify:jwt-max-age-encapsulation": "tsx scripts/verify-jwt-max-age-encapsulation.ts",
+    "verify:security-headers": "tsx scripts/verify-security-headers.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

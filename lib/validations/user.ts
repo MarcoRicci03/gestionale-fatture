@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCommonWeakPassword } from "@/lib/auth/common-passwords";
 
 const userCommonSchema = {
   username: z
@@ -11,9 +12,19 @@ const userCommonSchema = {
   abilitato: z.boolean(),
 } as const;
 
+// Condiviso da userCreateSchema, resetPasswordSchema e changePasswordSchema:
+// 12 caratteri minimi (non 8) e rifiuto di una deny-list di password comuni
+// note (vedi SEC-16 in SECURITY_AUDIT.md e lib/auth/common-passwords.ts).
+export const passwordSchema = z
+  .string()
+  .min(12, "La password deve avere almeno 12 caratteri")
+  .refine((value) => !isCommonWeakPassword(value), {
+    message: "Questa password è troppo comune, scegline una più sicura",
+  });
+
 export const userCreateSchema = z.object({
   ...userCommonSchema,
-  password: z.string().min(8, "La password deve avere almeno 8 caratteri"),
+  password: passwordSchema,
 });
 
 export const userUpdateSchema = z.object({
@@ -21,18 +32,22 @@ export const userUpdateSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  password: z.string().min(8, "La password deve avere almeno 8 caratteri"),
+  password: passwordSchema,
 });
 
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Inserisci la password attuale"),
-    newPassword: z.string().min(8, "La nuova password deve avere almeno 8 caratteri"),
+    newPassword: passwordSchema,
     confirmPassword: z.string().min(1, "Conferma la nuova password"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Le password non coincidono",
     path: ["confirmPassword"],
+  })
+  .refine((data) => data.newPassword !== data.currentPassword, {
+    message: "La nuova password deve essere diversa da quella attuale",
+    path: ["newPassword"],
   });
 
 export type UserCreateFormData = z.output<typeof userCreateSchema>;

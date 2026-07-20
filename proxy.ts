@@ -3,8 +3,13 @@ import type { NextRequest } from "next/server";
 import { verifySession } from "@/lib/auth/jwt";
 
 export const config = {
+  // Il lookahead è ancorato a un confine di segmento con (?:/|$), non solo
+  // al prefisso: senza l'ancoraggio, un percorso che INIZIA con una di
+  // queste stringhe (es. "/logins", "/api-docs") sfuggirebbe al controllo
+  // di sessione qui sotto pur non essendo affatto la route pensata come
+  // pubblica (vedi SEC-12 in SECURITY_AUDIT.md).
   matcher: [
-    "/((?!login|api|_next/static|_next/image|favicon.ico|robots.txt).*)",
+    "/((?!(?:login|api|_next/static|_next/image|favicon\\.ico|robots\\.txt)(?:/|$)).*)",
   ],
 };
 

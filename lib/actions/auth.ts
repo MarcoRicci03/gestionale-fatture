@@ -3,8 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { signSession } from "@/lib/auth/jwt";
-import { setSessionCookie, clearSessionCookie } from "@/lib/auth/session";
+import { createSessionCookie, clearSessionCookie } from "@/lib/auth/session";
 import {
   checkLoginRateLimit,
   recordFailedLogin,
@@ -16,7 +15,13 @@ export type LoginState = {
   error?: string;
 };
 
-const DUMMY_HASH = "$2b$10$wN9Q/35I9qR/V.Y.5rJ9d.fA/C7j.39/4/51r2X73456789012345";
+// Cost factor 12, identico a quello usato da hashPassword() (lib/auth/password.ts):
+// se questo hash avesse un cost diverso da quello reale, il tempo di verifica
+// per uno username inesistente/disabilitato sarebbe misurabilmente diverso da
+// quello di uno username esistente, rivelando l'esistenza dell'account tramite
+// timing (vedi SEC-05 in SECURITY_AUDIT.md). Non corrisponde a nessuna password
+// reale, serve solo a pareggiare i tempi di bcrypt.compare.
+const DUMMY_HASH = "$2b$12$uEQH0NVA9flEIdsy4VyajO8CcJ6fP/Ygj9MSjRp0iGfhH8sylWycu";
 
 export async function login(
   _prevState: LoginState,
@@ -65,8 +70,7 @@ export async function login(
 
   recordSuccessfulLogin(username, ip);
 
-  const token = await signSession(user.id);
-  await setSessionCookie(token);
+  await createSessionCookie(user.id, user.tokenVersion);
 
   redirect("/dashboard");
 }
