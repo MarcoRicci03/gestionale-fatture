@@ -4,8 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { requireSession, createSessionCookie } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
+import { getClientIp } from "@/lib/auth/client-ip";
 import { changePasswordSchema } from "@/lib/validations/user";
 import { profileUpdateSchema } from "@/lib/validations/profile";
+import { logAudit } from "@/lib/audit/log";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
 export type AccountActionState = { success: true } | { error: string };
 
@@ -71,6 +74,14 @@ export async function changePassword(
     return { error: "Errore durante il cambio password" };
   }
 
+  await logAudit({
+    azione: AUDIT_ACTIONS.ACCOUNT_PASSWORD_CHANGE,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: session.id,
+    ip: await getClientIp(),
+  });
+
   // Riallinea subito il cookie della sessione corrente al nuovo
   // tokenVersion: solo così l'utente che ha appena cambiato la propria
   // password resta loggato, mentre ogni altro token più vecchio viene
@@ -123,6 +134,14 @@ export async function updateProfile(
     console.error("updateProfile error", error);
     return { error: "Errore durante l'aggiornamento del profilo" };
   }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.ACCOUNT_PROFILE_UPDATE,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: session.id,
+    ip: await getClientIp(),
+  });
 
   return { success: true };
 }

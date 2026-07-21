@@ -2,16 +2,19 @@
 
 import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { requireSession } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/auth/client-ip";
 import { upsertPdfSettings } from "@/lib/data/settings";
 import { pdfSettingsSchema } from "@/lib/validations/pdf-settings";
 import type { PdfSettingsInput } from "@/lib/pdf/types";
+import { logAudit } from "@/lib/audit/log";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
 export type PdfSettingsActionState = { success: true } | { success: false; error: string };
 
 export async function updatePdfSettings(
   data: unknown
 ): Promise<PdfSettingsActionState> {
-  await requireSession();
+  const session = await requireSession();
 
   const parsed = pdfSettingsSchema.safeParse(data);
   if (!parsed.success) {
@@ -33,12 +36,22 @@ export async function updatePdfSettings(
     blocchi: parsed.data.blocchi as unknown as PdfSettingsInput["blocchi"],
   };
 
+  let settingsId: number;
   try {
-    await upsertPdfSettings(input);
+    const settings = await upsertPdfSettings(input);
+    settingsId = settings.id;
   } catch (e) {
     console.error("updatePdfSettings error", e);
     return { success: false, error: "Errore durante il salvataggio delle impostazioni PDF" };
   }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.PDF_SETTINGS_UPDATE,
+    userId: session.id,
+    entita: "ImpostazioniPdf",
+    entitaId: settingsId,
+    ip: await getClientIp(),
+  });
 
   return { success: true };
 }
@@ -54,6 +67,14 @@ export async function refreshInvoicePdfLayout(
     console.error("refreshInvoicePdfLayout error", e);
     return { success: false, error: "Errore durante l'aggiornamento del layout" };
   }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.PDF_SETTINGS_REFRESH_LAYOUT,
+    userId: session.id,
+    entita: "Pagamento",
+    entitaId: invoiceId,
+    ip: await getClientIp(),
+  });
 
   return { success: true };
 }

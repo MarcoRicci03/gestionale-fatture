@@ -1,7 +1,21 @@
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 const LOCKOUT_MS = 15 * 60 * 1000;
-const SWEEP_PROBABILITY = 0.01;
+
+// SEC-04 in SECURITY_AUDIT.md: le Map vivono in memoria di processo (si
+// azzerano a ogni riavvio, non condivise tra repliche — accettato per ora,
+// l'app resta a singola istanza). Senza un tetto, un attaccante che manda
+// username/IP diversi a ogni tentativo (vedi SEC-01: con TRUSTED_PROXY=false
+// l'IP collassa sempre su "unknown", ma lo username resta arbitrario e non
+// validato finché la query su Postgres non lo risolve) fa crescere le Map
+// senza limite. MAX_ENTRIES_PER_MAP impone un tetto fisso con eviction LRU
+// (per ordine di scrittura, non di lettura: ogni tentativo fallito scrive
+// comunque via recordFailedLogin, quindi l'ordine di scrittura riflette già
+// l'attività reale). Sostituisce lo sweep probabilistico (SWEEP_PROBABILITY,
+// che con traffico basso lasciava voci scadute in memoria a lungo) con uno
+// sweep temporizzato indipendente dal traffico in ingresso.
+export const MAX_ENTRIES_PER_MAP = 10_000;
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Rete di sicurezza indipendente dall'IP: senza TRUSTED_PROXY=true (vedi
 // lib/auth/client-ip.ts), o anche con un reverse proxy configurato male, un
@@ -52,7 +66,33 @@ function isExpired(record: AttemptRecord, now: number): boolean {
   return now - record.windowStart >= WINDOW_MS;
 }
 
-function sweepExpired(now: number): void {
+// Scrive spostando la chiave in coda all'ordine di iterazione della Map (un
+// Map.set su una chiave già esistente NON la sposta in coda da solo):
+// necessario perché evictOldest() tratta la prima chiave in ordine di
+// iterazione come la meno recentemente scritta.
+function writeRecord(
+  map: Map<string, AttemptRecord>,
+  key: string,
+  record: AttemptRecord
+): void {
+  map.delete(key);
+  map.set(key, record);
+}
+
+function evictOldest(map: Map<string, AttemptRecord>): void {
+  while (map.size > MAX_ENTRIES_PER_MAP) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) break;
+    map.delete(oldestKey);
+  }
+}
+
+// Esportata per scripts/verify-rate-limit-bounds.ts: la logica di scadenza è
+// pura (dipende solo da `now`, non dall'orologio reale), verificabile senza
+// dover aspettare WINDOW_MS/LOCKOUT_MS per davvero. L'unico pezzo non
+// testato direttamente è il setInterval che la richiama periodicamente più
+// sotto in questo file — puro glue code, non porta logica propria.
+export function sweepExpired(now: number): void {
   for (const [key, record] of attempts) {
     if (isExpired(record, now)) {
       attempts.delete(key);
@@ -63,6 +103,24 @@ function sweepExpired(now: number): void {
       usernameAttempts.delete(key);
     }
   }
+}
+
+// Guardia contro l'hot-reload di Next in sviluppo (stesso pattern di
+// lib/prisma.ts): senza, ogni ricompilazione di questo modulo aggiungerebbe
+// un nuovo setInterval, accumulando timer via via che si modifica il codice.
+// .unref() evita che il timer da solo tenga vivo il processo (rilevante per
+// gli script scripts/verify-*.ts, che importano questo modulo e devono poter
+// terminare da soli).
+const globalForRateLimit = globalThis as unknown as {
+  loginRateLimitSweepInterval: NodeJS.Timeout | undefined;
+};
+
+if (!globalForRateLimit.loginRateLimitSweepInterval) {
+  const interval = setInterval(() => {
+    sweepExpired(Date.now());
+  }, SWEEP_INTERVAL_MS);
+  interval.unref();
+  globalForRateLimit.loginRateLimitSweepInterval = interval;
 }
 
 function checkRecord(
@@ -98,9 +156,6 @@ export function checkLoginRateLimit(
   retryAfterMinutes?: number;
 } {
   const now = Date.now();
-  if (Math.random() < SWEEP_PROBABILITY) {
-    sweepExpired(now);
-  }
 
   const ipResult = checkRecord(attempts, buildKey(username, ip), now);
   const usernameResult = checkRecord(
@@ -131,25 +186,28 @@ function recordFailure(
   const record = map.get(key);
 
   if (!record || isExpired(record, now)) {
-    map.set(key, { count: 1, windowStart: now, lockedUntil: null });
+    writeRecord(map, key, { count: 1, windowStart: now, lockedUntil: null });
+    evictOldest(map);
     return;
   }
 
   const count = record.count + 1;
   if (count >= maxAttempts) {
-    map.set(key, {
+    writeRecord(map, key, {
       count,
       windowStart: record.windowStart,
       lockedUntil: now + LOCKOUT_MS,
     });
+    evictOldest(map);
     return;
   }
 
-  map.set(key, {
+  writeRecord(map, key, {
     count,
     windowStart: record.windowStart,
     lockedUntil: null,
   });
+  evictOldest(map);
 }
 
 export function recordFailedLogin(username: string, ip: string): void {

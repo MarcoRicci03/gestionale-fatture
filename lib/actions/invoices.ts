@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
+import { getClientIp } from "@/lib/auth/client-ip";
 import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { getNextInvoiceNumberForUserYear } from "@/lib/data/invoices";
+import { logAudit } from "@/lib/audit/log";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
@@ -180,6 +183,15 @@ export async function createInvoice(
     console.error("snapshotPdfLayoutForInvoice error", error);
   }
 
+  await logAudit({
+    azione: AUDIT_ACTIONS.INVOICE_CREATE,
+    userId,
+    entita: "Pagamento",
+    entitaId: createdInvoiceId,
+    meta: { n_fattura, anno: year },
+    ip: await getClientIp(),
+  });
+
   revalidatePath("/invoices");
   return { success: true };
 }
@@ -268,6 +280,15 @@ export async function updateInvoice(
     return { error: "Errore durante l'aggiornamento della fattura" };
   }
 
+  await logAudit({
+    azione: AUDIT_ACTIONS.INVOICE_UPDATE,
+    userId,
+    entita: "Pagamento",
+    entitaId: id,
+    meta: { n_fattura, anno: year },
+    ip: await getClientIp(),
+  });
+
   revalidatePath("/invoices");
   revalidatePath(`/invoices/${id}/edit`);
   return { success: true };
@@ -281,6 +302,14 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   } catch {
     return { error: "Errore durante l'eliminazione della fattura" };
   }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.INVOICE_DELETE,
+    userId,
+    entita: "Pagamento",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
 
   revalidatePath("/invoices");
   return { success: true };

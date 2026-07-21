@@ -5,12 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
+import { getClientIp } from "@/lib/auth/client-ip";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import {
   userCreateSchema,
   userUpdateSchema,
   resetPasswordSchema,
 } from "@/lib/validations/user";
+import { logAudit } from "@/lib/audit/log";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
 export type UserActionState = { success: true } | { error: string };
 
@@ -26,7 +29,7 @@ const resetPasswordLimiter = createRateLimiter({
 export async function createUser(
   data: unknown
 ): Promise<UserActionState> {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const parsed = userCreateSchema.safeParse(data);
   if (!parsed.success) {
@@ -40,8 +43,9 @@ export async function createUser(
     return { error: "Username già in uso" };
   }
 
+  let createdUserId: number;
   try {
-    await prisma.utente.create({
+    const created = await prisma.utente.create({
       data: {
         username,
         nome: nome || null,
@@ -51,6 +55,7 @@ export async function createUser(
         abilitato,
       },
     });
+    createdUserId = created.id;
   } catch (error) {
     if (isUniqueViolationOnField(error, "username")) {
       return { error: "Username già in uso" };
@@ -58,6 +63,15 @@ export async function createUser(
     console.error("createUser error", error);
     return { error: "Errore durante la creazione dell'utente" };
   }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.USER_CREATE,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: createdUserId,
+    meta: { username, isAdmin, abilitato },
+    ip: await getClientIp(),
+  });
 
   revalidatePath("/users");
   return { success: true };
@@ -104,6 +118,15 @@ export async function updateUser(
     return { error: "Errore durante l'aggiornamento dell'utente" };
   }
 
+  await logAudit({
+    azione: AUDIT_ACTIONS.USER_UPDATE,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: id,
+    meta: { username, isAdmin, abilitato },
+    ip: await getClientIp(),
+  });
+
   revalidatePath("/users");
   return { success: true };
 }
@@ -146,6 +169,14 @@ export async function resetUserPassword(
     return { error: "Errore durante il reset della password" };
   }
 
+  await logAudit({
+    azione: AUDIT_ACTIONS.USER_PASSWORD_RESET,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
+
   revalidatePath("/users");
   return { success: true };
 }
@@ -169,6 +200,14 @@ export async function toggleUserEnabled(
     console.error("toggleUserEnabled error", error);
     return { error: "Errore durante l'aggiornamento dello stato" };
   }
+
+  await logAudit({
+    azione: abilitato ? AUDIT_ACTIONS.USER_ENABLE : AUDIT_ACTIONS.USER_DISABLE,
+    userId: session.id,
+    entita: "Utente",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
 
   revalidatePath("/users");
   return { success: true };

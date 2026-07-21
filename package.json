@@ -22,7 +22,10 @@
     "verify:api-route-auth-checker": "tsx scripts/verify-api-route-auth-checker.ts",
     "verify:password-policy": "tsx scripts/verify-password-policy.ts",
     "verify:jwt-max-age-encapsulation": "tsx scripts/verify-jwt-max-age-encapsulation.ts",
-    "verify:security-headers": "tsx scripts/verify-security-headers.ts"
+    "verify:security-headers": "tsx scripts/verify-security-headers.ts",
+    "verify:prisma-pool-limits": "tsx scripts/verify-prisma-pool-limits.ts",
+    "verify:audit-log-coverage": "tsx scripts/verify-audit-log-coverage.ts",
+    "verify:rate-limit-bounds": "tsx scripts/verify-rate-limit-bounds.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

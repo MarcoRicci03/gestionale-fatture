@@ -35,6 +35,7 @@ model Utente {
   pazienti         Paziente[]
   pagamenti        Pagamento[]
   impostazioniPdf  ImpostazioniPdf?
+  auditLogs        AuditLog[]
 
   @@map("utenti")
 }
@@ -150,4 +151,28 @@ enum ModalitaPagamento {
   CONTANTI
   CARTA
   BONIFICO
+}
+
+// SEC-15: traccia login/logout e ogni mutazione sensibile (vedi
+// lib/audit/log.ts). id_Utente è l'attore che ha compiuto l'azione (per le
+// action admin-only, es. resetUserPassword, è l'admin, non l'utente target).
+// entita/entitaId NON sono una relazione Prisma: identificano polimorficamente
+// una riga in un altro model (es. "Pagamento"/id) tramite una stringa libera,
+// perché deleteInvoice fa hard-delete (LOG-03) e l'id deve restare leggibile
+// nel log anche dopo che la riga referenziata non esiste più.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  id_Utente Int?
+  azione    String
+  entita    String?
+  entitaId  Int?
+  meta      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  utente    Utente?  @relation(fields: [id_Utente], references: [id])
+
+  @@index([id_Utente, createdAt])
+  @@index([azione, createdAt])
+  @@map("audit_logs")
 }

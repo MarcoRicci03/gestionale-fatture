@@ -11,6 +11,7 @@ import {
   UserCircle,
   FileType,
   LogOut,
+  History,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
   { href: "/payers", label: "Paganti", icon: UserCheck },
   { href: "/invoices", label: "Fatture", icon: FileText },
   { href: "/users", label: "Utenti", icon: Settings, admin: true },
+  { href: "/audit-log", label: "Audit log", icon: History, admin: true },
 ];
 
 type SidebarContentProps = {
