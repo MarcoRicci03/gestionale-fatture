@@ -37,7 +37,9 @@ const baseValidInvoice = {
   data: "2026-01-01",
   mod_pag: "CONTANTI" as const,
   n_fattura: 1,
-  mesi: [{ mese: "GENNAIO", prezzo: 100 }],
+  // Prezzo volutamente sotto SOGLIA_BOLLO (LOG-01): questi test riguardano
+  // solo i limiti di lunghezza dei campi testuali, non la logica del bollo.
+  mesi: [{ mese: "GENNAIO", prezzo: 50 }],
   citta: "Roma",
   cap: "00100",
 };

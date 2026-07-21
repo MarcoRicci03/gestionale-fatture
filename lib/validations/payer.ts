@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CF_REGEX, PIVA_REGEX } from "@/lib/constants/fiscal";
 
 export const payerSchema = z
   .object({
@@ -8,11 +9,19 @@ export const payerSchema = z
     citta: z.string().min(1, "La città è obbligatoria").max(100),
     cap: z.string().min(1, "Il CAP è obbligatorio").max(10),
     cf: z
-      .union([z.string().min(1).max(16), z.literal(""), z.null()])
-      .transform((val) => (val === "" || val === null ? null : val))
+      .union([
+        z.string().regex(CF_REGEX, "Codice fiscale non valido (16 caratteri alfanumerici)"),
+        z.literal(""),
+        z.null(),
+      ])
+      .transform((val) => (val === "" || val === null ? null : val.toUpperCase()))
       .optional(),
     piva: z
-      .union([z.string().min(1).max(11), z.literal(""), z.null()])
+      .union([
+        z.string().regex(PIVA_REGEX, "P.IVA non valida (11 cifre numeriche)"),
+        z.literal(""),
+        z.null(),
+      ])
       .transform((val) => (val === "" || val === null ? null : val))
       .optional(),
   })

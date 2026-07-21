@@ -25,7 +25,13 @@
     "verify:security-headers": "tsx scripts/verify-security-headers.ts",
     "verify:prisma-pool-limits": "tsx scripts/verify-prisma-pool-limits.ts",
     "verify:audit-log-coverage": "tsx scripts/verify-audit-log-coverage.ts",
-    "verify:rate-limit-bounds": "tsx scripts/verify-rate-limit-bounds.ts"
+    "verify:rate-limit-bounds": "tsx scripts/verify-rate-limit-bounds.ts",
+    "verify:invoice-bollo-threshold": "tsx scripts/verify-invoice-bollo-threshold.ts",
+    "verify:invoice-prezzo-parsing": "tsx scripts/verify-invoice-prezzo-parsing.ts",
+    "verify:currency-rounding": "tsx scripts/verify-currency-rounding.ts",
+    "verify:payer-fiscal-format": "tsx scripts/verify-payer-fiscal-format.ts",
+    "verify:invoice-mesi-limits": "tsx scripts/verify-invoice-mesi-limits.ts",
+    "verify:account-cache-invalidation": "tsx scripts/verify-account-cache-invalidation.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

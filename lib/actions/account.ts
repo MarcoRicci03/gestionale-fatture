@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession, createSessionCookie } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
@@ -142,6 +143,14 @@ export async function updateProfile(
     entitaId: session.id,
     ip: await getClientIp(),
   });
+
+  // I dati del profilo (mittente) sono renderizzati anche nella sidebar/
+  // header e nell'anteprima del template PDF: senza invalidare la cache
+  // resterebbero stantii nelle pagine già visitate finché non si forza un
+  // reload. "/", "layout" invalida l'intero albero condiviso, non solo
+  // /account.
+  revalidatePath("/account");
+  revalidatePath("/", "layout");
 
   return { success: true };
 }

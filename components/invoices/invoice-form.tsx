@@ -23,6 +23,7 @@ import {
 import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
+import { roundCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils";
 import type { FatturaMese, Pagante, Paziente, $Enums } from "@prisma/client";
 
@@ -121,7 +122,7 @@ export function InvoiceForm({
   const bolloCodiceValue = useWatch({ control, name: "bolloCodice" });
 
   const totale = useMemo(
-    () => mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0),
+    () => roundCurrency(mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0)),
     [mesiValues]
   );
 
