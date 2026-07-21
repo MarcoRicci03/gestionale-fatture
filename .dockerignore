@@ -10,3 +10,5 @@ coverage
 .idea
 tmp
 *.log
+/postgres_dev_data
+/backups

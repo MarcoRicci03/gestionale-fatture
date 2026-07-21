@@ -38,15 +38,24 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Copia l'applicazione standalone e le dipendenze di produzione
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
+# Utente non privilegiato: node.js non deve girare come root nel container
+RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
 
-# Copia la cartella Prisma per eseguire le migrazioni in produzione
-COPY --from=builder /app/prisma ./prisma
+# Copia l'applicazione standalone e le dipendenze di produzione
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+# Copia la cartella Prisma e la config per eseguire le migrazioni in produzione
+# (prisma.config.ts è la fonte del datasource.url in Prisma 7: senza questo file
+# "prisma migrate deploy" fallisce con "datasource.url property is required",
+# a prescindere dall'utente con cui gira il container)
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+
+USER nextjs
 
 EXPOSE 3000
 
