@@ -49,6 +49,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -84,6 +85,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -150,5 +152,14 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Il popup nativo di <select> ignora `color-scheme` in alcuni browser: si
+     colorano esplicitamente le <option> con gli stessi token del tema
+     (già corretti per light/dark grazie a :root/.dark sopra), altrimenti in
+     dark mode il popup resta con lo sfondo chiaro di default del browser e
+     il testo diventa illeggibile. */
+  select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 }

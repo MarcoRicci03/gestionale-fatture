@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   PlusCircle,
   Pencil,
   FileText,
+  FileSpreadsheet,
   Eye,
   RefreshCw,
   AlertTriangle,
@@ -32,8 +33,14 @@ import { InvoiceForm } from "./invoice-form";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatDateDisplay } from "@/lib/utils/date";
+import { formatDateDisplay, parseDateInput } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
+import {
+  InvoicesFilterBar,
+  EMPTY_INVOICE_FILTERS,
+  type InvoiceFilters,
+} from "./invoices-filter-bar";
+import { ExportInvoicesDialog } from "./export-invoices-dialog";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 
 // prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
@@ -69,6 +76,83 @@ export function InvoicesManager({
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const [filters, setFilters] = useState<InvoiceFilters>(EMPTY_INVOICE_FILTERS);
+  const [prevFilters, setPrevFilters] = useState(filters);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // Azzera la selezione ogni volta che i filtri cambiano, per evitare di
+  // esportare "a sorpresa" righe non più visibili nell'elenco filtrato.
+  // Aggiornamento di stato durante il render (pattern consigliato da React
+  // per "adjusting state when a prop changes"), non in un effect, per non
+  // innescare un render a cascata evitabile.
+  if (filters !== prevFilters) {
+    setPrevFilters(filters);
+    setSelectedIds(new Set());
+  }
+
+  const years = useMemo(
+    () =>
+      Array.from(new Set(invoices.map((i) => i.anno))).sort((a, b) => b - a),
+    [invoices]
+  );
+
+  const filteredInvoices = useMemo(() => {
+    const dataDa = filters.dataDa ? parseDateInput(filters.dataDa) : null;
+    const dataA = filters.dataA ? parseDateInput(filters.dataA) : null;
+    const persona = filters.persona.trim().toLowerCase();
+    return invoices.filter((invoice) => {
+      if (dataDa && invoice.data < dataDa) return false;
+      if (dataA && invoice.data > dataA) return false;
+      if (persona) {
+        const paganteMatch = invoice.pagante
+          ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
+              .toLowerCase()
+              .includes(persona)
+          : false;
+        const pazienteMatch = invoice.paziente
+          ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
+              .toLowerCase()
+              .includes(persona)
+          : false;
+        if (!paganteMatch && !pazienteMatch) return false;
+      }
+      if (filters.modPag && invoice.mod_pag !== filters.modPag) return false;
+      if (filters.anno && invoice.anno !== Number(filters.anno)) return false;
+      return true;
+    });
+  }, [invoices, filters]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    const selectedInView = filteredInvoices.filter((i) =>
+      selectedIds.has(i.id)
+    ).length;
+    selectAllRef.current.indeterminate =
+      selectedInView > 0 && selectedInView < filteredInvoices.length;
+  }, [selectedIds, filteredInvoices]);
+
+  const toggleSelected = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedIds(
+      checked ? new Set(filteredInvoices.map((i) => i.id)) : new Set()
+    );
+  };
+
+  const exportInvoiceIds =
+    selectedIds.size > 0
+      ? Array.from(selectedIds)
+      : filteredInvoices.map((i) => i.id);
+
   const handleOpenNew = () => {
     setEditingInvoice(null);
     setOpen(true);
@@ -95,20 +179,59 @@ export function InvoicesManager({
           <h1 className="text-2xl font-bold tracking-tight">Fatture</h1>
           <p className="text-muted-foreground">Gestione fatture e pagamenti</p>
         </div>
-        <Button onClick={handleOpenNew}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Nuova fattura
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setExportDialogOpen(true)}
+            disabled={filteredInvoices.length === 0}
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Esporta Excel
+          </Button>
+          <Button onClick={handleOpenNew}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Nuova fattura
+          </Button>
+        </div>
       </div>
 
       {invoices.length === 0 ? (
         <p className="text-muted-foreground">Nessuna fattura emessa.</p>
       ) : (
         <>
+          <InvoicesFilterBar
+            filters={filters}
+            onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+            onReset={() => setFilters(EMPTY_INVOICE_FILTERS)}
+            payers={payers}
+            patients={patients}
+            years={years}
+          />
+
+          {filteredInvoices.length === 0 ? (
+            <p className="text-muted-foreground">
+              Nessuna fattura corrisponde ai filtri selezionati.
+            </p>
+          ) : (
+          <>
           <div className="hidden rounded-lg border lg:block">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      ref={selectAllRef}
+                      className="h-4 w-4 rounded border-input"
+                      checked={
+                        filteredInvoices.length > 0 &&
+                        filteredInvoices.every((i) => selectedIds.has(i.id))
+                      }
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      aria-label="Seleziona tutte le fatture visibili"
+                    />
+                  </TableHead>
                   <TableHead>N. Fattura</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead>Pagante</TableHead>
@@ -119,8 +242,20 @@ export function InvoicesManager({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices.map((invoice) => (
+                {filteredInvoices.map((invoice) => (
                   <TableRow key={invoice.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={selectedIds.has(invoice.id)}
+                        onChange={(e) =>
+                          toggleSelected(invoice.id, e.target.checked)
+                        }
+                        aria-label={`Seleziona fattura ${invoice.n_fattura}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       {invoice.n_fattura}
                     </TableCell>
@@ -208,14 +343,26 @@ export function InvoicesManager({
           </div>
 
           <ul className="space-y-3 lg:hidden">
-            {invoices.map((invoice) => (
+            {filteredInvoices.map((invoice) => (
               <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">N. {invoice.n_fattura}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDateDisplay(invoice.data)}
-                    </p>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      checked={selectedIds.has(invoice.id)}
+                      onChange={(e) =>
+                        toggleSelected(invoice.id, e.target.checked)
+                      }
+                      aria-label={`Seleziona fattura ${invoice.n_fattura}`}
+                    />
+                    <div>
+                      <p className="font-medium">N. {invoice.n_fattura}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatDateDisplay(invoice.data)}
+                      </p>
+                    </div>
                   </div>
                   <span className="flex items-center gap-1.5 font-medium">
                     {invoice.prezzo_totale.toLocaleString("it-IT", {
@@ -299,8 +446,16 @@ export function InvoicesManager({
               </li>
             ))}
           </ul>
+          </>
+          )}
         </>
       )}
+
+      <ExportInvoicesDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        invoiceIds={exportInvoiceIds}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-3xl">

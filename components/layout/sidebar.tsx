@@ -38,7 +38,7 @@ export function Sidebar({ session }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "hidden lg:flex h-screen flex-col border-r bg-sidebar py-6 transition-[width] duration-200 ease-in-out",
+        "hidden lg:flex sticky top-0 h-screen shrink-0 self-start flex-col border-r bg-sidebar py-6 transition-[width] duration-200 ease-in-out",
         collapsed ? "w-16 px-2" : "w-64 px-4"
       )}
     >
