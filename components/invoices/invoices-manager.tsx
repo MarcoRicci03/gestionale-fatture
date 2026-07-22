@@ -35,6 +35,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay, parseDateInput } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
+import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
+import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import {
   InvoicesFilterBar,
   EMPTY_INVOICE_FILTERS,
@@ -74,7 +76,18 @@ export function InvoicesManager({
   >(null);
   const [refreshInvoiceId, setRefreshInvoiceId] = useState<number | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [anagraficaRefreshInvoiceId, setAnagraficaRefreshInvoiceId] = useState<number | null>(null);
+  const [anagraficaRefreshError, setAnagraficaRefreshError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const resolvedAnagrafica = useMemo(() => {
+    if (!viewingInvoice?.pagante || !viewingInvoice?.paziente) return null;
+    return resolveAnagrafica({
+      snapshotAnagrafica: viewingInvoice.snapshotAnagrafica,
+      pagante: viewingInvoice.pagante,
+      paziente: viewingInvoice.paziente,
+    });
+  }, [viewingInvoice]);
 
   const [filters, setFilters] = useState<InvoiceFilters>(EMPTY_INVOICE_FILTERS);
   const [prevFilters, setPrevFilters] = useState(filters);
@@ -540,19 +553,19 @@ export function InvoicesManager({
                 </div>
               </div>
 
-              {viewingInvoice.pagante && (
+              {viewingInvoice.pagante && resolvedAnagrafica && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Pagante</p>
                   <p>
-                    {viewingInvoice.pagante.cognome} {viewingInvoice.pagante.nome}
+                    {resolvedAnagrafica.pagante.cognome} {resolvedAnagrafica.pagante.nome}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {viewingInvoice.pagante.via}, {viewingInvoice.pagante.citta}{" "}
-                    {viewingInvoice.pagante.cap}
+                    {resolvedAnagrafica.pagante.via}, {resolvedAnagrafica.pagante.citta}{" "}
+                    {resolvedAnagrafica.pagante.cap}
                   </p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
-                    <div>CF: {viewingInvoice.pagante.cf ?? "-"}</div>
-                    <div>P.IVA: {viewingInvoice.pagante.piva ?? "-"}</div>
+                    <div>CF: {resolvedAnagrafica.pagante.cf ?? "-"}</div>
+                    <div>P.IVA: {resolvedAnagrafica.pagante.piva ?? "-"}</div>
                   </div>
                   <Button
                     variant="outline"
@@ -564,11 +577,11 @@ export function InvoicesManager({
                 </div>
               )}
 
-              {viewingInvoice.paziente && (
+              {viewingInvoice.paziente && resolvedAnagrafica && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Paziente</p>
                   <p>
-                    {viewingInvoice.paziente.cognome} {viewingInvoice.paziente.nome}
+                    {resolvedAnagrafica.paziente.cognome} {resolvedAnagrafica.paziente.nome}
                   </p>
                   <Button
                     variant="outline"
