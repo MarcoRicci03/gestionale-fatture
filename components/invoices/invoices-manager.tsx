@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Eye,
   RefreshCw,
+  IdCard,
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
@@ -326,6 +327,19 @@ export function InvoicesManager({
                           <RefreshCw className="h-4 w-4" />
                         </Button>
                       </Tooltip>
+                      <Tooltip content="Aggiorna anagrafica">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setAnagraficaRefreshError(null);
+                            setAnagraficaRefreshInvoiceId(invoice.id);
+                          }}
+                          aria-label="Aggiorna anagrafica"
+                        >
+                          <IdCard className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
                       <Tooltip content="Scarica PDF">
                         <Link
                           href={`/api/invoices/${invoice.id}/pdf`}
@@ -434,6 +448,19 @@ export function InvoicesManager({
                       aria-label="Aggiorna layout PDF"
                     >
                       <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Aggiorna anagrafica">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setAnagraficaRefreshError(null);
+                        setAnagraficaRefreshInvoiceId(invoice.id);
+                      }}
+                      aria-label="Aggiorna anagrafica"
+                    >
+                      <IdCard className="h-4 w-4" />
                     </Button>
                   </Tooltip>
                   <Tooltip content="Scarica PDF">
@@ -678,6 +705,33 @@ export function InvoicesManager({
       {refreshError && (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {refreshError}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={anagraficaRefreshInvoiceId !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setAnagraficaRefreshInvoiceId(null);
+        }}
+        title="Aggiorna anagrafica"
+        description="I dati di pagante e paziente salvati su questa fattura verranno sostituiti con quelli attuali. Da usare solo per correggere un errore nell'anagrafica originale, non per fatture già consegnate con dati diversi. Sei sicuro?"
+        confirmLabel="Aggiorna"
+        isPending={isPending}
+        onConfirm={() => {
+          if (anagraficaRefreshInvoiceId == null) return;
+          startTransition(async () => {
+            const result = await refreshInvoiceAnagrafica(anagraficaRefreshInvoiceId);
+            if ("error" in result) {
+              setAnagraficaRefreshError(result.error);
+            }
+            setAnagraficaRefreshInvoiceId(null);
+          });
+        }}
+      />
+
+      {anagraficaRefreshError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {anagraficaRefreshError}
         </p>
       )}
 
