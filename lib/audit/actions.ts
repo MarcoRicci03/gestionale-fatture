@@ -17,6 +17,11 @@ export const AUDIT_ACTIONS = {
   USER_DISABLE: "user.disable",
   INVOICE_CREATE: "invoice.create",
   INVOICE_UPDATE: "invoice.update",
+  // INVOICE_DELETE ora indica l'ANNULLAMENTO di una fattura (soft, campo
+  // Pagamento.annullata), non più la cancellazione fisica — introdotto per
+  // LOG-03 in SECURITY_AUDIT.md, per non riassegnare mai il numero di una
+  // fattura già annullata. Gli eventi storici precedenti a questo cambiamento
+  // restano da leggere come cancellazione fisica.
   INVOICE_DELETE: "invoice.delete",
   PATIENT_CREATE: "patient.create",
   PATIENT_UPDATE: "patient.update",
@@ -56,7 +61,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.USER_DISABLE]: "Disabilitazione utente",
   [AUDIT_ACTIONS.INVOICE_CREATE]: "Creazione fattura",
   [AUDIT_ACTIONS.INVOICE_UPDATE]: "Modifica fattura",
-  [AUDIT_ACTIONS.INVOICE_DELETE]: "Eliminazione fattura",
+  [AUDIT_ACTIONS.INVOICE_DELETE]: "Annullamento fattura",
   [AUDIT_ACTIONS.PATIENT_CREATE]: "Creazione paziente",
   [AUDIT_ACTIONS.PATIENT_UPDATE]: "Modifica paziente",
   [AUDIT_ACTIONS.PATIENT_DELETE]: "Eliminazione definitiva paziente",

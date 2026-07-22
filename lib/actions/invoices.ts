@@ -298,9 +298,16 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
   try {
-    await prisma.pagamento.delete({ where: { id, id_Utente: userId } });
+    // LOG-03 in SECURITY_AUDIT.md: non più un delete fisico. La riga resta
+    // nel DB (consultabile, esclusa dai totali da getAnnualRevenue/
+    // getMonthlyRevenue) così il suo n_fattura non viene mai più riassegnato
+    // da getNextInvoiceNumberForUserYear, che non filtra su questo campo.
+    await prisma.pagamento.update({
+      where: { id, id_Utente: userId },
+      data: { annullata: true },
+    });
   } catch {
-    return { error: "Errore durante l'eliminazione della fattura" };
+    return { error: "Errore durante l'annullamento della fattura" };
   }
 
   await logAudit({
@@ -312,5 +319,6 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   });
 
   revalidatePath("/invoices");
+  revalidatePath("/dashboard");
   return { success: true };
 }
