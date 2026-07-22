@@ -59,6 +59,44 @@ export async function getNextInvoiceNumber(year: number): Promise<number> {
   return getNextInvoiceNumberForUserYear(userId, year);
 }
 
+export async function getChronologyNeighbors(
+  userId: number,
+  anno: number,
+  nFattura: number,
+  excludeId?: number
+): Promise<{
+  previous: { n_fattura: number; data: Date } | null;
+  next: { n_fattura: number; data: Date } | null;
+}> {
+  // Nessun filtro su `annullata`: una fattura annullata resta un vicino
+  // valido nel controllo di consequenzialità cronologica (LOG-04), lo
+  // stesso motivo per cui getNextInvoiceNumberForUserYear non la esclude
+  // dal calcolo di max(n_fattura).
+  const [previous, next] = await Promise.all([
+    prisma.pagamento.findFirst({
+      where: {
+        id_Utente: userId,
+        anno,
+        n_fattura: { lt: nFattura },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      orderBy: { n_fattura: "desc" },
+      select: { n_fattura: true, data: true },
+    }),
+    prisma.pagamento.findFirst({
+      where: {
+        id_Utente: userId,
+        anno,
+        n_fattura: { gt: nFattura },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      orderBy: { n_fattura: "asc" },
+      select: { n_fattura: true, data: true },
+    }),
+  ]);
+  return { previous, next };
+}
+
 export async function getPayersAndPatients() {
   const userId = await requireUserId();
   const [payers, patients] = await Promise.all([
@@ -88,6 +126,7 @@ export async function getAnnualRevenue(year: number) {
     where: {
       id_Utente: userId,
       data: yearRange(year),
+      annullata: false,
     },
     _sum: { prezzo_totale: true },
   });
@@ -103,6 +142,7 @@ export async function getMonthlyRevenue(year: number, month: number) {
         gte: new Date(year, month - 1, 1),
         lt: new Date(year, month, 1),
       },
+      annullata: false,
     },
     _sum: { prezzo_totale: true },
   });
