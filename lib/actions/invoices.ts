@@ -236,7 +236,7 @@ export async function updateInvoice(
   // quelli inviati, prima di applicare qualunque altra modifica.
   const existing = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
-    select: { n_fattura: true, anno: true },
+    select: { n_fattura: true, anno: true, id_Pagante: true, id_Paziente: true },
   });
   if (!existing) {
     return { error: "Fattura non trovata" };
@@ -269,14 +269,23 @@ export async function updateInvoice(
     };
   }
 
-  const relationError = await validateInvoiceRelations(
+  const relationResult = await validateInvoiceRelations(
     userId,
     id_Pagante,
     id_Paziente
   );
-  if (relationError) {
-    return { error: relationError };
+  if ("error" in relationResult) {
+    return { error: relationResult.error };
   }
+  const { payer, patient } = relationResult;
+
+  // Lo snapshot va ricatturato SOLO se cambia a chi è intestata la fattura,
+  // mai per una modifica non correlata (vedi spec: altrimenti un
+  // aggiornamento dell'indirizzo del pagante fatto dopo l'emissione
+  // riapparirebbe alla prima modifica successiva, riaprendo il bug che
+  // questo fix deve risolvere).
+  const anagraficaCambiata =
+    id_Pagante !== existing.id_Pagante || id_Paziente !== existing.id_Paziente;
 
   // Giorno/mese restano liberi, ma non devono invertire l'ordine
   // cronologico rispetto alle fatture con numero adiacente nello stesso
@@ -317,6 +326,14 @@ export async function updateInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        ...(anagraficaCambiata
+          ? {
+              snapshotAnagrafica: buildSnapshotAnagrafica(
+                payer,
+                patient
+              ) as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
         mesi: {
           deleteMany: {},
           create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
