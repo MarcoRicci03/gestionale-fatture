@@ -203,9 +203,15 @@ export function InvoiceForm({
           <Input
             id="n_fattura"
             type="number"
+            readOnly={!!invoice}
             {...register("n_fattura")}
             aria-invalid={!!errors.n_fattura}
           />
+          {invoice && (
+            <p className="text-xs text-muted-foreground">
+              Il numero fattura non è modificabile dopo la creazione.
+            </p>
+          )}
           {errors.n_fattura && (
             <p className="text-sm text-destructive">
               {errors.n_fattura.message}
@@ -221,6 +227,13 @@ export function InvoiceForm({
             {...register("data")}
             aria-invalid={!!errors.data}
           />
+          {invoice && (
+            <p className="text-xs text-muted-foreground">
+              L&apos;anno non è modificabile. Giorno e mese lo sono solo se
+              non invertono l&apos;ordine cronologico rispetto alle fatture
+              con numero adiacente.
+            </p>
+          )}
           {errors.data && (
             <p className="text-sm text-destructive">{errors.data.message}</p>
           )}
