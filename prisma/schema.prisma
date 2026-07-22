@@ -115,6 +115,11 @@ model Pagamento {
   cap                 String
   pdfLayoutSnapshot   Json?
   bolloCodice         String?
+  // LOG-03 in SECURITY_AUDIT.md: sostituisce la cancellazione fisica.
+  // Una fattura annullata resta nel DB (consultabile, esclusa dai totali)
+  // così il suo n_fattura non viene mai più riassegnato da
+  // getNextInvoiceNumberForUserYear, che non filtra su questo campo.
+  annullata           Boolean        @default(false)
 
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
