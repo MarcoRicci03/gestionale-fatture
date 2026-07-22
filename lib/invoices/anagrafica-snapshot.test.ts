@@ -78,7 +78,14 @@ describe("isSnapshotAnagrafica", () => {
   });
 
   it("rifiuta un oggetto con un campo pagante mancante", () => {
-    const { via: _via, ...paganteSenzaVia } = SNAPSHOT_VALIDO.pagante;
+    const paganteSenzaVia = {
+      nome: SNAPSHOT_VALIDO.pagante.nome,
+      cognome: SNAPSHOT_VALIDO.pagante.cognome,
+      citta: SNAPSHOT_VALIDO.pagante.citta,
+      cap: SNAPSHOT_VALIDO.pagante.cap,
+      cf: SNAPSHOT_VALIDO.pagante.cf,
+      piva: SNAPSHOT_VALIDO.pagante.piva,
+    };
     expect(
       isSnapshotAnagrafica({ pagante: paganteSenzaVia, paziente: SNAPSHOT_VALIDO.paziente })
     ).toBe(false);

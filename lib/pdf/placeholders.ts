@@ -1,6 +1,7 @@
 import type { InvoiceWithRelations, MeseConfig } from "./types";
 import { IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { roundCurrency } from "@/lib/utils/currency";
+import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 
 export type PlaceholderContext = {
   invoice: InvoiceWithRelations;
@@ -76,8 +77,9 @@ export function buildReplacements(
   invoice: InvoiceWithRelations
 ): Record<string, string> {
   const u = invoice.utente;
-  const p = invoice.pagante;
-  const z = invoice.paziente;
+  const anagrafica = resolveAnagrafica(invoice);
+  const p = anagrafica.pagante;
+  const z = anagrafica.paziente;
 
   const replacements: Record<string, string> = {
     // Mittente
@@ -249,6 +251,7 @@ export function buildMockInvoice(
     citta: "Roma",
     cap: "00100",
     pdfLayoutSnapshot: null,
+    snapshotAnagrafica: null,
     bolloCodice: "01234567890123",
     pagante: {
       id: 1,
