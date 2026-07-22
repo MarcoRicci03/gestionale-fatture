@@ -44,6 +44,7 @@ export function AnnullaInvoiceButton({ id }: { id: number }) {
         title="Annulla fattura"
         description="La fattura resterà nell'archivio, consultabile e ristampabile, ma marcata come annullata ed esclusa dai totali. Il suo numero non potrà mai essere riassegnato a un'altra fattura."
         confirmLabel="Annulla fattura"
+        cancelLabel="Chiudi"
         isPending={isPending}
         onConfirm={handleConfirm}
         error={error}
