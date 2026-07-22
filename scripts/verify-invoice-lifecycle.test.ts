@@ -74,3 +74,40 @@ describe("createInvoice verifica la consequenzialità cronologica (LOG-04)", () 
     expect(body).toMatch(/findChronologyConflict\s*\(/);
   });
 });
+
+describe("createInvoice cattura lo snapshot anagrafica", () => {
+  const body = extractFunctionBody(source, "createInvoice");
+
+  it("chiama buildSnapshotAnagrafica prima di creare la fattura", () => {
+    expect(body).toMatch(/buildSnapshotAnagrafica\s*\(/);
+  });
+});
+
+describe("updateInvoice ricattura lo snapshot solo se cambia pagante/paziente", () => {
+  const body = extractFunctionBody(source, "updateInvoice");
+
+  it("confronta id_Pagante/id_Paziente con l'esistente prima di ricatturare", () => {
+    expect(body).toMatch(/id_Pagante\s*!==\s*existing\.id_Pagante/);
+    expect(body).toMatch(/id_Paziente\s*!==\s*existing\.id_Paziente/);
+  });
+
+  it("chiama buildSnapshotAnagrafica solo dentro un ramo condizionale", () => {
+    expect(body).toMatch(/anagraficaCambiata[\s\S]*buildSnapshotAnagrafica\s*\(/);
+  });
+});
+
+describe("refreshInvoiceAnagrafica esiste e ricattura dalle relazioni live", () => {
+  const body = extractFunctionBody(source, "refreshInvoiceAnagrafica");
+
+  it("recupera pagante e paziente dal DB", () => {
+    expect(body).toMatch(/include:\s*\{\s*pagante:\s*true,\s*paziente:\s*true/);
+  });
+
+  it("chiama buildSnapshotAnagrafica sulle relazioni live", () => {
+    expect(body).toMatch(/buildSnapshotAnagrafica\s*\(\s*invoice\.pagante,\s*invoice\.paziente/);
+  });
+
+  it("registra un evento di audit", () => {
+    expect(body).toMatch(/logAudit\s*\(/);
+  });
+});
