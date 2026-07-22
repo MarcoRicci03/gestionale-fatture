@@ -389,3 +389,46 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+export async function refreshInvoiceAnagrafica(
+  id: number
+): Promise<InvoiceActionState> {
+  const userId = await requireUserId();
+
+  const invoice = await prisma.pagamento.findFirst({
+    where: { id, id_Utente: userId },
+    include: { pagante: true, paziente: true },
+  });
+  if (!invoice) {
+    return { error: "Fattura non trovata" };
+  }
+
+  try {
+    // Legge intenzionalmente le relazioni live (non resolveAnagrafica):
+    // questa azione esiste apposta per sostituire lo snapshot congelato
+    // con lo stato attuale, su scelta esplicita dell'utente.
+    await prisma.pagamento.update({
+      where: { id, id_Utente: userId },
+      data: {
+        snapshotAnagrafica: buildSnapshotAnagrafica(
+          invoice.pagante,
+          invoice.paziente
+        ) as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    console.error("refreshInvoiceAnagrafica error", error);
+    return { error: "Errore durante l'aggiornamento dell'anagrafica" };
+  }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.INVOICE_ANAGRAFICA_REFRESH,
+    userId,
+    entita: "Pagamento",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
+
+  revalidatePath("/invoices");
+  return { success: true };
+}
