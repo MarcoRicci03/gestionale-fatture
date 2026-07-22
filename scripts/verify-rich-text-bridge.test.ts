@@ -1,3 +1,4 @@
+import { it, expect } from "vitest";
 import { parseTestoToRichContent, serializeRichContentToTesto } from "../lib/pdf/rich-text";
 import { LAYOUT_DEFAULT } from "../lib/pdf/layout-default";
 
@@ -6,7 +7,7 @@ for (const b of LAYOUT_DEFAULT.blocchi) {
   if (b.testo) fixtures.push(b.testo);
 }
 
-const extra = [
+fixtures.push(
   "Testo libero",
   "Mittente\n{{mittente.titoloNomeCognomeSpec}}\n{{mittente.via}}\n{{mittente.cittaProvincia}}\nCF: {{mittente.cf}}\nP.IVA: {{mittente.pIva}}",
   "Intestatario fattura (Pagante)\n{{intestatario.cognomeNome}}\n{{intestatario.via}}\n{{intestatario.capCitta}}\nCF: {{intestatario.cf}}\nP.IVA: {{intestatario.piva}}",
@@ -17,21 +18,14 @@ const extra = [
   "Riga senza placeholder ne formattazione",
   "{{placeholder.sconosciuto}} orfano",
   "<b>{{fattura.numero}}</b> normale",
-  "Prezzo: <i>{{fattura.prezzoTotale}}</i> e <note>{{fattura.commento}}</note>",
-];
-fixtures.push(...extra);
+  "Prezzo: <i>{{fattura.prezzoTotale}}</i> e <note>{{fattura.commento}}</note>"
+);
 
-let failures = 0;
-for (const original of fixtures) {
-  const doc = parseTestoToRichContent(original);
-  const roundTripped = serializeRichContentToTesto(doc);
-  if (roundTripped !== original) {
-    failures++;
-    console.error("MISMATCH");
-    console.error("  original: ", JSON.stringify(original));
-    console.error("  roundtrip:", JSON.stringify(roundTripped));
+it.each(fixtures.map((original) => [original]))(
+  "round-trip testo -> rich-content -> testo: %j",
+  (original) => {
+    const doc = parseTestoToRichContent(original);
+    const roundTripped = serializeRichContentToTesto(doc);
+    expect(roundTripped).toBe(original);
   }
-}
-
-console.log(`Checked ${fixtures.length} fixtures, ${failures} mismatches.`);
-if (failures > 0) process.exit(1);
+);

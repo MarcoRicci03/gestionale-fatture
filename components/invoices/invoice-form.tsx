@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { it } from "date-fns/locale";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,7 +99,9 @@ export function InvoiceForm({
           }))
         : [
             {
-              mese: format(new Date(), "MMMM", { locale: it }).toUpperCase() as Mese,
+              mese: new Date()
+                .toLocaleDateString("it-IT", { month: "long" })
+                .toUpperCase() as Mese,
               prezzo: "",
             },
           ],

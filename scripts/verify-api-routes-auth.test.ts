@@ -1,15 +1,16 @@
+import { it, expect } from "vitest";
 import { readFileSync, readdirSync } from "fs";
 import { join, relative } from "path";
 import { hasApiRouteAuthCheck } from "./lib/api-route-auth-checks";
 
-// Equivalente di verify-actions-auth.ts per le route API: proxy.ts esclude
-// esplicitamente "api" dal matcher (vedi commento in proxy.ts), quindi ogni
-// handler HTTP esportato da app/api/**/route.ts è raggiungibile da un client
-// non autenticato a meno che non verifichi la sessione da sé. Questo script
-// rende l'invariante verificabile invece che affidata alla disciplina di chi
-// aggiunge una nuova route. I predicati che definiscono "verifica la
+// Equivalente di verify-actions-auth.test.ts per le route API: proxy.ts
+// esclude esplicitamente "api" dal matcher (vedi commento in proxy.ts), quindi
+// ogni handler HTTP esportato da app/api/**/route.ts è raggiungibile da un
+// client non autenticato a meno che non verifichi la sessione da sé. Questo
+// test rende l'invariante verificabile invece che affidata alla disciplina di
+// chi aggiunge una nuova route. I predicati che definiscono "verifica la
 // sessione" sono in ./lib/api-route-auth-checks.ts (condivisi con
-// scripts/verify-api-route-auth-checker.ts, che li testa direttamente).
+// scripts/verify-api-route-auth-checker.test.ts, che li testa direttamente).
 const API_DIR = join(__dirname, "..", "app", "api");
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 // Chiave "percorso/relativo/route.ts:METHOD" per handler intenzionalmente
@@ -60,38 +61,34 @@ function findRouteFiles(dir: string): string[] {
   return files;
 }
 
-const violations: string[] = [];
+it("tutte le route API verificano la sessione", () => {
+  const violations: string[] = [];
 
-for (const path of findRouteFiles(API_DIR)) {
-  const source = readFileSync(path, "utf-8");
-  const relPath = relative(join(__dirname, ".."), path);
+  for (const path of findRouteFiles(API_DIR)) {
+    const source = readFileSync(path, "utf-8");
+    const relPath = relative(join(__dirname, ".."), path);
 
-  for (const method of HTTP_METHODS) {
-    const regex = new RegExp(`export\\s+async\\s+function\\s+${method}\\s*\\(`);
-    const match = regex.exec(source);
-    if (!match) continue;
-    if (PUBLIC_ROUTES.has(`${relPath}:${method}`)) continue;
+    for (const method of HTTP_METHODS) {
+      const regex = new RegExp(`export\\s+async\\s+function\\s+${method}\\s*\\(`);
+      const match = regex.exec(source);
+      if (!match) continue;
+      if (PUBLIC_ROUTES.has(`${relPath}:${method}`)) continue;
 
-    const body = extractFunctionBody(source, match.index);
-    if (!hasApiRouteAuthCheck(body)) {
-      violations.push(`${relPath}: ${method}()`);
+      const body = extractFunctionBody(source, match.index);
+      if (!hasApiRouteAuthCheck(body)) {
+        violations.push(`${relPath}: ${method}()`);
+      }
     }
   }
-}
 
-if (violations.length > 0) {
-  console.error("Route API esportate senza controllo di sessione diretto:");
-  for (const v of violations) console.error(`  - ${v}`);
-  console.error(
-    "\nOgni handler HTTP esportato da app/api/**/route.ts è raggiungibile senza " +
+  expect(
+    violations,
+    "Ogni handler HTTP esportato da app/api/**/route.ts è raggiungibile senza " +
       "passare dal proxy (vedi proxy.ts): aggiungi requireUserId()/requireSession()/" +
       "requireAdmin() direttamente nell'handler (redirect a /login), oppure " +
       "getUserIdOrNull() con un controllo esplicito `=== null` che risponda con " +
       "status 401 (preferibile per una route API — vedi SEC-13 in " +
       "SECURITY_AUDIT.md), oppure, se è intenzionalmente pubblico, aggiungilo a " +
-      "PUBLIC_ROUTES in questo script."
-  );
-  process.exit(1);
-}
-
-console.log("Tutte le route API verificano la sessione.");
+      "PUBLIC_ROUTES in questo test."
+  ).toEqual([]);
+});

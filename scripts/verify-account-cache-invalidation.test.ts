@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -7,8 +8,8 @@ import { join } from "path";
 // di mutazione del codebase. Questi campi sono renderizzati nella sidebar/
 // header (Session in lib/auth/session.ts) e come "mittente" nell'anteprima
 // PDF: potevano restare stantii nelle pagine già visitate. Verificato via
-// analisi statica (stesso approccio di verify-audit-log-coverage.ts) che il
-// corpo di updateProfile chiami sia revalidatePath("/account") sia
+// analisi statica (stesso approccio di verify-audit-log-coverage.test.ts) che
+// il corpo di updateProfile chiami sia revalidatePath("/account") sia
 // revalidatePath("/", "layout") (quest'ultimo invalida l'intero albero
 // condiviso, non solo /account).
 
@@ -32,24 +33,17 @@ function extractFunctionBody(source: string, fnName: string): string {
   return source.slice(openBrace);
 }
 
-const source = readFileSync(ACCOUNT_ACTIONS_PATH, "utf-8");
-const body = extractFunctionBody(source, "updateProfile");
-
-const failures: string[] = [];
-
-if (!body.includes('revalidatePath("/account")')) {
-  failures.push('updateProfile deve chiamare revalidatePath("/account")');
-}
-if (!body.includes('revalidatePath("/", "layout")')) {
-  failures.push(
-    'updateProfile deve chiamare revalidatePath("/", "layout") per invalidare sidebar/header'
+describe("updateProfile invalida la cache", () => {
+  const body = extractFunctionBody(
+    readFileSync(ACCOUNT_ACTIONS_PATH, "utf-8"),
+    "updateProfile"
   );
-}
 
-if (failures.length > 0) {
-  console.error("verify-account-cache-invalidation: FALLITO");
-  for (const f of failures) console.error(`  - ${f}`);
-  process.exit(1);
-}
+  it('chiama revalidatePath("/account")', () => {
+    expect(body).toContain('revalidatePath("/account")');
+  });
 
-console.log("updateProfile invalida correttamente la cache di /account e del layout condiviso.");
+  it('chiama revalidatePath("/", "layout") per invalidare sidebar/header', () => {
+    expect(body).toContain('revalidatePath("/", "layout")');
+  });
+});

@@ -1,3 +1,4 @@
+import { it, expect } from "vitest";
 import { SAFE_USER_SELECT } from "../lib/data/user-select";
 
 // Regressione: SAFE_USER_SELECT alimenta componenti client
@@ -6,15 +7,9 @@ import { SAFE_USER_SELECT } from "../lib/data/user-select";
 // finirebbe nel payload RSC inviato al browser dell'admin.
 const FORBIDDEN_FIELDS = ["passwordHash"] as const;
 
-const leaked = FORBIDDEN_FIELDS.filter(
-  (field) => (SAFE_USER_SELECT as Record<string, boolean>)[field] === true
-);
-
-if (leaked.length > 0) {
-  console.error(
-    `SAFE_USER_SELECT espone campi sensibili al client: ${leaked.join(", ")}`
+it("SAFE_USER_SELECT non espone campi sensibili", () => {
+  const leaked = FORBIDDEN_FIELDS.filter(
+    (field) => (SAFE_USER_SELECT as Record<string, boolean>)[field] === true
   );
-  process.exit(1);
-}
-
-console.log("SAFE_USER_SELECT non espone campi sensibili.");
+  expect(leaked).toEqual([]);
+});

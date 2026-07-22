@@ -1,3 +1,4 @@
+import { it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -39,19 +40,15 @@ function extractDummyHashCost(): number {
   return Number(bcryptFormatMatch[1]);
 }
 
-const realCost = extractRealBcryptCost();
-const dummyCost = extractDummyHashCost();
+it("DUMMY_HASH usa lo stesso cost factor bcrypt degli hash reali", () => {
+  const realCost = extractRealBcryptCost();
+  const dummyCost = extractDummyHashCost();
 
-if (realCost !== dummyCost) {
-  console.error(
+  expect(
+    dummyCost,
     `DUMMY_HASH ha cost factor ${dummyCost}, ma hashPassword() usa cost factor ${realCost}: ` +
       "il tempo di verifica per uno username inesistente sarebbe distinguibile da quello di " +
       "uno username esistente (enumerazione via timing). Rigenera DUMMY_HASH con lo stesso " +
       `cost factor (${realCost}), es. con bcryptjs.hash("qualsiasi-stringa", ${realCost}).`
-  );
-  process.exit(1);
-}
-
-console.log(
-  `DUMMY_HASH usa lo stesso cost factor bcrypt (${realCost}) degli hash reali.`
-);
+  ).toBe(realCost);
+});
