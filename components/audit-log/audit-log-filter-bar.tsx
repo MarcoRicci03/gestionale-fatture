@@ -90,7 +90,7 @@ export function AuditLogFilterBar({
             onValueChange={(v) => onChange({ azione: fromSelectValue(v) })}
           >
             <SelectTrigger id="audit-filtro-azione" className="w-full">
-              <SelectValue>{(v: string) => (v === ALL_VALUE ? "Tutte" : v)}</SelectValue>
+              <SelectValue>{(v: string) => (v === ALL_VALUE ? "Tutte" : AUDIT_ACTION_LABELS[v as AuditAction])}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL_VALUE}>Tutte</SelectItem>
