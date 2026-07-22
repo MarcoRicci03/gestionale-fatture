@@ -220,6 +220,17 @@ export async function updateInvoice(
     return { error: "Dati non validi" };
   }
 
+  // LOG-04 in SECURITY_AUDIT.md: n_fattura/anno non sono più modificabili
+  // dopo la creazione. Servono i valori esistenti per confrontarli con
+  // quelli inviati, prima di applicare qualunque altra modifica.
+  const existing = await prisma.pagamento.findFirst({
+    where: { id, id_Utente: userId },
+    select: { n_fattura: true, anno: true },
+  });
+  if (!existing) {
+    return { error: "Fattura non trovata" };
+  }
+
   const {
     id_Pagante,
     id_Paziente,
@@ -234,6 +245,19 @@ export async function updateInvoice(
     bolloCodice,
   } = parsed.data;
 
+  const year = invoiceDate.getFullYear();
+
+  if (n_fattura !== existing.n_fattura) {
+    return {
+      error: "Non è possibile modificare il numero di una fattura già emessa",
+    };
+  }
+  if (year !== existing.anno) {
+    return {
+      error: "Non è possibile modificare l'anno di una fattura già emessa",
+    };
+  }
+
   const relationError = await validateInvoiceRelations(
     userId,
     id_Pagante,
@@ -243,11 +267,18 @@ export async function updateInvoice(
     return { error: relationError };
   }
 
-  const year = invoiceDate.getFullYear();
-  if (await isInvoiceNumberTaken(userId, n_fattura, year, id)) {
-    return {
-      error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
-    };
+  // Giorno/mese restano liberi, ma non devono invertire l'ordine
+  // cronologico rispetto alle fatture con numero adiacente nello stesso
+  // anno (vedi lib/invoices/chronology.ts).
+  const { previous, next } = await getChronologyNeighbors(
+    userId,
+    year,
+    n_fattura,
+    id
+  );
+  const chronologyConflict = findChronologyConflict(invoiceDate, previous, next);
+  if (chronologyConflict) {
+    return { error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
   if (bolloCodice && (await isBolloCodiceTaken(bolloCodice, id))) {
@@ -284,11 +315,6 @@ export async function updateInvoice(
   } catch (error) {
     if (isBolloCodiceUniqueViolation(error)) {
       return { error: BOLLO_CODICE_DUPLICATO_ERROR };
-    }
-    if (isInvoiceNumberUniqueViolation(error)) {
-      return {
-        error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
-      };
     }
     return { error: "Errore durante l'aggiornamento della fattura" };
   }
