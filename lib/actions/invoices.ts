@@ -8,7 +8,14 @@ import { getClientIp } from "@/lib/auth/client-ip";
 import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
-import { getNextInvoiceNumberForUserYear } from "@/lib/data/invoices";
+import {
+  getNextInvoiceNumberForUserYear,
+  getChronologyNeighbors,
+} from "@/lib/data/invoices";
+import {
+  findChronologyConflict,
+  formatChronologyConflictMessage,
+} from "@/lib/invoices/chronology";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
@@ -129,6 +136,12 @@ export async function createInvoice(
     return {
       error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
     };
+  }
+
+  const { previous, next } = await getChronologyNeighbors(userId, year, n_fattura);
+  const chronologyConflict = findChronologyConflict(invoiceDate, previous, next);
+  if (chronologyConflict) {
+    return { error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
   if (bolloCodice && (await isBolloCodiceTaken(bolloCodice))) {
