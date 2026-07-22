@@ -31,7 +31,8 @@
     "verify:currency-rounding": "tsx scripts/verify-currency-rounding.ts",
     "verify:payer-fiscal-format": "tsx scripts/verify-payer-fiscal-format.ts",
     "verify:invoice-mesi-limits": "tsx scripts/verify-invoice-mesi-limits.ts",
-    "verify:account-cache-invalidation": "tsx scripts/verify-account-cache-invalidation.ts"
+    "verify:account-cache-invalidation": "tsx scripts/verify-account-cache-invalidation.ts",
+    "verify:archive-guards": "tsx scripts/verify-archive-guards.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

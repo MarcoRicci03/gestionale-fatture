@@ -19,34 +19,72 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PayerForm } from "./payer-form";
-import { DeletePayerButton } from "./delete-payer-button";
+import { ArchivePayerButton } from "./archive-payer-button";
+import { RestorePayerButton } from "./restore-payer-button";
+import { HardDeletePayerButton } from "./hard-delete-payer-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { Pagante, Paziente } from "@prisma/client";
+import type { ArchivedPayerRow } from "@/lib/data/payers";
+
+type ActivePayer = Pagante & { pazienti: Paziente[] };
 
 type PayersManagerProps = {
-  payers: (Pagante & { pazienti: Paziente[] })[];
+  payers: ActivePayer[];
+  archivedPayers: ArchivedPayerRow[];
 };
 
-export function PayersManager({ payers }: PayersManagerProps) {
+function formatCurrency(amount: number) {
+  return amount.toLocaleString("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  });
+}
+
+function invoiceImpactLabel(row: ArchivedPayerRow): string | null {
+  if (row.fattureCount === 0) return null;
+  const years =
+    row.fatturaAnnoMin === row.fatturaAnnoMax
+      ? `${row.fatturaAnnoMin}`
+      : `${row.fatturaAnnoMin}-${row.fatturaAnnoMax}`;
+  const plural = row.fattureCount === 1 ? "" : "e";
+  return `${row.fattureCount} fattura${plural} collegata${plural} (${years}, ${formatCurrency(row.fattureTotale)})`;
+}
+
+function hardDeleteBlockReason(row: ArchivedPayerRow): string | null {
+  if (row.fattureCount > 0) {
+    const plural = row.fattureCount === 1 ? "" : "e";
+    return `Impossibile eliminare: ci sono ${row.fattureCount} fattura${plural} collegata${plural}. Le fatture non possono essere cancellate.`;
+  }
+  if (row.pazientiNonArchiviati > 0) {
+    const plural = row.pazientiNonArchiviati === 1 ? "" : "i";
+    return `Impossibile eliminare: ${row.pazientiNonArchiviati} paziente${plural} collegato${plural} non ${row.pazientiNonArchiviati === 1 ? "è" : "sono"} ancora archiviato${plural}. Archivialo prima di procedere.`;
+  }
+  return null;
+}
+
+function restoreConflictLabel(row: ArchivedPayerRow): string | null {
+  if (!row.restoreConflict) return null;
+  const fieldLabel = row.restoreConflict.field === "cf" ? "CF" : "P.IVA";
+  return `Ripristino bloccato: esiste già un pagante attivo con lo stesso ${fieldLabel}.`;
+}
+
+export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
+  const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
-  const [editingPayer, setEditingPayer] = useState<
-    (Pagante & { pazienti: Paziente[] }) | null
-  >(null);
-  const [viewingPayer, setViewingPayer] = useState<
-    (Pagante & { pazienti: Paziente[] }) | null
-  >(null);
+  const [editingPayer, setEditingPayer] = useState<ActivePayer | null>(null);
+  const [viewingPayer, setViewingPayer] = useState<ActivePayer | null>(null);
 
   const handleOpenNew = () => {
     setEditingPayer(null);
     setOpen(true);
   };
 
-  const handleOpenEdit = (payer: Pagante & { pazienti: Paziente[] }) => {
+  const handleOpenEdit = (payer: ActivePayer) => {
     setEditingPayer(payer);
     setOpen(true);
   };
 
-  const handleOpenView = (payer: Pagante & { pazienti: Paziente[] }) => {
+  const handleOpenView = (payer: ActivePayer) => {
     setViewingPayer(payer);
   };
 
@@ -68,8 +106,124 @@ export function PayersManager({ payers }: PayersManagerProps) {
         </Button>
       </div>
 
-      {payers.length === 0 ? (
-        <p className="text-muted-foreground">Nessun pagante registrato.</p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant={view === "active" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("active")}
+        >
+          Attivi ({payers.length})
+        </Button>
+        <Button
+          variant={view === "archived" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("archived")}
+        >
+          Archiviati ({archivedPayers.length})
+        </Button>
+      </div>
+
+      {view === "active" ? (
+        payers.length === 0 ? (
+          <p className="text-muted-foreground">Nessun pagante registrato.</p>
+        ) : (
+          <>
+            <div className="hidden rounded-lg border lg:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cognome</TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Città</TableHead>
+                    <TableHead>CAP</TableHead>
+                    <TableHead>CF</TableHead>
+                    <TableHead>P.IVA</TableHead>
+                    <TableHead className="w-24 text-right">Azioni</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payers.map((payer) => (
+                    <TableRow key={payer.id}>
+                      <TableCell className="font-medium">{payer.cognome}</TableCell>
+                      <TableCell>{payer.nome}</TableCell>
+                      <TableCell>{payer.citta}</TableCell>
+                      <TableCell>{payer.cap}</TableCell>
+                      <TableCell>{payer.cf ?? "-"}</TableCell>
+                      <TableCell>{payer.piva ?? "-"}</TableCell>
+                      <TableCell className="flex justify-end gap-1">
+                        <Tooltip content="Visualizza dettagli pagante">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(payer)}
+                            aria-label="Visualizza dettagli pagante"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Modifica pagante">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(payer)}
+                            aria-label="Modifica pagante"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <ArchivePayerButton id={payer.id} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <ul className="space-y-3 lg:hidden">
+              {payers.map((payer) => (
+                <li key={payer.id} className="rounded-lg border p-4 space-y-3">
+                  <div>
+                    <p className="font-medium">
+                      {payer.cognome} {payer.nome}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {payer.citta} {payer.cap}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                    <p>CF: {payer.cf ?? "-"}</p>
+                    <p>P.IVA: {payer.piva ?? "-"}</p>
+                  </div>
+                  <div className="flex items-center gap-1 border-t pt-3">
+                    <Tooltip content="Visualizza dettagli pagante">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenView(payer)}
+                        aria-label="Visualizza dettagli pagante"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="Modifica pagante">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenEdit(payer)}
+                        aria-label="Modifica pagante"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <ArchivePayerButton id={payer.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      ) : archivedPayers.length === 0 ? (
+        <p className="text-muted-foreground">Nessun pagante archiviato.</p>
       ) : (
         <>
           <div className="hidden rounded-lg border lg:block">
@@ -78,44 +232,34 @@ export function PayersManager({ payers }: PayersManagerProps) {
                 <TableRow>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Città</TableHead>
-                  <TableHead>CAP</TableHead>
                   <TableHead>CF</TableHead>
                   <TableHead>P.IVA</TableHead>
+                  <TableHead>Fatture collegate</TableHead>
                   <TableHead className="w-24 text-right">Azioni</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payers.map((payer) => (
+                {archivedPayers.map((payer) => (
                   <TableRow key={payer.id}>
                     <TableCell className="font-medium">{payer.cognome}</TableCell>
                     <TableCell>{payer.nome}</TableCell>
-                    <TableCell>{payer.citta}</TableCell>
-                    <TableCell>{payer.cap}</TableCell>
                     <TableCell>{payer.cf ?? "-"}</TableCell>
                     <TableCell>{payer.piva ?? "-"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {invoiceImpactLabel(payer) ?? "Nessuna"}
+                      {restoreConflictLabel(payer) && (
+                        <p className="text-destructive">{restoreConflictLabel(payer)}</p>
+                      )}
+                      {hardDeleteBlockReason(payer) && (
+                        <p className="text-destructive">{hardDeleteBlockReason(payer)}</p>
+                      )}
+                    </TableCell>
                     <TableCell className="flex justify-end gap-1">
-                      <Tooltip content="Visualizza dettagli pagante">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenView(payer)}
-                          aria-label="Visualizza dettagli pagante"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Modifica pagante">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(payer)}
-                          aria-label="Modifica pagante"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <DeletePayerButton id={payer.id} />
+                      <RestorePayerButton id={payer.id} />
+                      <HardDeletePayerButton
+                        id={payer.id}
+                        disabledReason={hardDeleteBlockReason(payer)}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -124,42 +268,36 @@ export function PayersManager({ payers }: PayersManagerProps) {
           </div>
 
           <ul className="space-y-3 lg:hidden">
-            {payers.map((payer) => (
+            {archivedPayers.map((payer) => (
               <li key={payer.id} className="rounded-lg border p-4 space-y-3">
                 <div>
                   <p className="font-medium">
                     {payer.cognome} {payer.nome}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {payer.citta} {payer.cap}
+                    {invoiceImpactLabel(payer) ?? "Nessuna fattura collegata"}
                   </p>
+                  {restoreConflictLabel(payer) && (
+                    <p className="text-sm text-destructive">
+                      {restoreConflictLabel(payer)}
+                    </p>
+                  )}
+                  {hardDeleteBlockReason(payer) && (
+                    <p className="text-sm text-destructive">
+                      {hardDeleteBlockReason(payer)}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <p>CF: {payer.cf ?? "-"}</p>
                   <p>P.IVA: {payer.piva ?? "-"}</p>
                 </div>
                 <div className="flex items-center gap-1 border-t pt-3">
-                  <Tooltip content="Visualizza dettagli pagante">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenView(payer)}
-                      aria-label="Visualizza dettagli pagante"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Modifica pagante">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenEdit(payer)}
-                      aria-label="Modifica pagante"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <DeletePayerButton id={payer.id} />
+                  <RestorePayerButton id={payer.id} />
+                  <HardDeletePayerButton
+                    id={payer.id}
+                    disabledReason={hardDeleteBlockReason(payer)}
+                  />
                 </div>
               </li>
             ))}

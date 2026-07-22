@@ -19,23 +19,63 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PatientForm } from "./patient-form";
-import { DeletePatientButton } from "./delete-patient-button";
+import { ArchivePatientButton } from "./archive-patient-button";
+import { RestorePatientButton } from "./restore-patient-button";
+import { HardDeletePatientButton } from "./hard-delete-patient-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { Paziente, Pagante } from "@prisma/client";
+import type { ArchivedPatientRow } from "@/lib/data/patients";
+
+type ActivePatient = Paziente & { pagante: Pagante | null };
 
 type PatientsManagerProps = {
-  patients: (Paziente & { pagante: Pagante | null })[];
+  patients: ActivePatient[];
   payers: Pagante[];
+  archivedPatients: ArchivedPatientRow[];
 };
 
-export function PatientsManager({ patients, payers }: PatientsManagerProps) {
+function formatCurrency(amount: number) {
+  return amount.toLocaleString("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  });
+}
+
+function invoiceImpactLabel(row: ArchivedPatientRow): string | null {
+  if (row.fattureCount === 0) return null;
+  const years =
+    row.fatturaAnnoMin === row.fatturaAnnoMax
+      ? `${row.fatturaAnnoMin}`
+      : `${row.fatturaAnnoMin}-${row.fatturaAnnoMax}`;
+  const plural = row.fattureCount === 1 ? "" : "e";
+  return `${row.fattureCount} fattura${plural} collegata${plural} (${years}, ${formatCurrency(row.fattureTotale)})`;
+}
+
+function hardDeleteBlockReason(row: ArchivedPatientRow): string | null {
+  if (row.fattureCount === 0) return null;
+  const plural = row.fattureCount === 1 ? "" : "e";
+  return `Impossibile eliminare: ci sono ${row.fattureCount} fattura${plural} collegata${plural}. Le fatture non possono essere cancellate.`;
+}
+
+function payerLabel(payer: ArchivedPatientRow["pagante"]): string {
+  if (!payer) return "Nessuno";
+  const archivedSuffix = payer.archiviato ? " (archiviato)" : "";
+  return `${payer.cognome} ${payer.nome}${archivedSuffix}`;
+}
+
+export function PatientsManager({
+  patients,
+  payers,
+  archivedPatients,
+}: PatientsManagerProps) {
+  const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
-  const [editingPatient, setEditingPatient] = useState<
-    (Paziente & { pagante: Pagante | null }) | null
-  >(null);
-  const [viewingPatient, setViewingPatient] = useState<
-    (Paziente & { pagante: Pagante | null }) | null
-  >(null);
+  const [editingPatient, setEditingPatient] = useState<ActivePatient | null>(
+    null
+  );
+  const [viewingPatient, setViewingPatient] = useState<ActivePatient | null>(
+    null
+  );
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
 
   const handleOpenNew = () => {
@@ -43,16 +83,12 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
     setOpen(true);
   };
 
-  const handleOpenEdit = (
-    patient: Paziente & { pagante: Pagante | null }
-  ) => {
+  const handleOpenEdit = (patient: ActivePatient) => {
     setEditingPatient(patient);
     setOpen(true);
   };
 
-  const handleOpenView = (
-    patient: Paziente & { pagante: Pagante | null }
-  ) => {
+  const handleOpenView = (patient: ActivePatient) => {
     setViewingPatient(patient);
   };
 
@@ -74,8 +110,123 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
         </Button>
       </div>
 
-      {patients.length === 0 ? (
-        <p className="text-muted-foreground">Nessun paziente registrato.</p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant={view === "active" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("active")}
+        >
+          Attivi ({patients.length})
+        </Button>
+        <Button
+          variant={view === "archived" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setView("archived")}
+        >
+          Archiviati ({archivedPatients.length})
+        </Button>
+      </div>
+
+      {view === "active" ? (
+        patients.length === 0 ? (
+          <p className="text-muted-foreground">Nessun paziente registrato.</p>
+        ) : (
+          <>
+            <div className="hidden rounded-lg border md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cognome</TableHead>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Pagante</TableHead>
+                    <TableHead className="w-24 text-right">Azioni</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {patients.map((patient) => (
+                    <TableRow key={patient.id}>
+                      <TableCell className="font-medium">
+                        {patient.cognome}
+                      </TableCell>
+                      <TableCell>{patient.nome}</TableCell>
+                      <TableCell>
+                        {patient.pagante
+                          ? `${patient.pagante.cognome} ${patient.pagante.nome}`
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="flex justify-end gap-1">
+                        <Tooltip content="Visualizza dettagli paziente">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(patient)}
+                            aria-label="Visualizza dettagli paziente"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Modifica paziente">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(patient)}
+                            aria-label="Modifica paziente"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <ArchivePatientButton id={patient.id} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <ul className="space-y-3 md:hidden">
+              {patients.map((patient) => (
+                <li key={patient.id} className="rounded-lg border p-4 space-y-3">
+                  <div>
+                    <p className="font-medium">
+                      {patient.cognome} {patient.nome}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Pagante:{" "}
+                      {patient.pagante
+                        ? `${patient.pagante.cognome} ${patient.pagante.nome}`
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 border-t pt-3">
+                    <Tooltip content="Visualizza dettagli paziente">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenView(patient)}
+                        aria-label="Visualizza dettagli paziente"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <Tooltip content="Modifica paziente">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenEdit(patient)}
+                        aria-label="Modifica paziente"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                    <ArchivePatientButton id={patient.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      ) : archivedPatients.length === 0 ? (
+        <p className="text-muted-foreground">Nessun paziente archiviato.</p>
       ) : (
         <>
           <div className="hidden rounded-lg border md:block">
@@ -85,43 +236,32 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Pagante</TableHead>
+                  <TableHead>Fatture collegate</TableHead>
                   <TableHead className="w-24 text-right">Azioni</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {patients.map((patient) => (
+                {archivedPatients.map((patient) => (
                   <TableRow key={patient.id}>
                     <TableCell className="font-medium">
                       {patient.cognome}
                     </TableCell>
                     <TableCell>{patient.nome}</TableCell>
-                    <TableCell>
-                      {patient.pagante
-                        ? `${patient.pagante.cognome} ${patient.pagante.nome}`
-                        : "-"}
+                    <TableCell>{payerLabel(patient.pagante)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {invoiceImpactLabel(patient) ?? "Nessuna"}
+                      {hardDeleteBlockReason(patient) && (
+                        <p className="text-destructive">
+                          {hardDeleteBlockReason(patient)}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="flex justify-end gap-1">
-                      <Tooltip content="Visualizza dettagli paziente">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenView(patient)}
-                          aria-label="Visualizza dettagli paziente"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Modifica paziente">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(patient)}
-                          aria-label="Modifica paziente"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <DeletePatientButton id={patient.id} />
+                      <RestorePatientButton id={patient.id} />
+                      <HardDeletePatientButton
+                        id={patient.id}
+                        disabledReason={hardDeleteBlockReason(patient)}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -130,41 +270,30 @@ export function PatientsManager({ patients, payers }: PatientsManagerProps) {
           </div>
 
           <ul className="space-y-3 md:hidden">
-            {patients.map((patient) => (
+            {archivedPatients.map((patient) => (
               <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                 <div>
                   <p className="font-medium">
                     {patient.cognome} {patient.nome}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Pagante:{" "}
-                    {patient.pagante
-                      ? `${patient.pagante.cognome} ${patient.pagante.nome}`
-                      : "-"}
+                    Pagante: {payerLabel(patient.pagante)}
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    {invoiceImpactLabel(patient) ?? "Nessuna fattura collegata"}
+                  </p>
+                  {hardDeleteBlockReason(patient) && (
+                    <p className="text-sm text-destructive">
+                      {hardDeleteBlockReason(patient)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 border-t pt-3">
-                  <Tooltip content="Visualizza dettagli paziente">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenView(patient)}
-                      aria-label="Visualizza dettagli paziente"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Modifica paziente">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenEdit(patient)}
-                      aria-label="Modifica paziente"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <DeletePatientButton id={patient.id} />
+                  <RestorePatientButton id={patient.id} />
+                  <HardDeletePatientButton
+                    id={patient.id}
+                    disabledReason={hardDeleteBlockReason(patient)}
+                  />
                 </div>
               </li>
             ))}

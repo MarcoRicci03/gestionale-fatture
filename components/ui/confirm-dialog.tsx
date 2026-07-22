@@ -19,6 +19,10 @@ type ConfirmDialogProps = {
   cancelLabel?: string;
   isPending?: boolean;
   onConfirm: () => void;
+  // Errore restituito dalla server action (es. conflitto di ripristino,
+  // fatture collegate): mostrato dentro il dialog, che resta aperto finché
+  // l'utente non annulla o corregge il problema altrove.
+  error?: string | null;
 };
 
 export function ConfirmDialog({
@@ -30,6 +34,7 @@ export function ConfirmDialog({
   cancelLabel = "Annulla",
   isPending,
   onConfirm,
+  error,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,6 +45,11 @@ export function ConfirmDialog({
             <DialogDescription>{description}</DialogDescription>
           )}
         </DialogHeader>
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
         <DialogFooter>
           <Button
             variant="outline"

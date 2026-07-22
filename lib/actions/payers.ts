@@ -8,8 +8,15 @@ import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
 
 export type PayerActionState = { success: true } | { error: string };
+
+function revalidatePayerViews() {
+  revalidatePath("/payers");
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+}
 
 async function checkPayerUniqueTaxIds(
   userId: number,
@@ -26,7 +33,7 @@ async function checkPayerUniqueTaxIds(
   const existing = await prisma.pagante.findFirst({
     where: {
       id_Utente: userId,
-      eliminato: false,
+      archiviato: false,
       id: excludeId ? { not: excludeId } : undefined,
       OR: conditions,
     },
@@ -118,7 +125,7 @@ export async function updatePayer(
 
   try {
     await prisma.pagante.update({
-      where: { id, id_Utente: userId, eliminato: false },
+      where: { id, id_Utente: userId, archiviato: false },
       data: {
         nome: parsed.data.nome,
         cognome: parsed.data.cognome,
@@ -153,17 +160,136 @@ export async function updatePayer(
   return { success: true };
 }
 
-export async function deletePayer(id: number): Promise<PayerActionState> {
+export async function archivePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
   try {
     await prisma.pagante.update({
       where: { id, id_Utente: userId },
-      data: { eliminato: true },
+      data: { archiviato: true },
     });
   } catch (error) {
-    console.error("deletePayer error", error);
-    return { error: "Errore durante l'eliminazione del pagante" };
+    console.error("archivePayer error", error);
+    return { error: "Errore durante l'archiviazione del pagante" };
+  }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.PAYER_ARCHIVE,
+    userId,
+    entita: "Pagante",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
+
+  revalidatePayerViews();
+  return { success: true };
+}
+
+export async function restorePayer(id: number): Promise<PayerActionState> {
+  const userId = await requireUserId();
+
+  const payer = await prisma.pagante.findFirst({
+    where: { id, id_Utente: userId, archiviato: true },
+  });
+  if (!payer) {
+    return { error: "Pagante non trovato tra gli archiviati" };
+  }
+
+  const activePayers = await prisma.pagante.findMany({
+    where: { id_Utente: userId, archiviato: false },
+    select: { id: true, cf: true, piva: true, nome: true, cognome: true },
+  });
+  const conflict = findRestoreConflict(
+    { cf: payer.cf, piva: payer.piva },
+    activePayers
+  );
+  if (conflict) {
+    const conflictingPayer = activePayers.find(
+      (p) => p.id === conflict.conflictingId
+    );
+    const fieldLabel = conflict.field === "cf" ? "codice fiscale" : "partita IVA";
+    const name = conflictingPayer
+      ? `${conflictingPayer.nome} ${conflictingPayer.cognome}`
+      : `#${conflict.conflictingId}`;
+    return {
+      error: `Impossibile ripristinare: esiste già un pagante attivo con lo stesso ${fieldLabel} (${name}). Modifica o archivia quel pagante prima di ripristinare.`,
+    };
+  }
+
+  try {
+    await prisma.pagante.update({
+      where: { id, id_Utente: userId },
+      data: { archiviato: false },
+    });
+  } catch (error) {
+    if (isUniqueViolationOnField(error, "cf")) {
+      return { error: "Codice Fiscale già presente su un pagante attivo" };
+    }
+    if (isUniqueViolationOnField(error, "piva")) {
+      return { error: "Partita IVA già presente su un pagante attivo" };
+    }
+    console.error("restorePayer error", error);
+    return { error: "Errore durante il ripristino del pagante" };
+  }
+
+  await logAudit({
+    azione: AUDIT_ACTIONS.PAYER_RESTORE,
+    userId,
+    entita: "Pagante",
+    entitaId: id,
+    ip: await getClientIp(),
+  });
+
+  revalidatePayerViews();
+  return { success: true };
+}
+
+export async function hardDeletePayer(id: number): Promise<PayerActionState> {
+  const userId = await requireUserId();
+
+  const payer = await prisma.pagante.findFirst({
+    where: { id, id_Utente: userId, archiviato: true },
+  });
+  if (!payer) {
+    return { error: "Pagante non trovato tra gli archiviati" };
+  }
+
+  const [fatture, pazientiNonArchiviati, pazientiArchiviatiCollegati] =
+    await Promise.all([
+      prisma.pagamento.count({
+        where: {
+          id_Utente: userId,
+          OR: [{ id_Pagante: id }, { paziente: { id_Pagante: id } }],
+        },
+      }),
+      prisma.paziente.count({
+        where: { id_Utente: userId, id_Pagante: id, archiviato: false },
+      }),
+      prisma.paziente.findMany({
+        where: { id_Utente: userId, id_Pagante: id, archiviato: true },
+        select: { id: true, nome: true, cognome: true },
+      }),
+    ]);
+
+  if (!canHardDeletePayer({ fatture, pazientiNonArchiviati })) {
+    if (fatture > 0) {
+      return {
+        error: `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`,
+      };
+    }
+    return {
+      error: `Impossibile eliminare: ${pazientiNonArchiviati} paziente/i collegato/i non è/sono ancora archiviato/i. Archivia prima quei pazienti.`,
+    };
+  }
+
+  try {
+    // Il cascade DB su pazienti.id_Pagante colpisce solo pazienti già
+    // archiviati e senza fatture (garantito dai conteggi sopra), mai un
+    // record che l'utente non ha esplicitamente archiviato.
+    await prisma.pagante.delete({ where: { id, id_Utente: userId } });
+  } catch (error) {
+    console.error("hardDeletePayer error", error);
+    return { error: "Errore durante l'eliminazione definitiva del pagante" };
   }
 
   await logAudit({
@@ -171,9 +297,16 @@ export async function deletePayer(id: number): Promise<PayerActionState> {
     userId,
     entita: "Pagante",
     entitaId: id,
+    meta: {
+      nome: payer.nome,
+      cognome: payer.cognome,
+      cf: payer.cf,
+      piva: payer.piva,
+      pazientiEliminatiInCascata: pazientiArchiviatiCollegati,
+    },
     ip: await getClientIp(),
   });
 
-  revalidatePath("/payers");
+  revalidatePayerViews();
   return { success: true };
 }

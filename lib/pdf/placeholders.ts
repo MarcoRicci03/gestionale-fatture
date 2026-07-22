@@ -260,7 +260,7 @@ export function buildMockInvoice(
       cap: "00100",
       cf: "RSSMRA80A01H501Z",
       piva: "12345678901",
-      eliminato: false,
+      archiviato: false,
     },
     paziente: {
       id: 1,
@@ -268,7 +268,7 @@ export function buildMockInvoice(
       id_Pagante: null,
       nome: "Giulia",
       cognome: "Rossi",
-      eliminato: false,
+      archiviato: false,
     },
     mesi: [
       { id: 1, id_Pagamento: 1, mese: "GIUGNO", prezzo: 75 },
