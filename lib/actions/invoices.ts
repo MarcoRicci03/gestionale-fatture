@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import type { Pagante, Paziente } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
@@ -16,6 +17,7 @@ import {
   findChronologyConflict,
   formatChronologyConflictMessage,
 } from "@/lib/invoices/chronology";
+import { buildSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
@@ -64,30 +66,34 @@ async function isBolloCodiceTaken(
   return existing !== null;
 }
 
+type RelationValidationResult =
+  | { error: string }
+  | { payer: Pagante; patient: Paziente };
+
 async function validateInvoiceRelations(
   userId: number,
   id_Pagante: number,
   id_Paziente: number
-): Promise<string | null> {
+): Promise<RelationValidationResult> {
   const payer = await prisma.pagante.findFirst({
     where: { id: id_Pagante, id_Utente: userId, archiviato: false },
   });
   if (!payer) {
-    return "Pagante selezionato non valido";
+    return { error: "Pagante selezionato non valido" };
   }
 
   const patient = await prisma.paziente.findFirst({
     where: { id: id_Paziente, id_Utente: userId, archiviato: false },
   });
   if (!patient) {
-    return "Paziente selezionato non valido";
+    return { error: "Paziente selezionato non valido" };
   }
 
   if (patient.id_Pagante !== id_Pagante) {
-    return "Il paziente non è associato al pagante selezionato";
+    return { error: "Il paziente non è associato al pagante selezionato" };
   }
 
-  return null;
+  return { payer, patient };
 }
 
 export async function getNextInvoiceNumberForYear(
@@ -122,14 +128,15 @@ export async function createInvoice(
     bolloCodice,
   } = parsed.data;
 
-  const relationError = await validateInvoiceRelations(
+  const relationResult = await validateInvoiceRelations(
     userId,
     id_Pagante,
     id_Paziente
   );
-  if (relationError) {
-    return { error: relationError };
+  if ("error" in relationResult) {
+    return { error: relationResult.error };
   }
+  const { payer, patient } = relationResult;
 
   const year = invoiceDate.getFullYear();
   if (await isInvoiceNumberTaken(userId, n_fattura, year)) {
@@ -170,6 +177,10 @@ export async function createInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        snapshotAnagrafica: buildSnapshotAnagrafica(
+          payer,
+          patient
+        ) as unknown as Prisma.InputJsonValue,
         mesi: {
           create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
