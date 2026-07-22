@@ -57,13 +57,13 @@
 | ID | Titolo | Severità | Stato |
 |---|---|---|---|
 | [LOG-01](#log-01) | Marca da bollo non validata lato server | Alta | ✅ Risolto |
-| [LOG-02](#log-02) | Fatture invisibili (elenco + PDF) se pagante/paziente viene eliminato | Alta | 🔴 Aperto |
+| [LOG-02](#log-02) | Fatture invisibili (elenco + PDF) se pagante/paziente viene archiviato | Alta | ✅ Risolto |
 | [LOG-03](#log-03) | Cancellazione fisica delle fatture e riuso del numero | Alta | 🔴 Aperto |
 | [LOG-04](#log-04) | Numero/anno/data modificabili su fatture già emesse, senza traccia | Media | 🔴 Aperto |
 | [LOG-05](#log-05) | Prezzo non parsabile convertito silenziosamente a 0 | Media | ✅ Risolto |
 | [LOG-06](#log-06) | Importi trattati come `number` (float) fuori dal DB | Media | ✅ Risolto |
 | [LOG-07](#log-07) | Mesi duplicati / array senza limite → errore opaco | Media | ✅ Risolto |
-| [LOG-08](#log-08) | Dashboard e elenco fatture calcolano insiemi diversi | Media | 🔴 Aperto |
+| [LOG-08](#log-08) | Dashboard e elenco fatture calcolano insiemi diversi | Media | ✅ Risolto |
 | [LOG-09](#log-09) | CF/P.IVA dei paganti senza validazione di formato | Bassa | ✅ Risolto |
 | [LOG-10](#log-10) | `updateProfile` non invalida la cache | Bassa | ✅ Risolto |
 | [LOG-11](#log-11) | Fallimento silenzioso dello snapshot layout PDF | Bassa | 🔴 Aperto |
@@ -794,20 +794,56 @@ la direzione "sopra soglia senza bollo", che è quella qui risolta.
 ---
 
 <a id="log-02"></a>
-### LOG-02 — Fatture invisibili se pagante/paziente viene eliminato
-**Severità:** Alta · **Stato:** 🔴 Aperto · **File:** `lib/data/invoices.ts` (`getInvoices`, `getInvoiceById`, `getLatestInvoices`)
+### LOG-02 — Fatture invisibili se pagante/paziente viene archiviato
+**Severità:** Alta · **Stato:** ✅ Risolto (2026-07-22) · **File:** `lib/data/invoices.ts` (`getInvoices`, `getInvoiceById`, `getLatestInvoices`), `lib/archive/guards.ts` (nuovo), `lib/actions/payers.ts`, `lib/actions/patients.ts`, `prisma/schema.prisma`
 
-Tutte e tre le query filtrano `pagante: { eliminato: false }, paziente: { eliminato: false }`.
-Conseguenza: appena si fa il soft-delete di un pagante o di un paziente, **tutte le sue fatture già
-emesse spariscono** dall'elenco e il loro PDF restituisce 404 (`route.ts:19-21` interpreta il `null`
-come "fattura non trovata"). I dati restano nel DB ma diventano irraggiungibili dall'applicazione.
+Tutte e tre le query filtravano `pagante: { eliminato: false }, paziente: { eliminato: false }`.
+Conseguenza: appena si faceva il soft-delete di un pagante o di un paziente, **tutte le sue fatture
+già emesse sparivano** dall'elenco e il loro PDF restituiva 404 (`route.ts:19-21` interpretava il
+`null` come "fattura non trovata"). I dati restavano nel DB ma diventavano irraggiungibili
+dall'applicazione — grave per un archivio fiscale, dove le fatture emesse devono restare
+consultabili e ristampabili per 10 anni indipendentemente dallo stato dell'anagrafica.
 
-Per un archivio fiscale è un comportamento grave: le fatture emesse devono restare consultabili e
-ristampabili per 10 anni, indipendentemente dallo stato dell'anagrafica.
+Risolto nell'ambito dell'introduzione della funzionalità di archiviazione/ripristino per paganti e
+pazienti (commit `74f226a`, 2026-07-22), che ha anche rinominato il campo booleano da `eliminato` ad
+`archiviato` (`@map("eliminato")` in `prisma/schema.prisma`: stessa colonna fisica, nessuna
+migration di dati necessaria) per riflettere che non è più un soft-delete "terminale" ma uno stato
+reversibile.
 
-**Rimedio proposto:** rimuovere il filtro `eliminato` sulle relazioni nelle query di lettura delle
-fatture (mantenendolo solo nelle liste di selezione per le **nuove** fatture, dove è già presente in
-`getPayersAndPatients`/`getPatientsForSelect`). Eventualmente marcare in UI l'anagrafica archiviata.
+**Fix applicato:**
+1. `getInvoices`, `getInvoiceById`, `getLatestInvoices` in `lib/data/invoices.ts` non filtrano più su
+   `pagante.archiviato`/`paziente.archiviato`: includono la relazione senza condizione, con un
+   commento che documenta esplicitamente il perché (una fattura è un documento fiscale e resta
+   visibile anche se l'anagrafica collegata viene archiviata). Il filtro `archiviato: false` resta,
+   correttamente, solo dove serve per le **nuove** fatture (`getPayersAndPatients` nello stesso file,
+   e le liste di selezione in `lib/data/patients.ts`/`lib/data/payers.ts`).
+2. La generazione PDF (`app/api/invoices/[id]/pdf/route.ts`) usa `getInvoiceById`, quindi beneficia
+   dello stesso fix senza modifiche proprie: non restituisce più 404 per una fattura di un
+   pagante/paziente archiviato.
+3. Seconda linea di difesa strutturale, oltre alla query: l'**hard delete** (cancellazione fisica)
+   di un pagante/paziente è ora bloccato finché esistono fatture collegate
+   (`canHardDeletePayer`/`canHardDeletePatient` in `lib/archive/guards.ts`, applicate in
+   `hardDeletePayer`/`hardDeletePatient`). L'unico stato raggiungibile per un'anagrafica con fatture
+   resta quindi "archiviata", mai cancellata: le fatture restano sempre risolvibili verso un record
+   reale nel DB, non solo verso dati storici scollegati.
+4. Nuovo flusso di **ripristino** (`restorePayer`/`restorePatient`) che riporta `archiviato` a
+   `false`, con controllo esplicito dei conflitti su CF/P.IVA contro gli indici unici parziali
+   (`findRestoreConflict`), utile in UI per far riemergere un'anagrafica archiviata per errore senza
+   passare da una nuova creazione.
+
+**Verificato con:**
+- `npm test` — l'intera suite (28 file, 145 test) passa, incluso il nuovo
+  `scripts/verify-archive-guards.test.ts` (10 test) che copre `canHardDeletePayer`,
+  `canHardDeletePatient` e `findRestoreConflict` in isolamento.
+- Lettura diretta di `lib/data/invoices.ts`: confermato che nessuna delle query di lettura fatture
+  applica più un filtro `archiviato`/`eliminato` sulle relazioni `pagante`/`paziente`.
+- `grep -rn "eliminato"` sull'intero codebase (esclusi `node_modules`/worktree): nessun filtro
+  residuo sul vecchio nome del campo — le uniche occorrenze rimaste sono testo UI/commenti che usano
+  "eliminato" nel senso di "cancellato definitivamente" (hard delete), non più come nome del campo
+  booleano.
+- Non testato end-to-end contro un dev server in questa sessione (verifica basata su lettura del
+  codice e sulla suite `verify:*`, stesso limite già annotato per altre voci di questo audit, es.
+  SEC-06/SEC-12/LOG-10).
 
 ---
 
@@ -988,13 +1024,25 @@ nuovi messaggi compaiono automaticamente lì se mai raggiunti (in pratica solo v
 
 <a id="log-08"></a>
 ### LOG-08 — Dashboard e elenco fatture calcolano insiemi diversi
-**Severità:** Media · **Stato:** 🔴 Aperto · **File:** `lib/data/invoices.ts` (`getAnnualRevenue`, `getMonthlyRevenue` vs `getInvoices`)
+**Severità:** Media · **Stato:** ✅ Risolto (2026-07-22, come conseguenza di LOG-02) · **File:** `lib/data/invoices.ts` (`getAnnualRevenue`, `getMonthlyRevenue`, `getInvoices`)
 
-Gli aggregati della dashboard **non** filtrano su `pagante/paziente eliminato`, mentre l'elenco
-fatture sì (vedi LOG-02). Risultato: il fatturato annuale mostrato non corrisponde alla somma delle
-fatture visibili in elenco, e la differenza è invisibile all'utente. Il fix di LOG-02 risolve anche
-questa incoerenza; vanno comunque allineati esplicitamente i criteri (incluse le eventuali fatture
-annullate di LOG-03).
+Gli aggregati della dashboard non filtravano su `pagante`/`paziente` archiviato, mentre l'elenco
+fatture sì (vedi [LOG-02](#log-02)): il fatturato annuale mostrato non corrispondeva alla somma
+delle fatture visibili in elenco, e la differenza era invisibile all'utente.
+
+**Fix applicato:** nessuna modifica diretta a `getAnnualRevenue`/`getMonthlyRevenue` (non filtravano
+già su `archiviato`, come previsto). Risolto integralmente come effetto collaterale del fix di
+[LOG-02](#log-02) su `getInvoices`: rimosso il filtro sulla relazione, ora entrambi i lati calcolano
+sullo stesso insieme di fatture (`id_Utente`, nessun filtro sull'anagrafica collegata).
+
+**Non ancora allineato:** le eventuali fatture "annullate" proposte in [LOG-03](#log-03) (tuttora
+aperto — la cancellazione resta fisica, nessun flag `annullata` in schema). Quando quel fix verrà
+applicato andrà verificato esplicitamente che dashboard ed elenco escludano le annullate in modo
+coerente da entrambi i lati, per non reintrodurre lo stesso disallineamento su un asse diverso.
+
+**Verificato con:** lettura diretta di `lib/data/invoices.ts` — `getInvoices`, `getInvoiceById`,
+`getLatestInvoices`, `getAnnualRevenue`, `getMonthlyRevenue` filtrano tutte esclusivamente su
+`id_Utente` (più il range di date per gli aggregati), nessuna su `archiviato`/`eliminato`.
 
 ---
 
@@ -1230,6 +1278,8 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 
 | Data | ID | Da → A | Note |
 |---|---|---|---|
+| 2026-07-22 | LOG-02 | 🔴 → ✅ | Rimosso il filtro `archiviato`/`eliminato` sulle relazioni `pagante`/`paziente` in `getInvoices`/`getInvoiceById`/`getLatestInvoices` (`lib/data/invoices.ts`); risolto nell'ambito della nuova funzionalità di archiviazione/ripristino (commit `74f226a`), che rinomina il campo `eliminato` in `archiviato` e aggiunge guardie contro l'hard delete di anagrafiche con fatture collegate (`lib/archive/guards.ts`); nuovo `verify:archive-guards` |
+| 2026-07-22 | LOG-08 | 🔴 → ✅ | Risolto come effetto collaterale del fix di LOG-02: dashboard ed elenco fatture calcolano ora sullo stesso insieme; resta da riverificare quando LOG-03 (fatture annullate) verrà affrontato |
 | 2026-07-21 | LOG-10 | 🔴 → ✅ | `updateProfile` chiama ora `revalidatePath("/account")` + `revalidatePath("/", "layout")`; `changePassword` deliberatamente escluso (nessun dato mutato è renderizzato in UI); nuovo `verify:account-cache-invalidation` |
 | 2026-07-21 | LOG-07 | 🔴 → ✅ | `mesi` in `invoiceSchema` limitato a `.max(12)` + nuovo `.refine()` di unicità sul mese (non raggiungibile dal form web, solo via RPC diretta); nuovo `verify:invoice-mesi-limits` |
 | 2026-07-21 | LOG-09 | 🔴 → ✅ | `payerSchema.cf`/`.piva` riusano `CF_REGEX`/`PIVA_REGEX` (nuovo `lib/constants/fiscal.ts`, condivise con `profileUpdateSchema`) invece di un semplice limite di lunghezza; CF normalizzato in maiuscolo; checksum del CF deliberatamente fuori scope; nuovo `verify:payer-fiscal-format` |
