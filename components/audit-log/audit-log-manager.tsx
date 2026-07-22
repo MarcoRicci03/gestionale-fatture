@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -7,6 +10,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AUDIT_ACTION_LABELS, type AuditAction } from "@/lib/audit/actions";
+import {
+  EMPTY_AUDIT_LOG_FILTERS,
+  filterAuditLogEntries,
+  getDistinctUsernames,
+  type AuditLogFilters,
+} from "@/lib/audit/filter-audit-log";
+import { AuditLogFilterBar } from "@/components/audit-log/audit-log-filter-bar";
 import type { AuditLogEntry } from "@/lib/data/audit-log-select";
 
 type AuditLogManagerProps = {
@@ -35,23 +45,47 @@ function formatMeta(meta: AuditLogEntry["meta"]): string {
   return json.length > 80 ? `${json.slice(0, 80)}…` : json;
 }
 
+// Altezza fissa dell'area scrollabile (tabella desktop e card mobile): con
+// fino a 200 eventi la pagina non deve allungarsi indefinitamente, la lista
+// scrolla al suo interno mentre filtri e intestazione restano fissi sopra.
+const SCROLL_AREA_CLASS = "max-h-[65vh] overflow-y-auto";
+
 export function AuditLogManager({ entries }: AuditLogManagerProps) {
+  const [filters, setFilters] = useState<AuditLogFilters>(EMPTY_AUDIT_LOG_FILTERS);
+
+  const usernames = useMemo(() => getDistinctUsernames(entries), [entries]);
+  const filteredEntries = useMemo(
+    () => filterAuditLogEntries(entries, filters),
+    [entries, filters]
+  );
+
+  const handleFilterChange = (patch: Partial<AuditLogFilters>) =>
+    setFilters((prev) => ({ ...prev, ...patch }));
+  const handleFilterReset = () => setFilters(EMPTY_AUDIT_LOG_FILTERS);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
         <p className="text-muted-foreground">
-          Ultimi {entries.length} eventi: accessi e operazioni sensibili
+          {filteredEntries.length} di {entries.length} eventi: accessi e operazioni sensibili
         </p>
       </div>
 
-      {entries.length === 0 ? (
-        <p className="text-muted-foreground">Nessun evento registrato.</p>
+      <AuditLogFilterBar
+        filters={filters}
+        onChange={handleFilterChange}
+        onReset={handleFilterReset}
+        usernames={usernames}
+      />
+
+      {filteredEntries.length === 0 ? (
+        <p className="text-muted-foreground">Nessun evento corrisponde ai filtri selezionati.</p>
       ) : (
         <>
-          <div className="hidden rounded-lg border md:block">
+          <div className={`hidden rounded-lg border md:block ${SCROLL_AREA_CLASS}`}>
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Data e ora</TableHead>
                   <TableHead>Utente</TableHead>
@@ -62,7 +96,7 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => (
+                {filteredEntries.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="whitespace-nowrap">
                       {formatData(entry.createdAt)}
@@ -80,8 +114,8 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
             </Table>
           </div>
 
-          <ul className="space-y-3 md:hidden">
-            {entries.map((entry) => (
+          <ul className={`space-y-3 rounded-lg md:hidden ${SCROLL_AREA_CLASS}`}>
+            {filteredEntries.map((entry) => (
               <li key={entry.id} className="rounded-lg border p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium">{formatAzione(entry.azione)}</p>
