@@ -30,7 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InvoiceForm } from "./invoice-form";
-import { DeleteInvoiceButton } from "./delete-invoice-button";
+import { AnnullaInvoiceButton } from "./annulla-invoice-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay, parseDateInput } from "@/lib/utils/date";
@@ -258,6 +258,7 @@ export function InvoicesManager({
                     </TableCell>
                     <TableCell className="font-medium">
                       {invoice.n_fattura}
+                      {invoice.annullata && " (annullata)"}
                     </TableCell>
                     <TableCell>{formatDateDisplay(invoice.data)}</TableCell>
                     <TableCell>
@@ -334,7 +335,7 @@ export function InvoicesManager({
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </Tooltip>
-                      <DeleteInvoiceButton id={invoice.id} />
+                      <AnnullaInvoiceButton id={invoice.id} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -358,7 +359,10 @@ export function InvoicesManager({
                       aria-label={`Seleziona fattura ${invoice.n_fattura}`}
                     />
                     <div>
-                      <p className="font-medium">N. {invoice.n_fattura}</p>
+                      <p className="font-medium">
+                        N. {invoice.n_fattura}
+                        {invoice.annullata && " (annullata)"}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {formatDateDisplay(invoice.data)}
                       </p>
@@ -441,7 +445,7 @@ export function InvoicesManager({
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </Tooltip>
-                  <DeleteInvoiceButton id={invoice.id} />
+                  <AnnullaInvoiceButton id={invoice.id} />
                 </div>
               </li>
             ))}
@@ -490,7 +494,10 @@ export function InvoicesManager({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-sm text-muted-foreground">N. Fattura</p>
-                  <p className="font-medium">{viewingInvoice.n_fattura}</p>
+                  <p className="font-medium">
+                    {viewingInvoice.n_fattura}
+                    {viewingInvoice.annullata && " (annullata)"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Data</p>
