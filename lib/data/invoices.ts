@@ -3,12 +3,12 @@ import { requireUserId } from "@/lib/auth/session";
 
 export async function getInvoices() {
   const userId = await requireUserId();
+  // Nessun filtro su pagante/paziente.archiviato: una fattura è un documento
+  // fiscale e resta visibile anche se il pagante o il paziente collegato
+  // sono stati archiviati nel frattempo (vedi lib/actions/payers.ts,
+  // lib/actions/patients.ts).
   const invoices = await prisma.pagamento.findMany({
-    where: {
-      id_Utente: userId,
-      pagante: { eliminato: false },
-      paziente: { eliminato: false },
-    },
+    where: { id_Utente: userId },
     include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },
   });
@@ -23,13 +23,11 @@ export async function getInvoices() {
 
 export async function getInvoiceById(id: number) {
   const userId = await requireUserId();
+  // Vedi nota in getInvoices: nessun filtro su archiviato, altrimenti la
+  // vista di dettaglio e la generazione PDF sparirebbero per le fatture di
+  // un pagante/paziente archiviato.
   const invoice = await prisma.pagamento.findFirst({
-    where: {
-      id,
-      id_Utente: userId,
-      pagante: { eliminato: false },
-      paziente: { eliminato: false },
-    },
+    where: { id, id_Utente: userId },
     include: { pagante: true, paziente: true, mesi: true, utente: true },
   });
   if (!invoice) return null;
@@ -65,11 +63,11 @@ export async function getPayersAndPatients() {
   const userId = await requireUserId();
   const [payers, patients] = await Promise.all([
     prisma.pagante.findMany({
-      where: { id_Utente: userId, eliminato: false },
+      where: { id_Utente: userId, archiviato: false },
       orderBy: [{ cognome: "asc" }, { nome: "asc" }],
     }),
     prisma.paziente.findMany({
-      where: { id_Utente: userId, eliminato: false },
+      where: { id_Utente: userId, archiviato: false },
       include: { pagante: true },
       orderBy: [{ cognome: "asc" }, { nome: "asc" }],
     }),
@@ -113,12 +111,9 @@ export async function getMonthlyRevenue(year: number, month: number) {
 
 export async function getLatestInvoices(limit: number) {
   const userId = await requireUserId();
+  // Vedi nota in getInvoices: nessun filtro su archiviato.
   const invoices = await prisma.pagamento.findMany({
-    where: {
-      id_Utente: userId,
-      pagante: { eliminato: false },
-      paziente: { eliminato: false },
-    },
+    where: { id_Utente: userId },
     include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },
     take: limit,

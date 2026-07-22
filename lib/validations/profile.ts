@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { CF_REGEX, PIVA_REGEX } from "@/lib/constants/fiscal";
 
 export const profileUpdateSchema = z.object({
   nome: z.string().max(100).optional(),
   cognome: z.string().max(100).optional(),
   pIva: z
     .union([
-      z.string().regex(/^\d{11}$/, "P.IVA non valida (11 cifre)"),
+      z.string().regex(PIVA_REGEX, "P.IVA non valida (11 cifre)"),
       z.literal(""),
       z.null(),
     ])
@@ -13,7 +14,7 @@ export const profileUpdateSchema = z.object({
     .optional(),
   cf: z
     .union([
-      z.string().regex(/^[A-Za-z0-9]{16}$/, "Codice fiscale non valido (16 caratteri)"),
+      z.string().regex(CF_REGEX, "Codice fiscale non valido (16 caratteri)"),
       z.literal(""),
       z.null(),
     ])

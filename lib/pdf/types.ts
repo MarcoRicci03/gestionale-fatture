@@ -154,19 +154,3 @@ export function isPdfLayout(value: unknown): value is PdfLayout {
     v.blocchi.every(isBlocco)
   );
 }
-
-export function isPrismaImpostazioniPdf(
-  value: unknown
-): value is ImpostazioniPdf {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === "number" &&
-    typeof v.id_Utente === "number" &&
-    typeof v.createdAt === "object" &&
-    v.createdAt instanceof Date &&
-    typeof v.updatedAt === "object" &&
-    v.updatedAt instanceof Date &&
-    isPdfLayout(value)
-  );
-}

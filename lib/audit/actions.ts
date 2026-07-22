@@ -20,10 +20,21 @@ export const AUDIT_ACTIONS = {
   INVOICE_DELETE: "invoice.delete",
   PATIENT_CREATE: "patient.create",
   PATIENT_UPDATE: "patient.update",
+  // PATIENT_DELETE ora indica l'eliminazione DEFINITIVA (hardDeletePatient in
+  // lib/actions/patients.ts): prima dell'introduzione di archivePatient
+  // indicava il soft-delete. Nell'audit trail il significato di questo
+  // valore cambia da questo punto in avanti, gli eventi storici precedenti
+  // restano da leggere come soft-delete.
   PATIENT_DELETE: "patient.delete",
+  PATIENT_ARCHIVE: "patient.archive",
+  PATIENT_RESTORE: "patient.restore",
   PAYER_CREATE: "payer.create",
   PAYER_UPDATE: "payer.update",
+  // Vedi nota su PATIENT_DELETE: ora indica l'eliminazione definitiva
+  // (hardDeletePayer).
   PAYER_DELETE: "payer.delete",
+  PAYER_ARCHIVE: "payer.archive",
+  PAYER_RESTORE: "payer.restore",
   PDF_SETTINGS_UPDATE: "pdf_settings.update",
   PDF_SETTINGS_REFRESH_LAYOUT: "pdf_settings.refresh_layout",
   INVOICE_EXPORT: "invoice.export",
@@ -48,10 +59,14 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.INVOICE_DELETE]: "Eliminazione fattura",
   [AUDIT_ACTIONS.PATIENT_CREATE]: "Creazione paziente",
   [AUDIT_ACTIONS.PATIENT_UPDATE]: "Modifica paziente",
-  [AUDIT_ACTIONS.PATIENT_DELETE]: "Eliminazione paziente",
+  [AUDIT_ACTIONS.PATIENT_DELETE]: "Eliminazione definitiva paziente",
+  [AUDIT_ACTIONS.PATIENT_ARCHIVE]: "Archiviazione paziente",
+  [AUDIT_ACTIONS.PATIENT_RESTORE]: "Ripristino paziente",
   [AUDIT_ACTIONS.PAYER_CREATE]: "Creazione pagante",
   [AUDIT_ACTIONS.PAYER_UPDATE]: "Modifica pagante",
-  [AUDIT_ACTIONS.PAYER_DELETE]: "Eliminazione pagante",
+  [AUDIT_ACTIONS.PAYER_DELETE]: "Eliminazione definitiva pagante",
+  [AUDIT_ACTIONS.PAYER_ARCHIVE]: "Archiviazione pagante",
+  [AUDIT_ACTIONS.PAYER_RESTORE]: "Ripristino pagante",
   [AUDIT_ACTIONS.PDF_SETTINGS_UPDATE]: "Aggiornamento template PDF",
   [AUDIT_ACTIONS.PDF_SETTINGS_REFRESH_LAYOUT]: "Riallineamento layout PDF fattura",
   [AUDIT_ACTIONS.INVOICE_EXPORT]: "Esportazione fatture in Excel",

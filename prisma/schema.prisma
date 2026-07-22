@@ -41,24 +41,29 @@ model Utente {
 }
 
 model Pagante {
-  id        Int         @id @default(autoincrement())
-  id_Utente Int
-  nome      String
-  cognome   String
-  via       String
-  citta     String
-  cap       String
-  cf        String?
-  piva      String?
-  eliminato Boolean     @default(false)
+  id         Int         @id @default(autoincrement())
+  id_Utente  Int
+  nome       String
+  cognome    String
+  via        String
+  citta      String
+  cap        String
+  cf         String?
+  piva       String?
+  // Rinominato da `eliminato` (era soft-delete puro): ora significa
+  // "archiviato" — sparisce da elenchi operativi e tendine, ma le sue
+  // fatture restano visibili/esportabili (vedi lib/data/invoices.ts). Il
+  // @map mantiene invariato il nome colonna in DB, quindi nessuna migration
+  // di dati è necessaria per questo rename.
+  archiviato Boolean     @default(false) @map("eliminato")
 
-  utente    Utente      @relation(fields: [id_Utente], references: [id])
-  pazienti  Paziente[]
-  pagamenti Pagamento[]
+  utente     Utente      @relation(fields: [id_Utente], references: [id])
+  pazienti   Paziente[]
+  pagamenti  Pagamento[]
 
-  // cf/piva sono univoci per utente SOLO tra i paganti attivi (eliminato =
+  // cf/piva sono univoci per utente SOLO tra i paganti attivi (archiviato =
   // false): applicato con indici unique parziali in
-  // prisma/migrations/<timestamp>_paganti_partial_unique_active_only/migration.sql,
+  // prisma/migrations/20260720000000_init/migration.sql (righe 129-130),
   // non rappresentabili con @@unique nel DSL di Prisma. NON riaggiungere
   // @@unique([id_Utente, cf]) / @@unique([id_Utente, piva]) qui: `prisma
   // migrate dev` li reintrodurrebbe come vincoli pieni, riaprendo il bug.
@@ -67,7 +72,7 @@ model Pagante {
   // schema. È atteso, non un'indicazione di rigenerare la migration. Se in
   // futuro si usa `prisma db push` in dev, questi indici andrebbero
   // ricreati manualmente (db push non replica migration SQL custom).
-  @@index([id_Utente, eliminato])
+  @@index([id_Utente, archiviato])
   @@map("paganti")
 }
 
@@ -77,13 +82,20 @@ model Paziente {
   id_Pagante Int?
   nome       String
   cognome    String
-  eliminato  Boolean     @default(false)
+  // Vedi commento su Pagante.archiviato: stesso rename, stesso @map.
+  archiviato Boolean     @default(false) @map("eliminato")
 
   utente     Utente      @relation(fields: [id_Utente], references: [id])
-  pagante    Pagante?    @relation(fields: [id_Pagante], references: [id])
+  // onDelete: Cascade (era SET NULL): un hard-delete del pagante (azione
+  // hardDeletePayer in lib/actions/payers.ts) può avvenire solo quando non
+  // restano pazienti collegati non archiviati (guard applicativo in
+  // lib/archive/guards.ts) — a quel punto i soli pazienti ancora collegati
+  // sono già archiviati e senza fatture, ed è corretto cancellarli insieme
+  // al pagante invece di lasciarli con un id_Pagante orfano.
+  pagante    Pagante?    @relation(fields: [id_Pagante], references: [id], onDelete: Cascade)
   pagamenti  Pagamento[]
 
-  @@index([id_Utente, eliminato])
+  @@index([id_Utente, archiviato])
   @@map("pazienti")
 }
 

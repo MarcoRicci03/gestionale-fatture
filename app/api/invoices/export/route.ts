@@ -48,12 +48,13 @@ export async function POST(request: Request) {
   // Non ci si fida degli id selezionati lato client per l'isolamento
   // multi-tenant: la query filtra sempre esplicitamente per id_Utente,
   // ignorando silenziosamente eventuali id non posseduti dall'utente.
+  // Nessun filtro su pagante/paziente.archiviato: una fattura resta
+  // esportabile anche se il contatto collegato è stato archiviato (vedi
+  // lib/data/invoices.ts).
   const invoices = await prisma.pagamento.findMany({
     where: {
       id_Utente: userId,
       id: { in: ids },
-      pagante: { eliminato: false },
-      paziente: { eliminato: false },
     },
     include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },

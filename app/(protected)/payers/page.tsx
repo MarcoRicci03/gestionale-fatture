@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getPayers } from "@/lib/data/payers";
+import { getPayers, getArchivedPayers } from "@/lib/data/payers";
 import { PayersManager } from "@/components/payers/payers-manager";
 
 export const metadata: Metadata = {
@@ -7,6 +7,9 @@ export const metadata: Metadata = {
 };
 
 export default async function PayersPage() {
-  const payers = await getPayers();
-  return <PayersManager payers={payers} />;
+  const [payers, archivedPayers] = await Promise.all([
+    getPayers(),
+    getArchivedPayers(),
+  ]);
+  return <PayersManager payers={payers} archivedPayers={archivedPayers} />;
 }

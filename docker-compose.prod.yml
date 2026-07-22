@@ -52,13 +52,14 @@ services:
       - .env.prod
     environment:
       POSTGRES_HOST: db
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./scripts/backup-db.sh:/backup-db.sh:ro
       - ./backups:/backups
-    entrypoint: ["sh", "/backup-db.sh"]
+    entrypoint: ["sh", "-c", "apk add --no-cache gnupg && sh /backup-db.sh"]
     networks:
       - internal
 

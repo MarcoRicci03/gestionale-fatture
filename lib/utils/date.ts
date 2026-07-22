@@ -1,6 +1,3 @@
-import { format } from "date-fns";
-import { it } from "date-fns/locale";
-
 export function parseDateInput(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0);
@@ -20,12 +17,13 @@ function toLocalDate(date: Date | string): Date {
 
 export function formatDateInput(date: Date | string | null | undefined): string {
   if (!date) return "";
-  return format(toLocalDate(date), "yyyy-MM-dd");
+  const d = toLocalDate(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function formatDateDisplay(
   date: Date | string | null | undefined
 ): string {
   if (!date) return "-";
-  return format(toLocalDate(date), "dd/MM/yyyy", { locale: it });
+  return toLocalDate(date).toLocaleDateString("it-IT");
 }

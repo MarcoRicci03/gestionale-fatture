@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { it } from "date-fns/locale";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +21,7 @@ import {
 import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
+import { roundCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils";
 import type { FatturaMese, Pagante, Paziente, $Enums } from "@prisma/client";
 
@@ -100,7 +99,9 @@ export function InvoiceForm({
           }))
         : [
             {
-              mese: format(new Date(), "MMMM", { locale: it }).toUpperCase() as Mese,
+              mese: new Date()
+                .toLocaleDateString("it-IT", { month: "long" })
+                .toUpperCase() as Mese,
               prezzo: "",
             },
           ],
@@ -121,7 +122,7 @@ export function InvoiceForm({
   const bolloCodiceValue = useWatch({ control, name: "bolloCodice" });
 
   const totale = useMemo(
-    () => mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0),
+    () => roundCurrency(mesiValues.reduce((somma, m) => somma + Number(m.prezzo || 0), 0)),
     [mesiValues]
   );
 

@@ -1,5 +1,6 @@
 import type { InvoiceWithRelations, MeseConfig } from "./types";
 import { IMPORTO_BOLLO } from "@/lib/constants/bollo";
+import { roundCurrency } from "@/lib/utils/currency";
 
 export type PlaceholderContext = {
   invoice: InvoiceWithRelations;
@@ -163,7 +164,7 @@ export function buildReplacements(
       ? `Imposta di bollo assolta in modo virtuale sull'originale per importi superiori a € 77,47 - Codice identificativo: ${invoice.bolloCodice} - Importo: ${formatCurrency(IMPORTO_BOLLO)}`
       : "",
     "{{fattura.totaleConBollo}}": formatCurrency(
-      invoice.prezzo_totale + (invoice.bolloCodice ? IMPORTO_BOLLO : 0)
+      roundCurrency(invoice.prezzo_totale + (invoice.bolloCodice ? IMPORTO_BOLLO : 0))
     ),
 
     // Dettaglio prezzi per mese
@@ -259,7 +260,7 @@ export function buildMockInvoice(
       cap: "00100",
       cf: "RSSMRA80A01H501Z",
       piva: "12345678901",
-      eliminato: false,
+      archiviato: false,
     },
     paziente: {
       id: 1,
@@ -267,7 +268,7 @@ export function buildMockInvoice(
       id_Pagante: null,
       nome: "Giulia",
       cognome: "Rossi",
-      eliminato: false,
+      archiviato: false,
     },
     mesi: [
       { id: 1, id_Pagamento: 1, mese: "GIUGNO", prezzo: 75 },

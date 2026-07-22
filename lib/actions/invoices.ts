@@ -63,14 +63,14 @@ async function validateInvoiceRelations(
   id_Paziente: number
 ): Promise<string | null> {
   const payer = await prisma.pagante.findFirst({
-    where: { id: id_Pagante, id_Utente: userId, eliminato: false },
+    where: { id: id_Pagante, id_Utente: userId, archiviato: false },
   });
   if (!payer) {
     return "Pagante selezionato non valido";
   }
 
   const patient = await prisma.paziente.findFirst({
-    where: { id: id_Paziente, id_Utente: userId, eliminato: false },
+    where: { id: id_Paziente, id_Utente: userId, archiviato: false },
   });
   if (!patient) {
     return "Paziente selezionato non valido";
