@@ -70,7 +70,7 @@
 | [LOG-10](#log-10) | `updateProfile` non invalida la cache | Bassa | ✅ Risolto |
 | [LOG-11](#log-11) | Fallimento silenzioso dello snapshot layout PDF | Bassa | ✅ Risolto |
 | [LOG-12](#log-12) | Aggregati dashboard dipendenti dal fuso orario del server | Bassa | ✅ Risolto |
-| [LOG-13](#log-13) | Regex globale a livello di modulo in `parseInlineFormatting` | Bassa | 🔴 Aperto |
+| [LOG-13](#log-13) | Regex globale a livello di modulo in `parseInlineFormatting` | Bassa | ✅ Risolto |
 | [LOG-14](#log-14) | Commento nello schema Prisma cita una migration inesistente | Bassa | ✅ Risolto |
 
 ### Deploy / conformità
@@ -1306,15 +1306,33 @@ non è un percorso di avvio previsto per questa app.
 
 <a id="log-13"></a>
 ### LOG-13 — Regex globale condivisa in `parseInlineFormatting`
-**Severità:** Bassa · **Stato:** 🔴 Aperto · **File:** `lib/pdf/formatting.ts:7-9`
+**Severità:** Bassa · **Stato:** ✅ Risolto (2026-07-24) · **File:** `lib/pdf/formatting.ts`, `lib/pdf/formatting.test.ts` (nuovo)
 
-`FORMATTING_REGEX` è dichiarata a livello di modulo con flag `g` e usata con `.exec()` in un ciclo:
-lo stato `lastIndex` è condiviso tra tutte le chiamate. Oggi è corretto perché il ciclo arriva
-sempre a `null` (che azzera `lastIndex`), ma basta un `break`/`return` anticipato o un'eccezione
-dentro il ciclo perché le chiamate successive partano da un offset sbagliato e producano PDF
-formattati male in modo non riproducibile.
+`FORMATTING_REGEX` era dichiarata a livello di modulo con flag `g` e usata con `.exec()` in un ciclo
+`while`: lo stato `lastIndex` era condiviso tra tutte le chiamate. Era corretto solo perché il ciclo
+arrivava sempre a `null` (che azzera `lastIndex`), ma sarebbe bastato un `break`/`return` anticipato
+o un'eccezione dentro il ciclo perché le chiamate successive partissero da un offset sbagliato e
+producessero PDF formattati male in modo non riproducibile. `parseInlineFormatting` è invocata molte
+volte per render (per blocco/testo, per riga in `rich-text.ts`, in 3 componenti), quindi lo stato
+condiviso era davvero esercitato.
 
-**Rimedio proposto:** creare la regex dentro la funzione, o usare `text.matchAll(...)`.
+**Fix applicato:** il ciclo `while ((match = FORMATTING_REGEX.exec(text)) !== null)` è sostituito da
+`for (const match of text.matchAll(FORMATTING_REGEX))`. `String.prototype.matchAll` costruisce per
+spec una **copia interna** della regex, quindi il `lastIndex` della costante a livello di modulo
+**non viene mai mutato**: lo stato condiviso è eliminato alla radice e il codice resta corretto anche
+se un domani si aggiunge un'uscita anticipata dal ciclo. La regex resta compilata una volta sola
+(nessuna allocazione per-chiamata, a differenza dello spostarla dentro la funzione) e sparisce il
+`let match` con l'assegnamento-in-condizione. La logica di segmentazione (`match.index`,
+`match[0]/[1]/[2]`) è invariata.
+
+**Verificato con:**
+- Nuovo `lib/pdf/formatting.test.ts` (7 unit comportamentali, prima assenti): testo semplice, tag
+  singolo con testo intorno, i tre tipi `b`/`i`/`note`, più tag intervallati, stringa vuota,
+  **idempotenza** su chiamate ripetute e — guardia diretta della regressione — **due chiamate
+  consecutive con input diversi** che devono dare risultati indipendenti e corretti (fallirebbe se lo
+  `lastIndex` fosse condiviso).
+- `npm test` verde (37 file, **214 test**, +7), `npx tsc --noEmit` pulito, `npm run lint` solo i due
+  warning preesistenti e non correlati su `invoice-form.tsx`.
 
 ---
 
@@ -1448,6 +1466,7 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 
 | Data | ID | Da → A | Note |
 |---|---|---|---|
+| 2026-07-24 | LOG-13 | 🔴 → ✅ | `parseInlineFormatting` passa da `while (FORMATTING_REGEX.exec(...))` a `for (… of text.matchAll(FORMATTING_REGEX))`: `matchAll` clona internamente la regex, quindi il `lastIndex` della costante a livello di modulo non è più mutato/condiviso tra chiamate (corretto anche con eventuali uscite anticipate future). Nuovo `lib/pdf/formatting.test.ts` (7 test, inclusa la guardia su due chiamate consecutive); suite 214 test verde |
 | 2026-07-24 | LOG-12 | 🔴 → ✅ | Fuso del processo pinnato a Europe/Rome: `tzdata` + `ENV TZ=Europe/Rome` nel `Dockerfile` (stage `runner`), prefisso `TZ=Europe/Rome` sugli script `dev`/`start` in `package.json` (copre anche `npm start` fuori da Docker su host UTC), `TZ=Europe/Rome` in `.env.prod.example` come default documentativo (con nota che `.env` da solo non basta: Node legge TZ prima di dotenv). Scelto il pinning del fuso, non `date-fns-tz` (app mono-fuso, nessuna dipendenza di date aggiunta). Nuovo `verify-container-timezone.test.ts`; suite 207 test verde |
 | 2026-07-23 | LOG-11 | 🔴 → ✅ | Snapshot layout PDF incluso direttamente nel `create` di `createInvoice` (come `snapshotAnagrafica`), non più con un `update` best-effort separato: lo stato "fattura con `pdfLayoutSnapshot` null per update fallito" diventa irrappresentabile. Rimosso l'import di `snapshotPdfLayoutForInvoice` da `createInvoice` (esce anche `@react-pdf/renderer` dal grafo dell'action); funzione mantenuta per `refreshInvoicePdfLayout`. Nuovi test statici in `verify-invoice-lifecycle.test.ts`; suite 203 test verde |
 | 2026-07-23 | LOG-14 | 🔴 → ✅ | Riverifica: il commento in `prisma/schema.prisma` (blocco `Pagante`) cita ora correttamente `20260720000000_init/migration.sql` (righe 129-130), non più la directory inesistente `_paganti_partial_unique_active_only`. Verificato che le due `CREATE UNIQUE INDEX ... WHERE "eliminato" = false` esistono a quelle righe |
