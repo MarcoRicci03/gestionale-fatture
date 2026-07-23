@@ -5,7 +5,7 @@ import {
   getPayersAndPatients,
 } from "@/lib/data/invoices";
 import { InvoicesManager } from "@/components/invoices/invoices-manager";
-import { currentMonthInvoiceFilters } from "@/components/invoices/invoices-filter-bar";
+import { currentMonthInvoiceFilters } from "@/components/invoices/invoice-filters";
 
 export const metadata: Metadata = {
   title: "Fatture",

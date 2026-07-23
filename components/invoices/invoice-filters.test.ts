@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_INVOICE_FILTERS,
   currentMonthInvoiceFilters,
-} from "./invoices-filter-bar";
+} from "./invoice-filters";
 
 describe("currentMonthInvoiceFilters", () => {
   it("mese a 31 giorni (luglio 2026)", () => {
