@@ -72,6 +72,7 @@
 | [LOG-12](#log-12) | Aggregati dashboard dipendenti dal fuso orario del server | Bassa | ✅ Risolto |
 | [LOG-13](#log-13) | Regex globale a livello di modulo in `parseInlineFormatting` | Bassa | ✅ Risolto |
 | [LOG-14](#log-14) | Commento nello schema Prisma cita una migration inesistente | Bassa | ✅ Risolto |
+| [LOG-15](#log-15) | Export Excel legge l'anagrafica live invece dello snapshot, disallineato dal PDF | Media | ✅ Risolto |
 
 ### Deploy / conformità
 
@@ -1369,6 +1370,43 @@ citate.
 
 ---
 
+<a id="log-15"></a>
+### LOG-15 — Export Excel legge l'anagrafica live invece dello snapshot
+**Severità:** Media · **Stato:** ✅ Risolto (2026-07-24) · **File:** `lib/excel/column-catalog.ts`, `lib/excel/column-catalog.test.ts` (nuovo)
+
+Emerso da una domanda diretta dell'utente ("l'export Excel prende i dati attuali o lo snapshot?"),
+non dall'audit originale. Le colonne pagante/paziente del catalogo export (`pagante_cognome_nome`,
+`pagante_via`, `pagante_citta`, `pagante_cap`, `pagante_cf`, `pagante_piva`, `paziente_cognome_nome`)
+leggevano `i.pagante`/`i.paziente` — le relazioni Prisma **live** incluse dalla query in
+`app/api/invoices/export/route.ts` — invece dello snapshot congelato all'emissione
+(`Pagamento.snapshotAnagrafica`, introdotto per il PDF). Il PDF di una fattura (`lib/pdf/placeholders.ts`,
+via `resolveAnagrafica`) mostra invece sempre lo snapshot. Conseguenza: se l'indirizzo o il CF di un
+pagante veniva modificato dopo l'emissione, il PDF di una fattura vecchia restava correttamente
+congelato ma il suo export Excel mostrava i dati **attuali** — gli stessi identici dati della stessa
+fattura, disallineati tra i due export.
+
+**Fix applicato:** le sei colonne pagante/paziente ora chiamano `resolveAnagrafica(invoice)`
+(`lib/invoices/anagrafica-snapshot.ts`, già esistente per il PDF) invece di leggere `i.pagante`/
+`i.paziente` direttamente. Nessuna azione ulteriore necessaria per il fallback richiesto
+esplicitamente dall'utente ("dovrebbe sempre esserci lo snapshot ma in caso estremo che non ci sia
+prendi i dati attuali"): `resolveAnagrafica` fa già esattamente questo — ricade sulle relazioni live
+solo se lo snapshot è `null` o ha una forma non valida (fatture create prima dell'introduzione dello
+snapshot). Il tipo `ExportableInvoice` è stato anche corretto da `Pagante | null`/`Paziente | null`
+a `Pagante`/`Paziente` (non nullable): `id_Pagante`/`id_Paziente` su `Pagamento` sono FK obbligatorie,
+quindi con `include` sono sempre risolte — stessa forma già usata da `InvoiceWithRelations` per il PDF,
+la nullabilità precedente non rifletteva alcuna reale possibilità a runtime.
+
+**Verificato con:**
+- Nuovo `lib/excel/column-catalog.test.ts` (3 test comportamentali, prima assenti per questo modulo):
+  con uno snapshot presente le colonne restituiscono i dati **congelati**, non quelli attuali del
+  pagante/paziente; senza snapshot (`null`) ricadono correttamente sui dati attuali; CF/P.IVA `null`
+  nello snapshot restituiscono `"-"` invece di `null`.
+- `npm test` verde (38 file, **218 test**, +3 nuovi), `npx tsc --noEmit` pulito (nessun errore dal
+  restringimento del tipo a non-nullable), `npm run lint` solo i due warning preesistenti e non
+  correlati su `invoice-form.tsx`.
+
+---
+
 ## Deploy e conformità — dettaglio
 
 <a id="ops-01"></a>
@@ -1477,6 +1515,7 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 
 | Data | ID | Da → A | Note |
 |---|---|---|---|
+| 2026-07-24 | LOG-15 | — → ✅ | Nuova voce, emersa da una domanda dell'utente (non dall'audit originale): l'export Excel leggeva `pagante`/`paziente` dalle relazioni live invece che da `resolveAnagrafica`/`snapshotAnagrafica` come il PDF, disallineando i due export della stessa fattura se l'anagrafica cambiava dopo l'emissione. Le 6 colonne pagante/paziente in `lib/excel/column-catalog.ts` ora usano `resolveAnagrafica` (fallback alle relazioni live solo se lo snapshot manca, comportamento già esistente); `ExportableInvoice.pagante/paziente` da nullable a non-nullable (FK obbligatorie, coerente con `InvoiceWithRelations`). Nuovo `column-catalog.test.ts`; suite 218 test verde |
 | 2026-07-24 | LOG-13 | 🔴 → ✅ | `parseInlineFormatting` passa da `while (FORMATTING_REGEX.exec(...))` a `for (… of text.matchAll(FORMATTING_REGEX))`: `matchAll` clona internamente la regex, quindi il `lastIndex` della costante a livello di modulo non è più mutato/condiviso tra chiamate (corretto anche con eventuali uscite anticipate future). Nuovo `lib/pdf/formatting.test.ts` (7 test, inclusa la guardia su due chiamate consecutive); suite 214 test verde |
 | 2026-07-24 | LOG-12 | — | Correzione del fix: gli script `dev`/`start` passano da un prefisso POSIX nudo (`TZ=Europe/Rome next ...`) a `cross-env TZ=Europe/Rome next ...` (nuova devDependency). Il prefisso nudo falliva in un ambiente reale dove il PATH di WSL risolve l'npm/node di Windows: gli script vengono eseguiti da `cmd.exe`, che non capisce `VAR=val comando` (`'TZ' is not recognized...`). Riprodotto il fallimento e confermato che `cross-env` lo risolve; `verify-container-timezone.test.ts` ora verifica anche `cross-env` (script + devDependency dichiarata) |
 | 2026-07-24 | LOG-12 | 🔴 → ✅ | Fuso del processo pinnato a Europe/Rome: `tzdata` + `ENV TZ=Europe/Rome` nel `Dockerfile` (stage `runner`), prefisso `TZ=Europe/Rome` sugli script `dev`/`start` in `package.json` (copre anche `npm start` fuori da Docker su host UTC), `TZ=Europe/Rome` in `.env.prod.example` come default documentativo (con nota che `.env` da solo non basta: Node legge TZ prima di dotenv). Scelto il pinning del fuso, non `date-fns-tz` (app mono-fuso, nessuna dipendenza di date aggiunta). Nuovo `verify-container-timezone.test.ts`; suite 207 test verde |

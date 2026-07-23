@@ -1,14 +1,18 @@
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
+import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 
 // Stessa forma prodotta da getInvoices()/getInvoiceById() (lib/data/invoices.ts):
-// Decimal già convertiti a number, relazioni incluse.
+// Decimal già convertiti a number, relazioni incluse. pagante/paziente non
+// null: id_Pagante/id_Paziente su Pagamento sono FK obbligatorie (non
+// opzionali), quindi con `include` sono sempre risolte — stessa forma di
+// InvoiceWithRelations in lib/pdf/types.ts.
 export type ExportableInvoice = Omit<Pagamento, "prezzo_totale"> & {
   prezzo_totale: number;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  pagante: Pagante | null;
-  paziente: Paziente | null;
+  pagante: Pagante;
+  paziente: Paziente;
 };
 
 function formatCurrency(amount: number): string {
@@ -64,50 +68,62 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
   { key: "citta", label: "Città", category: "fattura", getValue: (i) => i.citta },
   { key: "cap", label: "CAP", category: "fattura", getValue: (i) => i.cap },
 
+  // Dati pagante/paziente letti dallo snapshot congelato all'emissione della
+  // fattura (resolveAnagrafica), non dalle relazioni live: stessa fonte già
+  // usata dal PDF (lib/pdf/placeholders.ts). Se una fattura non ha ancora uno
+  // snapshot (fatture create prima di questo fix), resolveAnagrafica ricade
+  // sulle relazioni live — comportamento identico a prima per quel caso.
+  // Senza questo allineamento, il PDF e l'export Excel della stessa fattura
+  // potevano mostrare indirizzi/CF diversi se l'anagrafica veniva modificata
+  // dopo l'emissione.
   {
     key: "pagante_cognome_nome",
     label: "Pagante (cognome nome)",
     category: "pagante",
-    getValue: (i) =>
-      i.pagante ? `${i.pagante.cognome} ${i.pagante.nome}` : "-",
+    getValue: (i) => {
+      const { pagante } = resolveAnagrafica(i);
+      return `${pagante.cognome} ${pagante.nome}`;
+    },
   },
   {
     key: "pagante_via",
     label: "Via pagante",
     category: "pagante",
-    getValue: (i) => i.pagante?.via ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.via,
   },
   {
     key: "pagante_citta",
     label: "Città pagante",
     category: "pagante",
-    getValue: (i) => i.pagante?.citta ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.citta,
   },
   {
     key: "pagante_cap",
     label: "CAP pagante",
     category: "pagante",
-    getValue: (i) => i.pagante?.cap ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.cap,
   },
   {
     key: "pagante_cf",
     label: "CF pagante",
     category: "pagante",
-    getValue: (i) => i.pagante?.cf ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.cf ?? "-",
   },
   {
     key: "pagante_piva",
     label: "P.IVA pagante",
     category: "pagante",
-    getValue: (i) => i.pagante?.piva ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.piva ?? "-",
   },
 
   {
     key: "paziente_cognome_nome",
     label: "Paziente (cognome nome)",
     category: "paziente",
-    getValue: (i) =>
-      i.paziente ? `${i.paziente.cognome} ${i.paziente.nome}` : "-",
+    getValue: (i) => {
+      const { paziente } = resolveAnagrafica(i);
+      return `${paziente.cognome} ${paziente.nome}`;
+    },
   },
 
   {
