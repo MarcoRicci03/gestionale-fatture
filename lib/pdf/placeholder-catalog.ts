@@ -30,6 +30,8 @@ export const PLACEHOLDER_GROUPS: PlaceholderGroup[] = [
     items: [
       { label: "Cognome e nome", value: "{{intestatario.cognomeNome}}" },
       { label: "Via", value: "{{intestatario.via}}" },
+      { label: "CAP", value: "{{intestatario.cap}}" },
+      { label: "Città", value: "{{intestatario.citta}}" },
       { label: "CAP e città", value: "{{intestatario.capCitta}}" },
       { label: "CF o P.IVA", value: "{{intestatario.cfOppurePiva}}" },
       { label: "CF", value: "{{intestatario.cf}}" },
