@@ -1277,10 +1277,17 @@ soluzione minima, senza introdurre una dipendenza di date (oggi non ce ne sono) 
 **Fix applicato:**
 1. `Dockerfile` (stage `runner`): aggiunto `tzdata` all'`apk add` (senza il database dei fusi, Node
    su Alpine ignora `TZ` e resta su UTC) e `ENV TZ=Europe/Rome`. Baked nell'immagine di produzione.
-2. `package.json`: script `dev` e `start` prefissati con `TZ=Europe/Rome` (prefisso POSIX, senza
-   `cross-env`: dev gira in WSL/Linux e la produzione è Linux/Docker). Copre il percorso
-   `npm start`/`npm run dev` anche fuori da Docker, così un `next start` diretto su un host UTC non
-   fa riemergere il bug.
+2. `package.json`: script `dev` e `start` prefissati con `cross-env TZ=Europe/Rome`. Copre il
+   percorso `npm start`/`npm run dev` anche fuori da Docker, così un `next start` diretto su un host
+   UTC non fa riemergere il bug.
+   **Aggiornamento (2026-07-24, correzione del fix stesso):** il primo tentativo usava un prefisso
+   POSIX nudo (`TZ=Europe/Rome next dev`), assumendo che l'host di sviluppo fosse sempre
+   Linux/WSL — falso nella pratica: se il PATH di WSL risolve l'npm/node **di Windows** (assente un
+   Node nativo in WSL), npm esegue gli script con `cmd.exe`, che non capisce `VAR=val comando` e
+   fallisce con `'TZ' is not recognized as an internal or external command`. Corretto sostituendo il
+   prefisso con `cross-env` (nuova devDependency), che imposta la variabile in modo portabile a
+   prescindere dalla shell che npm usa per eseguire lo script. Verificato con un riavvio reale di
+   `npm run dev` in quell'ambiente: parte correttamente e stampa `✓ Ready`.
 3. `.env.prod.example`: aggiunta `TZ=Europe/Rome` come default documentativo, **con un commento
    esplicito** che chiarisce che da solo il valore in `.env` non basta — Node legge `TZ`
    dall'ambiente all'avvio, prima che i file `.env` vengano caricati da dotenv, quindi l'enforcement
@@ -1293,11 +1300,15 @@ che bypassi entrambi (es. `node server.js` a mano su un host UTC senza `TZ` espo
 non è un percorso di avvio previsto per questa app.
 
 **Verificato con:**
-- Nuovo `scripts/verify-container-timezone.test.ts` (analisi statica): fallisce se il `Dockerfile`
-  non contiene `ENV TZ=Europe/Rome` o non installa `tzdata`, o se gli script `start`/`dev` in
-  `package.json` non esportano `TZ=Europe/Rome`.
-- `npm test` verde (36 file, **207 test**, +4 nuovi), `npx tsc --noEmit` pulito, `npm run lint` solo
-  i due warning preesistenti e non correlati su `invoice-form.tsx`.
+- `scripts/verify-container-timezone.test.ts` (analisi statica), aggiornato dopo la correzione del
+  2026-07-24: fallisce se il `Dockerfile` non contiene `ENV TZ=Europe/Rome` o non installa `tzdata`,
+  se gli script `start`/`dev` in `package.json` non passano per `cross-env TZ=Europe/Rome` (non basta
+  più il solo `TZ=Europe/Rome` nudo), o se `cross-env` non è dichiarato tra le `devDependencies`.
+- `npm test` verde, `npx tsc --noEmit` pulito, `npm run lint` solo i due warning preesistenti e non
+  correlati su `invoice-form.tsx`.
+- Riprodotto empiricamente il fallimento originale (`npm run dev` → `'TZ' is not recognized...`) in
+  un ambiente dove `npm`/`node` risolvono al binario Windows anche da un prompt bash/WSL, e
+  confermato che con `cross-env` lo stesso comando parte correttamente.
 - **Non** verificato con un build Docker reale in questa sessione (il cambiamento è dichiarativo:
   `ENV`/`apk add` nel Dockerfile e prefisso negli script). Consigliato un controllo al prossimo
   deploy: `docker run ... sh -c 'date'` deve mostrare l'ora di Roma (CET/CEST), non UTC.
@@ -1467,6 +1478,7 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 | Data | ID | Da → A | Note |
 |---|---|---|---|
 | 2026-07-24 | LOG-13 | 🔴 → ✅ | `parseInlineFormatting` passa da `while (FORMATTING_REGEX.exec(...))` a `for (… of text.matchAll(FORMATTING_REGEX))`: `matchAll` clona internamente la regex, quindi il `lastIndex` della costante a livello di modulo non è più mutato/condiviso tra chiamate (corretto anche con eventuali uscite anticipate future). Nuovo `lib/pdf/formatting.test.ts` (7 test, inclusa la guardia su due chiamate consecutive); suite 214 test verde |
+| 2026-07-24 | LOG-12 | — | Correzione del fix: gli script `dev`/`start` passano da un prefisso POSIX nudo (`TZ=Europe/Rome next ...`) a `cross-env TZ=Europe/Rome next ...` (nuova devDependency). Il prefisso nudo falliva in un ambiente reale dove il PATH di WSL risolve l'npm/node di Windows: gli script vengono eseguiti da `cmd.exe`, che non capisce `VAR=val comando` (`'TZ' is not recognized...`). Riprodotto il fallimento e confermato che `cross-env` lo risolve; `verify-container-timezone.test.ts` ora verifica anche `cross-env` (script + devDependency dichiarata) |
 | 2026-07-24 | LOG-12 | 🔴 → ✅ | Fuso del processo pinnato a Europe/Rome: `tzdata` + `ENV TZ=Europe/Rome` nel `Dockerfile` (stage `runner`), prefisso `TZ=Europe/Rome` sugli script `dev`/`start` in `package.json` (copre anche `npm start` fuori da Docker su host UTC), `TZ=Europe/Rome` in `.env.prod.example` come default documentativo (con nota che `.env` da solo non basta: Node legge TZ prima di dotenv). Scelto il pinning del fuso, non `date-fns-tz` (app mono-fuso, nessuna dipendenza di date aggiunta). Nuovo `verify-container-timezone.test.ts`; suite 207 test verde |
 | 2026-07-23 | LOG-11 | 🔴 → ✅ | Snapshot layout PDF incluso direttamente nel `create` di `createInvoice` (come `snapshotAnagrafica`), non più con un `update` best-effort separato: lo stato "fattura con `pdfLayoutSnapshot` null per update fallito" diventa irrappresentabile. Rimosso l'import di `snapshotPdfLayoutForInvoice` da `createInvoice` (esce anche `@react-pdf/renderer` dal grafo dell'action); funzione mantenuta per `refreshInvoicePdfLayout`. Nuovi test statici in `verify-invoice-lifecycle.test.ts`; suite 203 test verde |
 | 2026-07-23 | LOG-14 | 🔴 → ✅ | Riverifica: il commento in `prisma/schema.prisma` (blocco `Pagante`) cita ora correttamente `20260720000000_init/migration.sql` (righe 129-130), non più la directory inesistente `_paganti_partial_unique_active_only`. Verificato che le due `CREATE UNIQUE INDEX ... WHERE "eliminato" = false` esistono a quelle righe |
