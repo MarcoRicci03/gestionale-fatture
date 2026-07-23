@@ -364,17 +364,19 @@ export async function updateInvoice(
 export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
+  // La riga sparisce fisicamente: i dati identificativi della fattura vengono
+  // conservati nel meta dell'evento di audit, unica traccia superstite.
+  const invoice = await prisma.pagamento.findFirst({
+    where: { id, id_Utente: userId },
+    include: { pagante: true, paziente: true },
+  });
+  if (!invoice) return { error: "Fattura non trovata" };
+
   try {
-    // LOG-03 in SECURITY_AUDIT.md: non più un delete fisico. La riga resta
-    // nel DB (consultabile, esclusa dai totali da getAnnualRevenue/
-    // getMonthlyRevenue) così il suo n_fattura non viene mai più riassegnato
-    // da getNextInvoiceNumberForUserYear, che non filtra su questo campo.
-    await prisma.pagamento.update({
-      where: { id, id_Utente: userId },
-      data: { annullata: true },
-    });
-  } catch {
-    return { error: "Errore durante l'annullamento della fattura" };
+    await prisma.pagamento.delete({ where: { id, id_Utente: userId } });
+  } catch (error) {
+    console.error("deleteInvoice error", error);
+    return { error: "Errore durante l'eliminazione della fattura" };
   }
 
   await logAudit({
@@ -383,6 +385,14 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
     entita: "Pagamento",
     entitaId: id,
     ip: await getClientIp(),
+    meta: {
+      n_fattura: invoice.n_fattura,
+      anno: invoice.anno,
+      data: invoice.data.toISOString(),
+      prezzo_totale: invoice.prezzo_totale.toString(),
+      pagante: `${invoice.pagante.cognome} ${invoice.pagante.nome}`,
+      paziente: `${invoice.paziente.cognome} ${invoice.paziente.nome}`,
+    },
   });
 
   revalidatePath("/invoices");

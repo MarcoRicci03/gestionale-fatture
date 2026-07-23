@@ -68,10 +68,8 @@ export async function getChronologyNeighbors(
   previous: { n_fattura: number; data: Date } | null;
   next: { n_fattura: number; data: Date } | null;
 }> {
-  // Nessun filtro su `annullata`: una fattura annullata resta un vicino
-  // valido nel controllo di consequenzialità cronologica (LOG-04), lo
-  // stesso motivo per cui getNextInvoiceNumberForUserYear non la esclude
-  // dal calcolo di max(n_fattura).
+  // Nessun filtro di stato: il controllo di consequenzialità cronologica
+  // (LOG-04) considera tutte le fatture dell'anno.
   const [previous, next] = await Promise.all([
     prisma.pagamento.findFirst({
       where: {
@@ -126,7 +124,6 @@ export async function getAnnualRevenue(year: number) {
     where: {
       id_Utente: userId,
       data: yearRange(year),
-      annullata: false,
     },
     _sum: { prezzo_totale: true },
   });
@@ -142,7 +139,6 @@ export async function getMonthlyRevenue(year: number, month: number) {
         gte: new Date(year, month - 1, 1),
         lt: new Date(year, month, 1),
       },
-      annullata: false,
     },
     _sum: { prezzo_totale: true },
   });

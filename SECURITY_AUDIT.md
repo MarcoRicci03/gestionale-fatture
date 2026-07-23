@@ -892,6 +892,18 @@ stesso numero.
 - `npx tsc --noEmit`, `npm run lint` (solo i due warning preesistenti su `invoice-form.tsx`) e
   `npm test` (30 file, 164 test) tutti puliti/verdi.
 
+**Aggiornamento (2026-07-23): rimedio revocato su richiesta esplicita dell'utente.** Il soft-delete
+introdotto sopra è stato sostituito da una cancellazione fisica definitiva, protetta da una conferma
+testuale obbligatoria (l'utente deve digitare `numeroFattura/anno` prima che il bottone si abiliti):
+`Pagamento.annullata` è stato rimosso dallo schema (migration `drop_pagamento_annullata`; le fatture
+già marcate `annullata = true` non sono state cancellate dalla migration, restano nel DB e tornano
+fatture "normali", rientrando nei totali), `deleteInvoice` torna a eseguire `prisma.pagamento.delete`
+e `getAnnualRevenue`/`getMonthlyRevenue` non filtrano più su quel campo. L'unica traccia superstite
+di una fattura eliminata è l'evento di audit `INVOICE_DELETE` (label "Eliminazione fattura"), il cui
+`meta` ora include i dati identificativi della fattura (numero, anno, data, importo, pagante,
+paziente) letti prima della `delete`, dato che la riga non è più consultabile dopo. Vedi
+`docs/superpowers/plans/2026-07-23-hard-delete-fatture-archivio-cascata-filtro-mese.md`.
+
 ---
 
 <a id="log-04"></a>

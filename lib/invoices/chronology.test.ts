@@ -11,8 +11,7 @@ import {
 // spostata a una data precedente alla #5). Questo modulo verifica solo la
 // regola pura (nessun accesso a Prisma): la data deve restare compresa tra
 // il vicino con numero minore e quello con numero maggiore, estremi
-// inclusi. I vicini annullati contano comunque (decisione presa in fase di
-// design: un annullamento non libera il vincolo per i numeri adiacenti).
+// inclusi.
 
 const PRECEDENTE: ChronologyNeighbor = {
   n_fattura: 5,
@@ -79,11 +78,11 @@ describe("findChronologyConflict", () => {
     expect(conflict?.side).toBe("successivo");
   });
 
-  it("un vicino annullato conta comunque come vincolo", () => {
-    // Stesso identico input di PRECEDENTE: la funzione non riceve/controlla
-    // un flag "annullata", quindi un vicino annullato passato dal chiamante
-    // (Task 3) vincola esattamente come uno attivo — nessuna logica speciale
-    // da testare qui oltre a confermare che il vicino non viene ignorato.
+  it("un vicino passato dal chiamante vincola sempre, senza distinzioni di stato", () => {
+    // Stesso identico input di PRECEDENTE: la funzione riceve solo
+    // numero/data, nessun flag di stato, quindi qualunque vicino passato dal
+    // chiamante vincola allo stesso modo — nessuna logica speciale da
+    // testare qui oltre a confermare che il vicino non viene ignorato.
     const data = new Date(2026, 4, 5, 12, 0, 0);
     const conflict = findChronologyConflict(data, PRECEDENTE, null);
     expect(conflict).not.toBeNull();

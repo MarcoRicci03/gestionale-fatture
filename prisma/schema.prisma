@@ -115,11 +115,6 @@ model Pagamento {
   cap                 String
   pdfLayoutSnapshot   Json?
   bolloCodice         String?
-  // LOG-03 in SECURITY_AUDIT.md: sostituisce la cancellazione fisica.
-  // Una fattura annullata resta nel DB (consultabile, esclusa dai totali)
-  // così il suo n_fattura non viene mai più riassegnato da
-  // getNextInvoiceNumberForUserYear, che non filtra su questo campo.
-  annullata           Boolean        @default(false)
   // Snapshot immutabile dei dati di pagante/paziente al momento
   // dell'emissione/ultima modifica che li riguarda (vedi
   // lib/invoices/anagrafica-snapshot.ts). Stesso pattern di

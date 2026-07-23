@@ -38,16 +38,20 @@ function extractFunctionBody(source: string, fnName: string): string {
 
 const source = readFileSync(INVOICES_ACTIONS_PATH, "utf-8");
 
-describe("deleteInvoice annulla invece di cancellare (LOG-03)", () => {
+describe("deleteInvoice cancella fisicamente la fattura (LOG-03 revocato)", () => {
   const body = extractFunctionBody(source, "deleteInvoice");
 
-  it("non chiama più prisma.pagamento.delete", () => {
-    expect(body).not.toMatch(/pagamento\.delete\s*\(/);
+  it("chiama prisma.pagamento.delete", () => {
+    expect(body).toMatch(/pagamento\.delete\s*\(/);
   });
 
-  it("imposta annullata: true tramite un update", () => {
-    expect(body).toMatch(/pagamento\.update\s*\(/);
-    expect(body).toMatch(/annullata:\s*true/);
+  it("non fa più riferimento al campo annullata", () => {
+    expect(body).not.toMatch(/annullata/);
+  });
+
+  it("registra un evento di audit con un meta strutturato", () => {
+    expect(body).toMatch(/logAudit\s*\(/);
+    expect(body).toMatch(/meta:\s*\{/);
   });
 });
 
