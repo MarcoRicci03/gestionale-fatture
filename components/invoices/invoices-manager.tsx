@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Eye,
   RefreshCw,
+  IdCard,
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
@@ -35,9 +36,10 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay, parseDateInput } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
+import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
+import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import {
   InvoicesFilterBar,
-  EMPTY_INVOICE_FILTERS,
   type InvoiceFilters,
 } from "./invoices-filter-bar";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
@@ -57,6 +59,7 @@ type InvoicesManagerProps = {
   payers: Pagante[];
   patients: (Paziente & { pagante: Pagante | null })[];
   nextInvoiceNumber: number;
+  defaultInvoiceFilters: InvoiceFilters;
 };
 
 export function InvoicesManager({
@@ -64,6 +67,7 @@ export function InvoicesManager({
   payers,
   patients,
   nextInvoiceNumber,
+  defaultInvoiceFilters,
 }: InvoicesManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
@@ -74,9 +78,20 @@ export function InvoicesManager({
   >(null);
   const [refreshInvoiceId, setRefreshInvoiceId] = useState<number | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [anagraficaRefreshInvoiceId, setAnagraficaRefreshInvoiceId] = useState<number | null>(null);
+  const [anagraficaRefreshError, setAnagraficaRefreshError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const [filters, setFilters] = useState<InvoiceFilters>(EMPTY_INVOICE_FILTERS);
+  const resolvedAnagrafica = useMemo(() => {
+    if (!viewingInvoice?.pagante || !viewingInvoice?.paziente) return null;
+    return resolveAnagrafica({
+      snapshotAnagrafica: viewingInvoice.snapshotAnagrafica,
+      pagante: viewingInvoice.pagante,
+      paziente: viewingInvoice.paziente,
+    });
+  }, [viewingInvoice]);
+
+  const [filters, setFilters] = useState<InvoiceFilters>(defaultInvoiceFilters);
   const [prevFilters, setPrevFilters] = useState(filters);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -202,7 +217,7 @@ export function InvoicesManager({
           <InvoicesFilterBar
             filters={filters}
             onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
-            onReset={() => setFilters(EMPTY_INVOICE_FILTERS)}
+            onReset={() => setFilters(defaultInvoiceFilters)}
             payers={payers}
             patients={patients}
             years={years}
@@ -312,6 +327,19 @@ export function InvoicesManager({
                           <RefreshCw className="h-4 w-4" />
                         </Button>
                       </Tooltip>
+                      <Tooltip content="Aggiorna anagrafica">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setAnagraficaRefreshError(null);
+                            setAnagraficaRefreshInvoiceId(invoice.id);
+                          }}
+                          aria-label="Aggiorna anagrafica"
+                        >
+                          <IdCard className="h-4 w-4" />
+                        </Button>
+                      </Tooltip>
                       <Tooltip content="Scarica PDF">
                         <Link
                           href={`/api/invoices/${invoice.id}/pdf`}
@@ -334,7 +362,11 @@ export function InvoicesManager({
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </Tooltip>
-                      <DeleteInvoiceButton id={invoice.id} />
+                      <DeleteInvoiceButton
+                        id={invoice.id}
+                        nFattura={invoice.n_fattura}
+                        anno={invoice.anno}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -358,7 +390,9 @@ export function InvoicesManager({
                       aria-label={`Seleziona fattura ${invoice.n_fattura}`}
                     />
                     <div>
-                      <p className="font-medium">N. {invoice.n_fattura}</p>
+                      <p className="font-medium">
+                        N. {invoice.n_fattura}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {formatDateDisplay(invoice.data)}
                       </p>
@@ -419,6 +453,19 @@ export function InvoicesManager({
                       <RefreshCw className="h-4 w-4" />
                     </Button>
                   </Tooltip>
+                  <Tooltip content="Aggiorna anagrafica">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setAnagraficaRefreshError(null);
+                        setAnagraficaRefreshInvoiceId(invoice.id);
+                      }}
+                      aria-label="Aggiorna anagrafica"
+                    >
+                      <IdCard className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
                   <Tooltip content="Scarica PDF">
                     <Link
                       href={`/api/invoices/${invoice.id}/pdf`}
@@ -441,7 +488,11 @@ export function InvoicesManager({
                       <Pencil className="h-4 w-4" />
                     </Button>
                   </Tooltip>
-                  <DeleteInvoiceButton id={invoice.id} />
+                  <DeleteInvoiceButton
+                    id={invoice.id}
+                    nFattura={invoice.n_fattura}
+                    anno={invoice.anno}
+                  />
                 </div>
               </li>
             ))}
@@ -490,7 +541,9 @@ export function InvoicesManager({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-sm text-muted-foreground">N. Fattura</p>
-                  <p className="font-medium">{viewingInvoice.n_fattura}</p>
+                  <p className="font-medium">
+                    {viewingInvoice.n_fattura}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Data</p>
@@ -533,19 +586,19 @@ export function InvoicesManager({
                 </div>
               </div>
 
-              {viewingInvoice.pagante && (
+              {viewingInvoice.pagante && resolvedAnagrafica && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Pagante</p>
                   <p>
-                    {viewingInvoice.pagante.cognome} {viewingInvoice.pagante.nome}
+                    {resolvedAnagrafica.pagante.cognome} {resolvedAnagrafica.pagante.nome}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {viewingInvoice.pagante.via}, {viewingInvoice.pagante.citta}{" "}
-                    {viewingInvoice.pagante.cap}
+                    {resolvedAnagrafica.pagante.via}, {resolvedAnagrafica.pagante.citta}{" "}
+                    {resolvedAnagrafica.pagante.cap}
                   </p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
-                    <div>CF: {viewingInvoice.pagante.cf ?? "-"}</div>
-                    <div>P.IVA: {viewingInvoice.pagante.piva ?? "-"}</div>
+                    <div>CF: {resolvedAnagrafica.pagante.cf ?? "-"}</div>
+                    <div>P.IVA: {resolvedAnagrafica.pagante.piva ?? "-"}</div>
                   </div>
                   <Button
                     variant="outline"
@@ -557,11 +610,11 @@ export function InvoicesManager({
                 </div>
               )}
 
-              {viewingInvoice.paziente && (
+              {viewingInvoice.paziente && resolvedAnagrafica && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <p className="font-medium">Paziente</p>
                   <p>
-                    {viewingInvoice.paziente.cognome} {viewingInvoice.paziente.nome}
+                    {resolvedAnagrafica.paziente.cognome} {resolvedAnagrafica.paziente.nome}
                   </p>
                   <Button
                     variant="outline"
@@ -658,6 +711,33 @@ export function InvoicesManager({
       {refreshError && (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {refreshError}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={anagraficaRefreshInvoiceId !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setAnagraficaRefreshInvoiceId(null);
+        }}
+        title="Aggiorna anagrafica"
+        description="I dati di pagante e paziente salvati su questa fattura verranno sostituiti con quelli attuali. Da usare solo per correggere un errore nell'anagrafica originale, non per fatture già consegnate con dati diversi. Sei sicuro?"
+        confirmLabel="Aggiorna"
+        isPending={isPending}
+        onConfirm={() => {
+          if (anagraficaRefreshInvoiceId == null) return;
+          startTransition(async () => {
+            const result = await refreshInvoiceAnagrafica(anagraficaRefreshInvoiceId);
+            if ("error" in result) {
+              setAnagraficaRefreshError(result.error);
+            }
+            setAnagraficaRefreshInvoiceId(null);
+          });
+        }}
+      />
+
+      {anagraficaRefreshError && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {anagraficaRefreshError}
         </p>
       )}
 

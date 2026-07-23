@@ -115,6 +115,12 @@ model Pagamento {
   cap                 String
   pdfLayoutSnapshot   Json?
   bolloCodice         String?
+  // Snapshot immutabile dei dati di pagante/paziente al momento
+  // dell'emissione/ultima modifica che li riguarda (vedi
+  // lib/invoices/anagrafica-snapshot.ts). Stesso pattern di
+  // pdfLayoutSnapshot: NULL per le fatture create prima di questo fix,
+  // gestito con fallback sulle relazioni live in quel caso.
+  snapshotAnagrafica  Json?
 
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])

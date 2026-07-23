@@ -53,7 +53,15 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100vh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // has-[[data-slot=dialog-footer]]:pb-0: quando è presente un
+          // DialogFooter, il padding inferiore del contenitore va rimosso
+          // qui invece di essere annullato dal `-mb-4` del footer stesso —
+          // la combinazione position:sticky + overflow-y-auto + margine
+          // negativo lasciava uno spazio bianco extra (~1rem) tra lo sfondo
+          // del footer e il bordo arrotondato del dialog. Nessun impatto sui
+          // dialog senza footer (la maggior parte in questo codebase), che
+          // mantengono il padding inferiore invariato.
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100vh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none has-[[data-slot=dialog-footer]]:pb-0 sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -102,7 +110,10 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "sticky bottom-0 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        // Il padding inferiore del genitore è già rimosso da
+        // has-[[data-slot=dialog-footer]]:pb-0 in DialogContent — qui basta
+        // il proprio p-4, senza un -mb-4 da annullare (vedi commento lì).
+        "sticky bottom-0 -mx-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}

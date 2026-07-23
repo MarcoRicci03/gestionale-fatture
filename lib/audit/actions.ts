@@ -38,6 +38,7 @@ export const AUDIT_ACTIONS = {
   PDF_SETTINGS_UPDATE: "pdf_settings.update",
   PDF_SETTINGS_REFRESH_LAYOUT: "pdf_settings.refresh_layout",
   INVOICE_EXPORT: "invoice.export",
+  INVOICE_ANAGRAFICA_REFRESH: "invoice.anagrafica_refresh",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -70,4 +71,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.PDF_SETTINGS_UPDATE]: "Aggiornamento template PDF",
   [AUDIT_ACTIONS.PDF_SETTINGS_REFRESH_LAYOUT]: "Riallineamento layout PDF fattura",
   [AUDIT_ACTIONS.INVOICE_EXPORT]: "Esportazione fatture in Excel",
+  [AUDIT_ACTIONS.INVOICE_ANAGRAFICA_REFRESH]: "Aggiornamento anagrafica fattura",
 };

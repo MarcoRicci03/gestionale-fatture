@@ -16,6 +16,7 @@ function revalidatePayerViews() {
   revalidatePath("/payers");
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
+  revalidatePath("/patients");
 }
 
 async function checkPayerUniqueTaxIds(
@@ -163,10 +164,20 @@ export async function updatePayer(
 export async function archivePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  let pazientiArchiviati = 0;
   try {
-    await prisma.pagante.update({
-      where: { id, id_Utente: userId },
-      data: { archiviato: true },
+    await prisma.$transaction(async (tx) => {
+      await tx.pagante.update({
+        where: { id, id_Utente: userId },
+        data: { archiviato: true },
+      });
+      // I pazienti di un pagante archiviato non devono restare negli elenchi
+      // operativi né nelle tendine: seguono il pagante.
+      const result = await tx.paziente.updateMany({
+        where: { id_Utente: userId, id_Pagante: id, archiviato: false },
+        data: { archiviato: true },
+      });
+      pazientiArchiviati = result.count;
     });
   } catch (error) {
     console.error("archivePayer error", error);
@@ -178,6 +189,7 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
     userId,
     entita: "Pagante",
     entitaId: id,
+    meta: { pazientiArchiviatiInCascata: pazientiArchiviati },
     ip: await getClientIp(),
   });
 
@@ -216,10 +228,20 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
     };
   }
 
+  let pazientiRipristinati = 0;
   try {
-    await prisma.pagante.update({
-      where: { id, id_Utente: userId },
-      data: { archiviato: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.pagante.update({
+        where: { id, id_Utente: userId },
+        data: { archiviato: false },
+      });
+      // Ripristino simmetrico: tornano attivi tutti i pazienti archiviati del
+      // pagante, indipendentemente da quando/come sono stati archiviati.
+      const result = await tx.paziente.updateMany({
+        where: { id_Utente: userId, id_Pagante: id, archiviato: true },
+        data: { archiviato: false },
+      });
+      pazientiRipristinati = result.count;
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
@@ -237,6 +259,7 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
     userId,
     entita: "Pagante",
     entitaId: id,
+    meta: { pazientiRipristinatiInCascata: pazientiRipristinati },
     ip: await getClientIp(),
   });
 

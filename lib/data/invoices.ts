@@ -59,6 +59,42 @@ export async function getNextInvoiceNumber(year: number): Promise<number> {
   return getNextInvoiceNumberForUserYear(userId, year);
 }
 
+export async function getChronologyNeighbors(
+  userId: number,
+  anno: number,
+  nFattura: number,
+  excludeId?: number
+): Promise<{
+  previous: { n_fattura: number; data: Date } | null;
+  next: { n_fattura: number; data: Date } | null;
+}> {
+  // Nessun filtro di stato: il controllo di consequenzialità cronologica
+  // (LOG-04) considera tutte le fatture dell'anno.
+  const [previous, next] = await Promise.all([
+    prisma.pagamento.findFirst({
+      where: {
+        id_Utente: userId,
+        anno,
+        n_fattura: { lt: nFattura },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      orderBy: { n_fattura: "desc" },
+      select: { n_fattura: true, data: true },
+    }),
+    prisma.pagamento.findFirst({
+      where: {
+        id_Utente: userId,
+        anno,
+        n_fattura: { gt: nFattura },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      orderBy: { n_fattura: "asc" },
+      select: { n_fattura: true, data: true },
+    }),
+  ]);
+  return { previous, next };
+}
+
 export async function getPayersAndPatients() {
   const userId = await requireUserId();
   const [payers, patients] = await Promise.all([

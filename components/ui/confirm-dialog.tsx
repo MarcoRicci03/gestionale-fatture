@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +24,13 @@ type ConfirmDialogProps = {
   // fatture collegate): mostrato dentro il dialog, che resta aperto finché
   // l'utente non annulla o corregge il problema altrove.
   error?: string | null;
+  // Contenuto extra reso tra la description e il blocco errore (es. il campo
+  // di conferma testuale di DeleteInvoiceButton).
+  children?: ReactNode;
+  // Si somma a isPending nel disabled del bottone di conferma: usato per
+  // tenere il bottone disabilitato finché una conferma testuale non è stata
+  // digitata correttamente.
+  confirmDisabled?: boolean;
 };
 
 export function ConfirmDialog({
@@ -35,6 +43,8 @@ export function ConfirmDialog({
   isPending,
   onConfirm,
   error,
+  children,
+  confirmDisabled,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,6 +55,7 @@ export function ConfirmDialog({
             <DialogDescription>{description}</DialogDescription>
           )}
         </DialogHeader>
+        {children}
         {error && (
           <p className="text-sm text-destructive" role="alert">
             {error}
@@ -61,7 +72,7 @@ export function ConfirmDialog({
           <Button
             variant="destructive"
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || confirmDisabled}
           >
             {isPending ? "Elaborazione..." : confirmLabel}
           </Button>
