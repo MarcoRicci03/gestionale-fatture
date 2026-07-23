@@ -69,7 +69,7 @@
 | [LOG-09](#log-09) | CF/P.IVA dei paganti senza validazione di formato | Bassa | ✅ Risolto |
 | [LOG-10](#log-10) | `updateProfile` non invalida la cache | Bassa | ✅ Risolto |
 | [LOG-11](#log-11) | Fallimento silenzioso dello snapshot layout PDF | Bassa | ✅ Risolto |
-| [LOG-12](#log-12) | Aggregati dashboard dipendenti dal fuso orario del server | Bassa | 🔴 Aperto |
+| [LOG-12](#log-12) | Aggregati dashboard dipendenti dal fuso orario del server | Bassa | ✅ Risolto |
 | [LOG-13](#log-13) | Regex globale a livello di modulo in `parseInlineFormatting` | Bassa | 🔴 Aperto |
 | [LOG-14](#log-14) | Commento nello schema Prisma cita una migration inesistente | Bassa | ✅ Risolto |
 
@@ -1261,16 +1261,46 @@ legacy con snapshot null (stato accettato). Non è stato aggiunto un segnale UI 
 
 <a id="log-12"></a>
 ### LOG-12 — Aggregati dipendenti dal fuso orario del server
-**Severità:** Bassa · **Stato:** 🔴 Aperto · **File:** `lib/data/invoices.ts` (`yearRange`, `getMonthlyRevenue`), `lib/utils/date.ts:4-7`
+**Severità:** Bassa · **Stato:** ✅ Risolto (2026-07-24) · **File:** `Dockerfile` (stage `runner`), `package.json` (script `dev`/`start`), `.env.prod.example`, `lib/data/invoices.ts`, `lib/utils/date.ts`, `scripts/verify-container-timezone.test.ts` (nuovo)
 
-Le date sono costruite alle 12:00 **ora locale del processo** e i range degli aggregati usano
-`new Date(year, 0, 1)`, anch'esso locale. Il container non imposta `TZ`, quindi gira in UTC mentre
-l'utente è in Europe/Rome. La scelta delle 12:00 rende improbabile lo scivolamento di giorno, ma i
-confini di anno/mese restano dipendenti dall'ambiente: la stessa fattura può cadere in periodi
-diversi tra dev (Windows/Europe-Rome) e produzione (container UTC).
+Le date sono costruite alle 12:00 **ora locale del processo** (`parseDateInput`) e i range degli
+aggregati usano `new Date(year, 0, 1)`/`new Date(year, month-1, 1)`, anch'essi locali. Il container
+non impostava `TZ`, quindi girava in UTC mentre il client (browser) è in Europe/Rome: i due assi
+venivano calcolati in fusi diversi e la stessa fattura poteva cadere in periodi diversi tra dev
+(Europe/Rome) e produzione (container UTC).
 
-**Rimedio proposto:** fissare `TZ=Europe/Rome` nel container e/o calcolare i range con `date-fns-tz`
-su una timezone esplicita.
+**Scelta di scope:** tra le due opzioni proposte è stato applicato il rimedio "fissare
+`TZ=Europe/Rome`" — non la migrazione a `date-fns-tz`. L'app è per costruzione mono-fuso (uno studio
+italiano che emette fatture italiane), quindi pinnare il fuso del processo a Europe/Rome è la
+soluzione minima, senza introdurre una dipendenza di date (oggi non ce ne sono) né codice DST-aware.
+
+**Fix applicato:**
+1. `Dockerfile` (stage `runner`): aggiunto `tzdata` all'`apk add` (senza il database dei fusi, Node
+   su Alpine ignora `TZ` e resta su UTC) e `ENV TZ=Europe/Rome`. Baked nell'immagine di produzione.
+2. `package.json`: script `dev` e `start` prefissati con `TZ=Europe/Rome` (prefisso POSIX, senza
+   `cross-env`: dev gira in WSL/Linux e la produzione è Linux/Docker). Copre il percorso
+   `npm start`/`npm run dev` anche fuori da Docker, così un `next start` diretto su un host UTC non
+   fa riemergere il bug.
+3. `.env.prod.example`: aggiunta `TZ=Europe/Rome` come default documentativo, **con un commento
+   esplicito** che chiarisce che da solo il valore in `.env` non basta — Node legge `TZ`
+   dall'ambiente all'avvio, prima che i file `.env` vengano caricati da dotenv, quindi l'enforcement
+   affidabile è il Dockerfile + gli script npm, non questa riga.
+4. Commenti in `lib/data/invoices.ts` (`yearRange`) e `lib/utils/date.ts` (`parseDateInput`) che
+   documentano la dipendenza dal fuso del processo e dove è pinnato.
+
+**Caveat (documentato):** il fix copre il percorso Docker di produzione e gli script npm. Un avvio
+che bypassi entrambi (es. `node server.js` a mano su un host UTC senza `TZ` esportato) rigrederebbe;
+non è un percorso di avvio previsto per questa app.
+
+**Verificato con:**
+- Nuovo `scripts/verify-container-timezone.test.ts` (analisi statica): fallisce se il `Dockerfile`
+  non contiene `ENV TZ=Europe/Rome` o non installa `tzdata`, o se gli script `start`/`dev` in
+  `package.json` non esportano `TZ=Europe/Rome`.
+- `npm test` verde (36 file, **207 test**, +4 nuovi), `npx tsc --noEmit` pulito, `npm run lint` solo
+  i due warning preesistenti e non correlati su `invoice-form.tsx`.
+- **Non** verificato con un build Docker reale in questa sessione (il cambiamento è dichiarativo:
+  `ENV`/`apk add` nel Dockerfile e prefisso negli script). Consigliato un controllo al prossimo
+  deploy: `docker run ... sh -c 'date'` deve mostrare l'ora di Roma (CET/CEST), non UTC.
 
 ---
 
@@ -1418,6 +1448,7 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 
 | Data | ID | Da → A | Note |
 |---|---|---|---|
+| 2026-07-24 | LOG-12 | 🔴 → ✅ | Fuso del processo pinnato a Europe/Rome: `tzdata` + `ENV TZ=Europe/Rome` nel `Dockerfile` (stage `runner`), prefisso `TZ=Europe/Rome` sugli script `dev`/`start` in `package.json` (copre anche `npm start` fuori da Docker su host UTC), `TZ=Europe/Rome` in `.env.prod.example` come default documentativo (con nota che `.env` da solo non basta: Node legge TZ prima di dotenv). Scelto il pinning del fuso, non `date-fns-tz` (app mono-fuso, nessuna dipendenza di date aggiunta). Nuovo `verify-container-timezone.test.ts`; suite 207 test verde |
 | 2026-07-23 | LOG-11 | 🔴 → ✅ | Snapshot layout PDF incluso direttamente nel `create` di `createInvoice` (come `snapshotAnagrafica`), non più con un `update` best-effort separato: lo stato "fattura con `pdfLayoutSnapshot` null per update fallito" diventa irrappresentabile. Rimosso l'import di `snapshotPdfLayoutForInvoice` da `createInvoice` (esce anche `@react-pdf/renderer` dal grafo dell'action); funzione mantenuta per `refreshInvoicePdfLayout`. Nuovi test statici in `verify-invoice-lifecycle.test.ts`; suite 203 test verde |
 | 2026-07-23 | LOG-14 | 🔴 → ✅ | Riverifica: il commento in `prisma/schema.prisma` (blocco `Pagante`) cita ora correttamente `20260720000000_init/migration.sql` (righe 129-130), non più la directory inesistente `_paganti_partial_unique_active_only`. Verificato che le due `CREATE UNIQUE INDEX ... WHERE "eliminato" = false` esistono a quelle righe |
 | 2026-07-23 | OPS-02 | 🔴 → 🟡 | Riverifica: Vitest ora configurato (`npm test`, 35 file / 201 test); coperte aree ad alto rischio (arrotondamento importi, soglia bollo, parsing prezzo, cronologia fatture, guardie archivio…). Resta da fare l'isolamento cross-tenant comportamentale per ogni action |

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "TZ=Europe/Rome next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "TZ=Europe/Rome next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",

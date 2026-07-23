@@ -31,12 +31,20 @@ RUN npm prune --omit=dev
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Necessario per eseguire l'engine di Prisma al runtime
-RUN apk add --no-cache openssl
+# openssl: per eseguire l'engine di Prisma al runtime.
+# tzdata: senza il database dei fusi, Node su Alpine ignora TZ e resta su UTC
+# (vedi LOG-12 in SECURITY_AUDIT.md).
+RUN apk add --no-cache openssl tzdata
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+# LOG-12: pinna il fuso del processo a Europe/Rome. Gli aggregati fatturato
+# (lib/data/invoices.ts) e la costruzione delle date (lib/utils/date.ts) usano
+# new Date(anno, mese, ...) in ora locale del processo: senza questo, il
+# container girerebbe in UTC mentre il client è in Europe/Rome, e la stessa
+# fattura potrebbe cadere in un mese/anno diverso tra i due.
+ENV TZ=Europe/Rome
 
 # Utente non privilegiato: node.js non deve girare come root nel container
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs

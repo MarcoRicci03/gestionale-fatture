@@ -111,6 +111,11 @@ export async function getPayersAndPatients() {
   return { payers, patients };
 }
 
+// LOG-12: i confini di anno/mese sono costruiti con new Date(anno, mese, ...),
+// cioè in ora locale DEL PROCESSO. Le date fattura sono costruite a mezzogiorno
+// locale (lib/utils/date.ts) dal client Europe/Rome, quindi questi range devono
+// essere calcolati nello stesso fuso: il processo è pinnato a Europe/Rome
+// (Dockerfile ENV TZ, e prefisso TZ sugli script dev/start in package.json).
 function yearRange(year: number) {
   return {
     gte: new Date(year, 0, 1),
