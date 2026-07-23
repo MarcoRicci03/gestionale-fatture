@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function InvoicesPage() {
-  const currentYear = new Date().getFullYear();
+  const today = new Date();
+  const currentYear = today.getFullYear();
   const [invoices, { payers, patients }, nextInvoiceNumber] = await Promise.all([
     getInvoices(),
     getPayersAndPatients(),
@@ -24,6 +25,7 @@ export default async function InvoicesPage() {
       payers={payers}
       patients={patients}
       nextInvoiceNumber={nextInvoiceNumber}
+      today={today}
     />
   );
 }
