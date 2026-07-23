@@ -171,7 +171,7 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
                             <Pencil className="h-4 w-4" />
                           </Button>
                         </Tooltip>
-                        <ArchivePayerButton id={payer.id} />
+                        <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -215,7 +215,7 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </Tooltip>
-                    <ArchivePayerButton id={payer.id} />
+                    <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
                   </div>
                 </li>
               ))}
@@ -255,7 +255,10 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
                       )}
                     </TableCell>
                     <TableCell className="flex justify-end gap-1">
-                      <RestorePayerButton id={payer.id} />
+                      <RestorePayerButton
+                        id={payer.id}
+                        pazientiArchiviati={payer.pazientiArchiviati}
+                      />
                       <HardDeletePayerButton
                         id={payer.id}
                         disabledReason={hardDeleteBlockReason(payer)}
@@ -293,7 +296,10 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
                   <p>P.IVA: {payer.piva ?? "-"}</p>
                 </div>
                 <div className="flex items-center gap-1 border-t pt-3">
-                  <RestorePayerButton id={payer.id} />
+                  <RestorePayerButton
+                    id={payer.id}
+                    pazientiArchiviati={payer.pazientiArchiviati}
+                  />
                   <HardDeletePayerButton
                     id={payer.id}
                     disabledReason={hardDeleteBlockReason(payer)}

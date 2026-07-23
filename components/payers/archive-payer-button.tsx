@@ -7,7 +7,12 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { archivePayer } from "@/lib/actions/payers";
 
-export function ArchivePayerButton({ id }: { id: number }) {
+type ArchivePayerButtonProps = {
+  id: number;
+  pazienti: { id: number; nome: string; cognome: string }[];
+};
+
+export function ArchivePayerButton({ id, pazienti }: ArchivePayerButtonProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +27,11 @@ export function ArchivePayerButton({ id }: { id: number }) {
       setOpen(false);
     });
   };
+
+  const hasPazienti = pazienti.length > 0;
+  const description = hasPazienti
+    ? "Il pagante sarà spostato tra gli archiviati e non comparirà negli elenchi operativi né nelle tendine. Le sue fatture restano visibili e conteggiate. Verranno archiviati anche i pazienti collegati, che potrai ripristinare insieme al pagante."
+    : "Il pagante sarà spostato tra gli archiviati e non comparirà negli elenchi operativi né nelle tendine. Le sue fatture restano visibili e conteggiate. Potrai ripristinarlo in qualsiasi momento.";
 
   return (
     <>
@@ -42,12 +52,31 @@ export function ArchivePayerButton({ id }: { id: number }) {
         open={open}
         onOpenChange={setOpen}
         title="Archivia pagante"
-        description="Il pagante sarà spostato tra gli archiviati e non comparirà negli elenchi operativi né nelle tendine. Le sue fatture restano visibili e conteggiate. Potrai ripristinarlo in qualsiasi momento."
+        description={description}
         confirmLabel="Archivia"
         isPending={isPending}
         onConfirm={handleConfirm}
         error={error}
-      />
+      >
+        {hasPazienti && (
+          <div className="rounded-md border p-3 text-sm space-y-2">
+            <p>
+              Verranno archiviati anche{" "}
+              {pazienti.length === 1
+                ? "1 paziente collegato"
+                : `${pazienti.length} pazienti collegati`}
+              :
+            </p>
+            <ul className="list-disc space-y-1 pl-4">
+              {pazienti.map((p) => (
+                <li key={p.id}>
+                  {p.cognome} {p.nome}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </ConfirmDialog>
     </>
   );
 }
