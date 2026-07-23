@@ -40,7 +40,6 @@ import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import {
   InvoicesFilterBar,
-  currentMonthInvoiceFilters,
   type InvoiceFilters,
 } from "./invoices-filter-bar";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
@@ -60,7 +59,7 @@ type InvoicesManagerProps = {
   payers: Pagante[];
   patients: (Paziente & { pagante: Pagante | null })[];
   nextInvoiceNumber: number;
-  today: Date;
+  defaultInvoiceFilters: InvoiceFilters;
 };
 
 export function InvoicesManager({
@@ -68,7 +67,7 @@ export function InvoicesManager({
   payers,
   patients,
   nextInvoiceNumber,
-  today,
+  defaultInvoiceFilters,
 }: InvoicesManagerProps) {
   const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
@@ -92,9 +91,7 @@ export function InvoicesManager({
     });
   }, [viewingInvoice]);
 
-  const [filters, setFilters] = useState<InvoiceFilters>(() =>
-    currentMonthInvoiceFilters(today)
-  );
+  const [filters, setFilters] = useState<InvoiceFilters>(defaultInvoiceFilters);
   const [prevFilters, setPrevFilters] = useState(filters);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -220,7 +217,7 @@ export function InvoicesManager({
           <InvoicesFilterBar
             filters={filters}
             onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
-            onReset={() => setFilters(currentMonthInvoiceFilters(today))}
+            onReset={() => setFilters(defaultInvoiceFilters)}
             payers={payers}
             patients={patients}
             years={years}
