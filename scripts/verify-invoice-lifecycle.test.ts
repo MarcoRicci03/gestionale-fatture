@@ -87,6 +87,18 @@ describe("createInvoice cattura lo snapshot anagrafica", () => {
   });
 });
 
+describe("createInvoice cattura lo snapshot layout PDF in modo atomico (LOG-11)", () => {
+  const body = extractFunctionBody(source, "createInvoice");
+
+  it("include pdfLayoutSnapshot nel data del create", () => {
+    expect(body).toMatch(/pagamento\.create\s*\([\s\S]*pdfLayoutSnapshot:/);
+  });
+
+  it("non usa più un update separato best-effort snapshotPdfLayoutForInvoice", () => {
+    expect(body).not.toMatch(/snapshotPdfLayoutForInvoice/);
+  });
+});
+
 describe("updateInvoice ricattura lo snapshot solo se cambia pagante/paziente", () => {
   const body = extractFunctionBody(source, "updateInvoice");
 

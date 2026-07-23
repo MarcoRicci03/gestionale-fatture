@@ -6,7 +6,7 @@ import type { Pagante, Paziente } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
-import { snapshotPdfLayoutForInvoice } from "@/lib/pdf/invoices";
+import { getPdfSettingsForUser } from "@/lib/data/settings";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import {
@@ -162,6 +162,12 @@ export async function createInvoice(
 
   let createdInvoiceId: number;
   try {
+    // LOG-11 in SECURITY_AUDIT.md: lo snapshot del layout PDF viene incluso
+    // direttamente nel create (come snapshotAnagrafica), non più con un update
+    // separato best-effort a valle. Così non può esistere una fattura persistita
+    // con pdfLayoutSnapshot = null per via di un update fallito silenziosamente:
+    // se questa lettura non riesce, l'intero create fallisce e non si crea nulla.
+    const pdfLayoutSnapshot = await getPdfSettingsForUser(userId);
     const created = await prisma.pagamento.create({
       data: {
         id_Utente: userId,
@@ -181,6 +187,7 @@ export async function createInvoice(
           payer,
           patient
         ) as unknown as Prisma.InputJsonValue,
+        pdfLayoutSnapshot: pdfLayoutSnapshot as unknown as Prisma.InputJsonValue,
         mesi: {
           create: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
         },
@@ -197,14 +204,6 @@ export async function createInvoice(
       };
     }
     return { error: "Errore durante la creazione della fattura" };
-  }
-
-  try {
-    await snapshotPdfLayoutForInvoice(createdInvoiceId, userId);
-  } catch (error) {
-    // Non-fatale: la fattura è creata comunque. generateInvoicePdf ha un
-    // fallback di sola lettura per il caso in cui lo snapshot resti null.
-    console.error("snapshotPdfLayoutForInvoice error", error);
   }
 
   await logAudit({

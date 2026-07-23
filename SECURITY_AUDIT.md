@@ -6,8 +6,10 @@
 > non è più valida marcala `✅ Risolto` o `🚫 Non applicabile`, non cancellarla.
 
 - **Data audit iniziale:** 2026-07-20
-- **Commit di riferimento:** `f9c9f94`
+- **Ultima riverifica:** 2026-07-23 (commit `c371d3b`) — rilettura di tutte le voci LOG e nuovo passaggio sull'intero codebase.
+- **Commit di riferimento (audit iniziale):** `f9c9f94`
 - **Scope:** tutto il repository (`app/`, `lib/`, `components/`, `prisma/`, `scripts/`, `proxy.ts`, Docker/deploy)
+- **Nota sulle verifiche (2026-07-23):** gli script `npm run verify:*` citati nelle schede sono stati migrati a test Vitest (`scripts/verify-*.test.ts`) e si eseguono ora con **`npm test`**, non più con `npm run verify:<nome>` (gli omonimi script npm sono stati rimossi). Dove una scheda dice "Verificato con `npm run verify:X`", va letto come "il file `scripts/verify-X.test.ts` sotto `npm test`". Alla riverifica del 2026-07-23 l'intera suite è verde: **35 file, 201 test**.
 
 ### Legenda stato
 
@@ -66,17 +68,17 @@
 | [LOG-08](#log-08) | Dashboard e elenco fatture calcolano insiemi diversi | Media | ✅ Risolto |
 | [LOG-09](#log-09) | CF/P.IVA dei paganti senza validazione di formato | Bassa | ✅ Risolto |
 | [LOG-10](#log-10) | `updateProfile` non invalida la cache | Bassa | ✅ Risolto |
-| [LOG-11](#log-11) | Fallimento silenzioso dello snapshot layout PDF | Bassa | 🔴 Aperto |
+| [LOG-11](#log-11) | Fallimento silenzioso dello snapshot layout PDF | Bassa | ✅ Risolto |
 | [LOG-12](#log-12) | Aggregati dashboard dipendenti dal fuso orario del server | Bassa | 🔴 Aperto |
 | [LOG-13](#log-13) | Regex globale a livello di modulo in `parseInlineFormatting` | Bassa | 🔴 Aperto |
-| [LOG-14](#log-14) | Commento nello schema Prisma cita una migration inesistente | Bassa | 🔴 Aperto |
+| [LOG-14](#log-14) | Commento nello schema Prisma cita una migration inesistente | Bassa | ✅ Risolto |
 
 ### Deploy / conformità
 
 | ID | Titolo | Severità | Stato |
 |---|---|---|---|
 | [OPS-01](#ops-01) | Nessuna gestione GDPR dei dati (categoria particolare) | Media | 🔴 Aperto |
-| [OPS-02](#ops-02) | Nessun test automatico oltre agli script di verifica invarianti | Bassa | 🔴 Aperto |
+| [OPS-02](#ops-02) | Nessun test automatico oltre agli script di verifica invarianti | Bassa | 🟡 In corso |
 | [OPS-03](#ops-03) | `prisma.config.ts` non copiato nello stage runner del Dockerfile: `migrate deploy` non poteva funzionare in produzione | Alta | ✅ Risolto |
 
 ---
@@ -1114,16 +1116,24 @@ già su `archiviato`, come previsto). Risolto integralmente come effetto collate
 [LOG-02](#log-02) su `getInvoices`: rimosso il filtro sulla relazione, ora entrambi i lati calcolano
 sullo stesso insieme di fatture (`id_Utente`, nessun filtro sull'anagrafica collegata).
 
-**Aggiornamento (2026-07-22, fix di LOG-03):** con l'introduzione di `Pagamento.annullata`,
-`getAnnualRevenue`/`getMonthlyRevenue` sono stati aggiornati per escludere esplicitamente
-`annullata: true` dai totali, mentre `getInvoices`/`getInvoiceById`/`getLatestInvoices` restano
-senza quel filtro (le annullate restano visibili in elenco, solo escluse dai totali) — i due lati
-restano quindi allineati anche su questo asse, non solo su quello di `archiviato`.
+**Aggiornamento (2026-07-22, fix di LOG-03):** con l'introduzione temporanea di `Pagamento.annullata`,
+`getAnnualRevenue`/`getMonthlyRevenue` erano stati aggiornati per escludere esplicitamente
+`annullata: true` dai totali, mentre `getInvoices`/`getInvoiceById`/`getLatestInvoices` restavano
+senza quel filtro — i due lati restavano allineati anche su questo asse, non solo su quello di
+`archiviato`.
 
-**Verificato con:** lettura diretta di `lib/data/invoices.ts` — `getInvoices`, `getInvoiceById`,
-`getLatestInvoices` filtrano esclusivamente su `id_Utente`; `getAnnualRevenue`/`getMonthlyRevenue`
-aggiungono `annullata: false` oltre a `id_Utente`/range di date. Nessuna delle cinque filtra più su
-`archiviato`/`eliminato`.
+**Aggiornamento (2026-07-23, revoca di LOG-03):** `Pagamento.annullata` è stato rimosso su richiesta
+dell'utente (hard-delete, vedi LOG-03) e con esso il filtro `annullata: false` da
+`getAnnualRevenue`/`getMonthlyRevenue`. Non c'è più una nozione di fattura "annullata ma visibile":
+una fattura eliminata sparisce fisicamente da entrambi i lati, quindi elenco e totali restano
+allineati per costruzione. L'unico asse di allineamento residuo da tutelare è quello di `archiviato`
+(fix originale di LOG-02), tuttora rispettato.
+
+**Riverificato con (2026-07-23):** lettura diretta di `lib/data/invoices.ts` — `getInvoices`,
+`getInvoiceById`, `getLatestInvoices` filtrano esclusivamente su `id_Utente`;
+`getAnnualRevenue`/`getMonthlyRevenue` filtrano su `id_Utente` + range di date (`yearRange` / range
+mensile), **senza** alcun filtro su `annullata` (campo non più esistente) né su
+`archiviato`/`eliminato`. Nessuna delle cinque query filtra sullo stato dell'anagrafica collegata.
 
 ---
 
@@ -1209,15 +1219,43 @@ non correggerebbe alcun bug osservabile.
 
 <a id="log-11"></a>
 ### LOG-11 — Fallimento silenzioso dello snapshot layout PDF
-**Severità:** Bassa · **Stato:** 🔴 Aperto · **File:** `lib/actions/invoices.ts:175-181`
+**Severità:** Bassa · **Stato:** ✅ Risolto (2026-07-23) · **File:** `lib/actions/invoices.ts` (`createInvoice`), `lib/data/settings.ts` (`getPdfSettingsForUser`), `scripts/verify-invoice-lifecycle.test.ts`
 
-Se `snapshotPdfLayoutForInvoice` fallisce, l'errore viene solo loggato e la fattura resta senza
-snapshot. Il fallback in `generateInvoicePdf` usa allora il layout **corrente**: la fattura
-sembrerà corretta oggi e cambierà aspetto se in futuro l'utente modifica il template — esattamente
-ciò che lo snapshot doveva impedire, e senza che nessuno se ne accorga.
+`createInvoice` creava la fattura e poi, in un blocco `try/catch` **best-effort separato**, chiamava
+`snapshotPdfLayoutForInvoice` per scrivere `pdfLayoutSnapshot` con un secondo `update`. Se quell'update
+falliva, l'errore veniva solo loggato (`console.error`) e la fattura restava persistita con
+`pdfLayoutSnapshot = null`. Il fallback in `generateInvoicePdf` usa allora il layout **corrente**: la
+fattura sembrava corretta il giorno stesso ma cambiava aspetto se in futuro l'utente modificava il
+template — esattamente ciò che lo snapshot doveva impedire, e senza che nessuno se ne accorgesse.
 
-**Rimedio proposto:** creare fattura e snapshot in un'unica `prisma.$transaction`, oppure segnalare
-in UI le fatture con `pdfLayoutSnapshot = null` suggerendo "Aggiorna layout PDF".
+**Fix applicato (approccio "atomico per costruzione", non la `$transaction` proposta):** lo snapshot
+del layout è ora incluso **direttamente nel `data` del `create`**, esattamente come già avveniva per
+`snapshotAnagrafica` due righe sopra, non più con un `update` separato a valle:
+1. Nuovo import di `getPdfSettingsForUser` da `@/lib/data/settings`; rimosso l'import ora inutilizzato
+   di `snapshotPdfLayoutForInvoice` da `@/lib/pdf/invoices` (effetto collaterale positivo:
+   `@react-pdf/renderer` esce dal grafo dei moduli di questa Server Action).
+2. Dentro il `try` che avvolge il `create`, come prima operazione:
+   `const pdfLayoutSnapshot = await getPdfSettingsForUser(userId);`, poi
+   `pdfLayoutSnapshot: pdfLayoutSnapshot as unknown as Prisma.InputJsonValue` nel `data` del `create`.
+3. Rimosso interamente il blocco best-effort `try { await snapshotPdfLayoutForInvoice(...) } catch { console.error(...) }`.
+
+Poiché non esiste più un secondo `update`, lo stato "fattura persistita con snapshot null per un
+update fallito" è ora **irrappresentabile**: se la lettura del layout non riesce (unico modo in cui
+può fallire, essendo una read su DB), l'intero `create` entra nel `catch` e restituisce "Errore
+durante la creazione della fattura" **senza creare nulla**.
+
+**Fuori scope (invariati, per costruzione):** `updateInvoice` non ri-snapshotta il layout (congelato
+alla creazione, riallineabile solo con `refreshInvoicePdfLayout`); `snapshotPdfLayoutForInvoice` resta
+per quel refresh esplicito; il fallback di sola lettura in `generateInvoicePdf` resta per le fatture
+legacy con snapshot null (stato accettato). Non è stato aggiunto un segnale UI per le fatture legacy
+(seconda opzione dell'audit, valutata non necessaria: il root cause è chiuso alla fonte).
+
+**Verificato con:**
+- `scripts/verify-invoice-lifecycle.test.ts` esteso (analisi statica): `createInvoice` include
+  `pdfLayoutSnapshot` nel `data` del `create` e non contiene più alcun riferimento a
+  `snapshotPdfLayoutForInvoice`.
+- `npm test` verde (35 file, **203 test**, +2 nuovi), `npx tsc --noEmit` pulito, `npm run lint` solo
+  i due warning preesistenti e non correlati su `invoice-form.tsx`.
 
 ---
 
@@ -1252,15 +1290,23 @@ formattati male in modo non riproducibile.
 
 <a id="log-14"></a>
 ### LOG-14 — Commento nello schema Prisma cita una migration inesistente
-**Severità:** Bassa · **Stato:** 🔴 Aperto · **File:** `prisma/schema.prisma:51-61`
+**Severità:** Bassa · **Stato:** ✅ Risolto (2026-07-23) · **File:** `prisma/schema.prisma:64-74`
 
-Il commento rimanda a `prisma/migrations/<timestamp>_paganti_partial_unique_active_only/migration.sql`,
+Il commento rimandava a `prisma/migrations/<timestamp>_paganti_partial_unique_active_only/migration.sql`,
 directory che non esiste. Gli indici parziali sono realmente creati in
 `20260720000000_init/migration.sql:129-130` (`paganti_id_Utente_cf_key`, `paganti_id_Utente_piva_key`,
-entrambi `WHERE "eliminato" = false`). L'invariante è quindi rispettata, ma il riferimento è
-fuorviante per chi dovrà mantenere il codice.
+entrambi `WHERE "eliminato" = false`). L'invariante era rispettata, ma il riferimento era fuorviante
+per chi doveva mantenere il codice.
 
-**Rimedio proposto:** correggere il riferimento in `20260720000000_init`.
+**Fix applicato:** il commento in `prisma/schema.prisma` (blocco su `Pagante`, righe 64-74) ora
+rimanda correttamente a `prisma/migrations/20260720000000_init/migration.sql (righe 129-130)`, la
+migration reale in cui gli indici unici parziali sono creati. Il riferimento inesistente
+`_paganti_partial_unique_active_only` non compare più.
+
+**Verificato con (2026-07-23):** rilettura di `prisma/schema.prisma` (il commento cita `20260720000000_init`,
+non più la directory inesistente) + `grep`/`sed` su `prisma/migrations/20260720000000_init/migration.sql`
+righe 129-130, che contengono effettivamente le due `CREATE UNIQUE INDEX ... WHERE "eliminato" = false`
+citate.
 
 ---
 
@@ -1283,16 +1329,29 @@ conservazione, (d) documentare i tempi di conservazione.
 
 <a id="ops-02"></a>
 ### OPS-02 — Nessun test automatico
-**Severità:** Bassa · **Stato:** 🔴 Aperto · **File:** `package.json`
+**Severità:** Bassa · **Stato:** 🟡 In corso (2026-07-23) · **File:** `package.json`, `vitest.config.ts`, `scripts/verify-*.test.ts`
 
-Non c'è un test runner configurato. Esistono cinque script di verifica di invarianti
-(`verify:actions-auth`, `verify:api-routes-auth`, `verify:safe-user-select`,
-`verify:rate-limit-ip-scope`, `verify:rich-text`) — utili, ma verificano la **forma** del codice,
-non il comportamento: nessun test copre calcolo del totale, soglia bollo, isolamento multi-tenant,
-scadenza sessione.
+**Situazione all'audit iniziale:** non c'era un test runner configurato. Esistevano cinque script di
+verifica di invarianti (`verify:actions-auth`, `verify:api-routes-auth`, `verify:safe-user-select`,
+`verify:rate-limit-ip-scope`, `verify:rich-text`) — utili, ma verificavano la **forma** del codice,
+non il comportamento.
 
-**Rimedio proposto:** introdurre Vitest e coprire per prime le aree ad alto rischio: calcolo
-importi, regole bollo, e un test di isolamento cross-tenant per ogni action.
+**Progressi (2026-07-23):** Vitest è ora configurato (`vitest.config.ts`, `npm test`) e la suite è
+cresciuta a **35 file / 201 test**. Parte del rimedio proposto è coperta:
+- calcolo importi / arrotondamento → `verify-currency-rounding.test.ts`;
+- regole bollo → `verify-invoice-bollo-threshold.test.ts`;
+- parsing prezzo, limiti mesi, lunghezze input, formato CF/P.IVA, ciclo di vita fattura e
+  cronologia (`chronology.test.ts`, `verify-invoice-lifecycle.test.ts`), guardie di archiviazione,
+  round-trip rich-text, ecc.
+
+**Ancora mancante:** un test di **isolamento cross-tenant** per ogni action (verifica comportamentale
+contro un DB reale che un utente non possa leggere/mutare i record di un altro) — i test attuali
+restano in larga parte analisi statica della forma del codice, non esecuzione contro Postgres.
+`test:e2e` (Playwright) è configurato ma la copertura E2E effettiva non è stata valutata in questa
+riverifica.
+
+**Rimedio residuo:** aggiungere test comportamentali di isolamento multi-tenant per le Server Action
+(create/update/delete di fatture, paganti, pazienti) contro un DB di test.
 
 ---
 
@@ -1359,6 +1418,12 @@ Aggiungere una riga a ogni modifica di stato (più recente in alto).
 
 | Data | ID | Da → A | Note |
 |---|---|---|---|
+| 2026-07-23 | LOG-11 | 🔴 → ✅ | Snapshot layout PDF incluso direttamente nel `create` di `createInvoice` (come `snapshotAnagrafica`), non più con un `update` best-effort separato: lo stato "fattura con `pdfLayoutSnapshot` null per update fallito" diventa irrappresentabile. Rimosso l'import di `snapshotPdfLayoutForInvoice` da `createInvoice` (esce anche `@react-pdf/renderer` dal grafo dell'action); funzione mantenuta per `refreshInvoicePdfLayout`. Nuovi test statici in `verify-invoice-lifecycle.test.ts`; suite 203 test verde |
+| 2026-07-23 | LOG-14 | 🔴 → ✅ | Riverifica: il commento in `prisma/schema.prisma` (blocco `Pagante`) cita ora correttamente `20260720000000_init/migration.sql` (righe 129-130), non più la directory inesistente `_paganti_partial_unique_active_only`. Verificato che le due `CREATE UNIQUE INDEX ... WHERE "eliminato" = false` esistono a quelle righe |
+| 2026-07-23 | OPS-02 | 🔴 → 🟡 | Riverifica: Vitest ora configurato (`npm test`, 35 file / 201 test); coperte aree ad alto rischio (arrotondamento importi, soglia bollo, parsing prezzo, cronologia fatture, guardie archivio…). Resta da fare l'isolamento cross-tenant comportamentale per ogni action |
+| 2026-07-23 | LOG-08 | — | Riverifica (nessun cambio di stato, resta ✅): scheda aggiornata dopo la revoca di LOG-03 — rimosso il riferimento stantìo a `annullata: false` in `getAnnualRevenue`/`getMonthlyRevenue` (campo eliminato con l'hard-delete). Elenco e totali restano allineati per costruzione |
+| 2026-07-23 | LOG-11 | — | Riverifica (resta 🔴 Aperto): riferimento di riga aggiornato a `lib/actions/invoices.ts:202-208`; annotato che il nuovo snapshot anagrafica ha invece un fallback coerente in `resolveAnagrafica`, a differenza del layout PDF |
+| 2026-07-23 | — | — | Riverifica completa (commit `c371d3b`): riletto tutto il codebase. Nessun nuovo difetto di sicurezza/logica trovato; isolamento multi-tenant confermato anche nel nuovo flusso archivia/ripristina/hard-delete di paganti e pazienti. Suite `npm test` verde (35 file, 201 test), `npx tsc --noEmit` pulito. Unica staleness diffusa: i riferimenti `npm run verify:*` (script migrati a Vitest, vedi nota in testa al documento) |
 | 2026-07-22 | LOG-04 | 🔴 → ✅ | `updateInvoice` blocca `n_fattura`/anno dopo la creazione; nuovo `lib/invoices/chronology.ts` + `getChronologyNeighbors` impediscono inversioni cronologiche numero/data (problema aggiuntivo emerso in fase di design, non nella formulazione originale); nessuna finestra di tolleranza per errori (già coperti da `updateInvoice`); nuovi `lib/invoices/chronology.test.ts` e `scripts/verify-invoice-lifecycle.test.ts` |
 | 2026-07-22 | LOG-03 | 🔴 → ✅ | Nuovo `Pagamento.annullata`; `deleteInvoice` annulla invece di cancellare fisicamente, `getNextInvoiceNumberForUserYear` non riassegna mai più il numero (nessuna modifica a quella funzione: la riga resta e viene già vista da `max(n_fattura)`); totali dashboard escludono le annullate; bottone UI "Annulla fattura" con badge in elenco; verificato anche end-to-end contro il DB di sviluppo |
 | 2026-07-22 | LOG-02 | 🔴 → ✅ | Rimosso il filtro `archiviato`/`eliminato` sulle relazioni `pagante`/`paziente` in `getInvoices`/`getInvoiceById`/`getLatestInvoices` (`lib/data/invoices.ts`); risolto nell'ambito della nuova funzionalità di archiviazione/ripristino (commit `74f226a`), che rinomina il campo `eliminato` in `archiviato` e aggiunge guardie contro l'hard delete di anagrafiche con fatture collegate (`lib/archive/guards.ts`); nuovo `verify:archive-guards` |
