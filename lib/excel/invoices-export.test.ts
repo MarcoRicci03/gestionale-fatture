@@ -108,4 +108,12 @@ describe("buildInvoicesWorkbook — sanitizzazione anti formula-injection", () =
     const value = await readCell(buffer, 2, 1);
     expect(value).toBe("Rossi Giulia");
   });
+
+  it("non antepone un apostrofo al placeholder 'n/d' di un campo nullo", async () => {
+    const invoice = baseInvoice({ bolloCodice: null });
+    const buffer = await buildInvoicesWorkbook([invoice], ["bollo_codice"]);
+
+    const value = await readCell(buffer, 2, 1);
+    expect(value).toBe("n/d");
+  });
 });

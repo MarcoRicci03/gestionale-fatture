@@ -107,13 +107,13 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     key: "pagante_cf",
     label: "CF pagante",
     category: "pagante",
-    getValue: (i) => resolveAnagrafica(i).pagante.cf ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.cf ?? "n/d",
   },
   {
     key: "pagante_piva",
     label: "P.IVA pagante",
     category: "pagante",
-    getValue: (i) => resolveAnagrafica(i).pagante.piva ?? "-",
+    getValue: (i) => resolveAnagrafica(i).pagante.piva ?? "n/d",
   },
 
   {
@@ -130,13 +130,13 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     key: "sedute",
     label: "Sedute",
     category: "dettaglio",
-    getValue: (i) => i.sedute ?? "-",
+    getValue: (i) => i.sedute ?? "n/d",
   },
   {
     key: "commento",
     label: "Commento",
     category: "dettaglio",
-    getValue: (i) => i.commento ?? "-",
+    getValue: (i) => i.commento ?? "n/d",
   },
   {
     key: "mesi",
@@ -149,7 +149,7 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     key: "bollo_codice",
     label: "Codice marca da bollo",
     category: "dettaglio",
-    getValue: (i) => i.bolloCodice ?? "-",
+    getValue: (i) => i.bolloCodice ?? "n/d",
   },
   {
     key: "bollo_dovuto",

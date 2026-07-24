@@ -98,7 +98,7 @@ describe("column-catalog — dati pagante/paziente dallo snapshot", () => {
     );
   });
 
-  it("CF/P.IVA null nello snapshot restituiscono '-' invece di null", () => {
+  it("CF/P.IVA null nello snapshot restituiscono 'n/d' invece di null", () => {
     const invoice = baseInvoice({
       snapshotAnagrafica: buildSnapshotAnagrafica(
         { ...PAGANTE_ATTUALE, cf: null, piva: null },
@@ -106,7 +106,7 @@ describe("column-catalog — dati pagante/paziente dallo snapshot", () => {
       ),
     });
 
-    expect(getExportColumn("pagante_cf")!.getValue(invoice)).toBe("-");
-    expect(getExportColumn("pagante_piva")!.getValue(invoice)).toBe("-");
+    expect(getExportColumn("pagante_cf")!.getValue(invoice)).toBe("n/d");
+    expect(getExportColumn("pagante_piva")!.getValue(invoice)).toBe("n/d");
   });
 });
