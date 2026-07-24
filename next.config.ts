@@ -9,10 +9,10 @@ const isProduction = process.env.NODE_ENV === "production";
 // script di bootstrap dell'hydration che Next.js inietta inline nell'HTML
 // (self.__next_f.push(...)): una CSP "strict" con nonce per-richiesta
 // eliminerebbe anche questo, ma richiede generare il nonce in proxy.ts e
-// propagarlo nei Server Component — fuori scope per questo fix (vedi SEC-06
-// in SECURITY_AUDIT.md), la differenza rispetto a nessuna CSP resta comunque
-// sostanziale (blocca il caricamento di script/risorse da domini esterni in
-// caso di un futuro XSS).
+// propagarlo nei Server Component — fuori scope per questo fix, la
+// differenza rispetto a nessuna CSP resta comunque sostanziale (blocca il
+// caricamento di script/risorse da domini esterni in caso di un futuro
+// XSS).
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",

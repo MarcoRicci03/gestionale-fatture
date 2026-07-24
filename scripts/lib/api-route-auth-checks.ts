@@ -7,8 +7,8 @@
 // requireUserId/requireSession/requireAdmin fanno redirect("/login") in
 // assenza di sessione: l'invariante è garantita strutturalmente, basta la
 // presenza della chiamata. getUserIdOrNull() invece restituisce null (per
-// poter rispondere 401 invece di un redirect, vedi SEC-13 in
-// SECURITY_AUDIT.md) e NON basta da sola: un chiamante potrebbe ignorare il
+// poter rispondere 401 invece di un redirect) e NON basta da sola: un
+// chiamante potrebbe ignorare il
 // caso null. Per questa via si richiede quindi anche un controllo esplicito
 // del null e una risposta 401 nello stesso corpo di funzione.
 export const REDIRECT_BASED_AUTH_CALLS = [

@@ -1,5 +1,5 @@
-// Elenco chiuso delle azioni auditate (SEC-15 in SECURITY_AUDIT.md). Stringa
-// libera, non un enum Prisma: l'elenco crescerà con le feature future e un
+// Elenco chiuso delle azioni auditate. Stringa libera, non un enum Prisma:
+// l'elenco crescerà con le feature future e un
 // enum richiederebbe una migration per ogni nuova voce. La validità è
 // garantita lato TypeScript da questo union type e da
 // scripts/verify-audit-log-coverage.ts (verifica che ogni Server Action

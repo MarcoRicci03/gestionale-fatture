@@ -1,7 +1,7 @@
 // Regola pura di consequenzialità cronologica per le fatture, condivisa tra
 // createInvoice/updateInvoice (lib/actions/invoices.ts) e questo test.
-// LOG-04 in SECURITY_AUDIT.md: bloccare n_fattura/anno dopo l'emissione non
-// basta se giorno/mese della data restano liberi — si potrebbe comunque
+// Bloccare n_fattura/anno dopo l'emissione non basta se giorno/mese della
+// data restano liberi — si potrebbe comunque
 // creare un'inversione (es. fattura #6 con data precedente alla #5). Per
 // lo stesso (id_Utente, anno), la data deve restare compresa tra il vicino
 // con n_fattura immediatamente minore e quello immediatamente maggiore,

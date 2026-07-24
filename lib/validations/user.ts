@@ -14,7 +14,7 @@ const userCommonSchema = {
 
 // Condiviso da userCreateSchema, resetPasswordSchema e changePasswordSchema:
 // 12 caratteri minimi (non 8) e rifiuto di una deny-list di password comuni
-// note (vedi SEC-16 in SECURITY_AUDIT.md e lib/auth/common-passwords.ts).
+// note (vedi lib/auth/common-passwords.ts).
 export const passwordSchema = z
   .string()
   .min(12, "La password deve avere almeno 12 caratteri")

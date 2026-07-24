@@ -5,7 +5,7 @@ import { createRateLimiter } from "@/lib/auth/rate-limiter";
 
 // La generazione PDF (@react-pdf/renderer) è costosa in CPU: senza un
 // limite, un client autenticato può saturare il processo Node richiedendo
-// PDF in loop (vedi SEC-08 in SECURITY_AUDIT.md).
+// PDF in loop.
 const pdfGenerationLimiter = createRateLimiter({
   maxRequests: 30,
   windowMs: 60 * 1000, // 1 minuto
@@ -18,7 +18,7 @@ export async function GET(
   const userId = await getUserIdOrNull();
   if (userId === null) {
     // 401 esplicito, non un redirect a /login: un client API non deve
-    // ricevere un 307 con corpo HTML (vedi SEC-13 in SECURITY_AUDIT.md).
+    // ricevere un 307 con corpo HTML.
     return new Response("Non autenticato", { status: 401 });
   }
 
@@ -51,8 +51,7 @@ export async function GET(
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="fattura-${invoice.n_fattura}.pdf"`,
       // Il PDF contiene dati sanitari/fiscali del paziente e del pagante:
-      // non va cacheato né da proxy intermedi né dal browser (vedi SEC-07 in
-      // SECURITY_AUDIT.md).
+      // non va cacheato né da proxy intermedi né dal browser.
       "Cache-Control": "private, no-store, max-age=0",
     },
   });

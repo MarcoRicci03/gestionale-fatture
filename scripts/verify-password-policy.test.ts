@@ -7,7 +7,7 @@ import {
 } from "../lib/validations/user";
 import { isCommonWeakPassword } from "../lib/auth/common-passwords";
 
-// Regressione SEC-16: la policy password era solo "almeno 8 caratteri",
+// La policy password era solo "almeno 8 caratteri",
 // senza deny-list di password comuni né verifica che la nuova password
 // differisca da quella attuale in changePassword. Questo test verifica che la
 // nuova policy (12 caratteri minimi, deny-list, newPassword !==

@@ -5,8 +5,8 @@ import {
   type ChronologyNeighbor,
 } from "./chronology";
 
-// Regressione LOG-04 in SECURITY_AUDIT.md: bloccare n_fattura/anno dopo
-// l'emissione non basta, perché lasciare libero il giorno/mese della data
+// Bloccare n_fattura/anno dopo l'emissione non basta, perché lasciare
+// libero il giorno/mese della data
 // permetterebbe comunque un'inversione cronologica (es. la fattura #6
 // spostata a una data precedente alla #5). Questo modulo verifica solo la
 // regola pura (nessun accesso a Prisma): la data deve restare compresa tra

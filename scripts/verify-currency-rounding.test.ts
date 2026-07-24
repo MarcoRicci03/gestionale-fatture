@@ -3,7 +3,7 @@ import { roundCurrency } from "../lib/utils/currency";
 import { invoiceSchema } from "../lib/validations/invoice";
 import { SOGLIA_BOLLO } from "../lib/constants/bollo";
 
-// Regressione LOG-06: gli importi diventano `number` non appena escono dal
+// Gli importi diventano `number` non appena escono dal
 // data layer (Decimal), e sommarli in JS può produrre errore di virgola
 // mobile (es. 0.1 + 0.2 !== 0.3). Applicato ai punti individuati
 // dall'audit: la soglia del bollo (lib/validations/invoice.ts, già coperta

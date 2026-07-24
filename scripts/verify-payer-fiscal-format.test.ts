@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { payerSchema } from "../lib/validations/payer";
 
-// Regressione LOG-09: cf/piva su payerSchema (lib/validations/payer.ts)
+// cf/piva su payerSchema (lib/validations/payer.ts)
 // accettavano qualunque stringa entro un limite di lunghezza ("abc" era un
 // codice fiscale valido), a differenza di profileUpdateSchema che già usava
 // le regex corrette. Questo test verifica che payerSchema ora usi le stesse

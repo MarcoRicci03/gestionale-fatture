@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { invoiceSchema } from "../lib/validations/invoice";
 
-// Regressione LOG-05: mesi[].prezzo trasformava qualunque input non
+// mesi[].prezzo trasformava qualunque input non
 // numerico (es. "50,00", virgola decimale italiana, o testo arbitrario) in
 // NaN e poi lo degradava silenziosamente a 0 — una fattura poteva essere
 // salvata con un importo sbagliato senza alcun errore di validazione. Questo

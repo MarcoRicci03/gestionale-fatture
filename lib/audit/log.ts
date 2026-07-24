@@ -11,8 +11,8 @@ type LogAuditParams = {
   ip?: string;
 };
 
-// Scrive una riga di audit log (SEC-15 in SECURITY_AUDIT.md). Best-effort e
-// deliberatamente non bloccante: un fallimento nella scrittura non deve mai
+// Scrive una riga di audit log. Best-effort e deliberatamente non bloccante:
+// un fallimento nella scrittura non deve mai
 // far fallire un'operazione già eseguita con successo (la mutazione è già
 // committata su Postgres quando questa funzione viene chiamata). Va sempre
 // `await`-ata dal chiamante, mai lanciata come "fire and forget": in una

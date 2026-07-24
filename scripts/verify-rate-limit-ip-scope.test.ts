@@ -47,7 +47,7 @@ it("isola il lockout per coppia (username, ip)", () => {
 });
 
 it("il contatore per sola username blocca dopo USERNAME_MAX_ATTEMPTS anche ruotando l'IP", () => {
-  // Regressione SEC-01: senza un proxy fidato, ruotare X-Forwarded-For a ogni
+  // Senza un proxy fidato, ruotare X-Forwarded-For a ogni
   // tentativo genera una chiave (username, ip) diversa ogni volta e
   // aggirerebbe il lockout per IP sopra. Il contatore per sola username deve
   // bloccare comunque l'attaccante dopo USERNAME_MAX_ATTEMPTS tentativi
@@ -75,7 +75,7 @@ it("il contatore per sola username blocca dopo USERNAME_MAX_ATTEMPTS anche ruota
 
 describe("resolveClientIp", () => {
   it("senza proxy fidato non legge X-Forwarded-For", () => {
-    // Regressione SEC-01: senza TRUSTED_PROXY=true, X-Forwarded-For/X-Real-IP
+    // Senza TRUSTED_PROXY=true, X-Forwarded-For/X-Real-IP
     // non vanno letti (sono falsificabili dal client), altrimenti il rate
     // limiter userebbe una chiave (username, ip) che l'attaccante controlla.
     const headersWithForwardedFor = {

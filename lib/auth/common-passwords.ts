@@ -1,6 +1,6 @@
 // Deny-list non esaustiva di password comuni note, usata come ulteriore
-// livello di difesa oltre al requisito di lunghezza minima (vedi SEC-16 in
-// SECURITY_AUDIT.md). Le voci sono già lunghe almeno 12 caratteri: più corte
+// livello di difesa oltre al requisito di lunghezza minima. Le voci sono
+// già lunghe almeno 12 caratteri: più corte
 // sarebbero comunque respinte dal requisito di lunghezza minima in
 // lib/validations/user.ts, quindi non serve includerle qui.
 const COMMON_WEAK_PASSWORDS = new Set(

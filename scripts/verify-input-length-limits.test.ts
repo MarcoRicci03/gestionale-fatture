@@ -5,7 +5,7 @@ import { payerSchema } from "../lib/validations/payer";
 import { profileUpdateSchema } from "../lib/validations/profile";
 import { pdfSettingsSchema, bloccoSchema } from "../lib/validations/pdf-settings";
 
-// Regressione SEC-11: diversi campi testuali accettavano stringhe di
+// Diversi campi testuali accettavano stringhe di
 // lunghezza arbitraria (nessun .max()), e i blob "ricchi" dell'editor PDF
 // (richContent/descrizioneRichContent/valoreRichContent) erano JSON opachi
 // senza alcun tetto di dimensione. Un client autenticato poteva scrivere
@@ -18,7 +18,7 @@ const baseValidInvoice = {
   data: "2026-01-01",
   mod_pag: "CONTANTI" as const,
   n_fattura: 1,
-  // Prezzo volutamente sotto SOGLIA_BOLLO (LOG-01): questi test riguardano
+  // Prezzo volutamente sotto SOGLIA_BOLLO: questi test riguardano
   // solo i limiti di lunghezza dei campi testuali, non la logica del bollo.
   mesi: [{ mese: "GENNAIO", prezzo: 50 }],
   citta: "Roma",

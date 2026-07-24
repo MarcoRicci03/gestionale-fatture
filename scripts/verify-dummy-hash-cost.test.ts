@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-// Regressione SEC-05: in lib/actions/auth.ts, login() confronta la password
+// In lib/actions/auth.ts, login() confronta la password
 // inserita contro DUMMY_HASH quando lo username non esiste (o è disabilitato),
 // per impedire che il tempo di risposta riveli se un dato username è
 // registrato. Questo funziona SOLO se DUMMY_HASH ha lo stesso cost factor

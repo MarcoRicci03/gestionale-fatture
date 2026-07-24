@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-// Regressione LOG-10: updateProfile (lib/actions/account.ts) mutava
+// updateProfile (lib/actions/account.ts) mutava
 // Utente.nome/cognome/pIva/cf/via/citta/cap/provincia/titolo/specializzazione
 // senza mai chiamare revalidatePath(), a differenza di tutte le altre action
 // di mutazione del codebase. Questi campi sono renderizzati nella sidebar/

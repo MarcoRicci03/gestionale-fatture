@@ -6,7 +6,7 @@ import {
   sweepExpired,
 } from "../lib/auth/rate-limit";
 
-// Regressione SEC-04: le Map di lib/auth/rate-limit.ts vivono in memoria di
+// Le Map di lib/auth/rate-limit.ts vivono in memoria di
 // processo. Senza un tetto, un attaccante che manda uno username/IP diverso
 // a ogni tentativo di login le fa crescere senza limite. Questo test verifica
 // il comportamento osservabile (non lo stato interno): un tetto fisso con

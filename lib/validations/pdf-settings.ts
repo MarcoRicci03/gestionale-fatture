@@ -17,7 +17,7 @@ const textAlignValues: TextAlign[] = ["left", "center", "right"];
 // server-side alla struttura interna della libreria di rich-text (vedi i commenti
 // sotto). Senza un tetto qualunque, però, sono JSON arbitrari salvati tal quali su
 // Postgres: un client autenticato potrebbe scrivere payload enormi e ripetere
-// l'operazione (SEC-11 in SECURITY_AUDIT.md). Il limite è sulla dimensione
+// l'operazione. Il limite è sulla dimensione
 // serializzata (soglia larga, pensata per un blocco di testo con formattazione),
 // non sulla forma del contenuto.
 const MAX_RICH_CONTENT_JSON_LENGTH = 50_000;
@@ -86,7 +86,7 @@ export const pdfSettingsSchema = z.object({
   fontSizeBase: z.number().int().min(6).max(72).default(11),
   // Tetto largo perché il layout può crescere con molti blocchi di testo/mesi
   // costruiti a mano nell'editor drag-and-drop: serve solo a impedire un
-  // payload senza limite (SEC-11), non a vincolare l'uso normale.
+  // payload senza limite, non a vincolare l'uso normale.
   blocchi: z.array(bloccoSchema).min(1).max(500),
 });
 

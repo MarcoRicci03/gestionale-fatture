@@ -83,9 +83,9 @@ export async function signSession(
 // firma): sicuro SOLO perché non è esportata, quindi l'unico chiamante
 // possibile è signSessionWithMaxAge qui sotto, che le passa sempre un token
 // appena firmato da questo stesso server, mai un token arbitrario letto da
-// un client (vedi SEC-17 in SECURITY_AUDIT.md — prima un futuro chiamante
-// avrebbe potuto passarle un token non verificato, dato che la funzione era
-// esportata e accettava una stringa qualsiasi).
+// un client (prima un futuro chiamante avrebbe potuto passarle un token non
+// verificato, dato che la funzione era esportata e accettava una stringa
+// qualsiasi).
 function getTokenMaxAgeSeconds(token: string): number {
   const { exp, iat } = decodeJwt(token);
   if (typeof exp !== "number" || typeof iat !== "number") {

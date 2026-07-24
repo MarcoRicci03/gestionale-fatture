@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-// Regressione LOG-12 in SECURITY_AUDIT.md. Analisi statica (stesso approccio di
+// Analisi statica (stesso approccio di
 // verify-invoice-lifecycle.test.ts): gli aggregati fatturato e la costruzione
 // delle date usano new Date(anno, mese, ...) in ora locale del processo. Perché
 // dev (Europe/Rome) e produzione (container, altrimenti UTC) concordino, il
@@ -20,7 +20,7 @@ const ROOT = join(__dirname, "..");
 const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf-8");
 const packageJson = readFileSync(join(ROOT, "package.json"), "utf-8");
 
-describe("Dockerfile pinna il fuso a Europe/Rome (LOG-12)", () => {
+describe("Dockerfile pinna il fuso a Europe/Rome", () => {
   it("imposta ENV TZ=Europe/Rome", () => {
     expect(dockerfile).toMatch(/ENV\s+TZ=Europe\/Rome/);
   });
@@ -30,7 +30,7 @@ describe("Dockerfile pinna il fuso a Europe/Rome (LOG-12)", () => {
   });
 });
 
-describe("gli script npm di avvio pinnano il fuso a Europe/Rome (LOG-12)", () => {
+describe("gli script npm di avvio pinnano il fuso a Europe/Rome", () => {
   const scripts = (JSON.parse(packageJson).scripts ?? {}) as Record<
     string,
     string

@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 
-// SEC-15: ogni Server Action mutante deve scrivere un evento di audit log
+// Ogni Server Action mutante deve scrivere un evento di audit log
 // tramite logAudit() (lib/audit/log.ts). Stesso pattern di
 // verify-actions-auth.test.ts (extractFunctionBody + regex sulle funzioni
 // esportate in lib/actions/*.ts): rende l'invariante verificabile invece che
@@ -53,8 +53,7 @@ it("tutte le Server Action mutanti registrano un evento di audit log", () => {
   expect(
     violations,
     "Ogni Server Action che modifica dati deve registrare un evento con " +
-      "logAudit() (vedi SEC-15 in SECURITY_AUDIT.md), oppure, se è " +
-      "intenzionalmente di sola lettura, va aggiunta a READ_ONLY_ACTIONS in " +
-      "questo test."
+      "logAudit(), oppure, se è intenzionalmente di sola lettura, va " +
+      "aggiunta a READ_ONLY_ACTIONS in questo test."
   ).toEqual([]);
 });

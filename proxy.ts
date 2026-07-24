@@ -7,7 +7,7 @@ export const config = {
   // al prefisso: senza l'ancoraggio, un percorso che INIZIA con una di
   // queste stringhe (es. "/logins", "/api-docs") sfuggirebbe al controllo
   // di sessione qui sotto pur non essendo affatto la route pensata come
-  // pubblica (vedi SEC-12 in SECURITY_AUDIT.md).
+  // pubblica.
   matcher: [
     "/((?!(?:login|api|_next/static|_next/image|favicon\\.ico|robots\\.txt)(?:/|$)).*)",
   ],

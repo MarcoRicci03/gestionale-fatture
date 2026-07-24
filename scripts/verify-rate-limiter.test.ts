@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { createRateLimiter } from "../lib/auth/rate-limiter";
 
-// Regressione SEC-08: changePassword (lib/actions/account.ts),
+// changePassword (lib/actions/account.ts),
 // resetUserPassword (lib/actions/users.ts) e la generazione PDF
 // (app/api/invoices/[id]/pdf/route.ts) devono avere un limite di richieste,
 // altrimenti chi ottiene una sessione può forzare in loop la password

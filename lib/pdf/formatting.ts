@@ -5,7 +5,7 @@ export type TextSegment = {
   gray?: boolean;
 };
 
-// LOG-13: la regex ha flag `g` ed è a livello di modulo, ma viene usata con
+// La regex ha flag `g` ed è a livello di modulo, ma viene usata con
 // `text.matchAll(...)`, che per spec ne costruisce internamente una copia — il
 // `lastIndex` di questa costante NON viene mai mutato. Così lo stato non è
 // condiviso tra chiamate (parseInlineFormatting è invocata molte volte per

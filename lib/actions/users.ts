@@ -18,9 +18,9 @@ import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 export type UserActionState = { success: true } | { error: string };
 
 // Senza questo limite, una sessione admin compromessa potrebbe resettare in
-// loop la password di ogni utente (vedi SEC-08 in SECURITY_AUDIT.md). Soglia
-// più larga di changePassword perché un admin legittimo può dover resettare
-// più account in sequenza (es. dopo un incidente).
+// loop la password di ogni utente. Soglia più larga di changePassword perché
+// un admin legittimo può dover resettare più account in sequenza (es. dopo
+// un incidente).
 const resetPasswordLimiter = createRateLimiter({
   maxRequests: 20,
   windowMs: 60 * 60 * 1000, // 1 ora

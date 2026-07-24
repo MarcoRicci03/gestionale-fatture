@@ -1,7 +1,7 @@
 // Le date sono costruite a mezzogiorno in ora locale DEL PROCESSO. Il fuso è
-// pinnato a Europe/Rome (Dockerfile ENV TZ + prefisso TZ sugli script npm, vedi
-// LOG-12 in SECURITY_AUDIT.md) così client e server concordano; il mezzogiorno
-// dà comunque margine contro lo scivolamento di giorno ai confini del fuso.
+// pinnato a Europe/Rome (Dockerfile ENV TZ + prefisso TZ sugli script npm)
+// così client e server concordano; il mezzogiorno dà comunque margine
+// contro lo scivolamento di giorno ai confini del fuso.
 export function parseDateInput(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0);

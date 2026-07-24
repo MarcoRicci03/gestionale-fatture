@@ -39,7 +39,7 @@ export const invoiceSchema = z
             .union([z.literal(""), z.string(), z.coerce.number().nonnegative()])
             .transform((val, ctx) => {
               if (val === "") return 0;
-              // LOG-05: un input non numerico (es. "50,00", virgola decimale
+              // Un input non numerico (es. "50,00", virgola decimale
               // italiana, o testo arbitrario) veniva prima convertito in NaN
               // e poi silenziosamente degradato a 0, salvando un importo
               // sbagliato senza alcun errore. Qui si normalizza la virgola in
@@ -83,7 +83,7 @@ export const invoiceSchema = z
       .optional(),
   })
   .superRefine((data, ctx) => {
-    // LOG-01: la soglia era imposta solo nel form client (solo un avviso, non
+    // La soglia era imposta solo nel form client (solo un avviso, non
     // bloccante) — una Server Action chiamata direttamente permetteva di
     // salvare fatture sopra soglia senza marca da bollo. Il totale va
     // ricalcolato qui, sui dati già validati/coercizzati, per non fidarsi di

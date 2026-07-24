@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-// Regressione LOG-03/LOG-04 in SECURITY_AUDIT.md. Analisi statica (stesso
-// approccio di verify-account-cache-invalidation.test.ts): verifica che il
+// Analisi statica (stesso approccio di
+// verify-account-cache-invalidation.test.ts): verifica che il
 // codice sorgente di lib/actions/invoices.ts contenga ancora i controlli
 // introdotti, così una futura modifica che li rimuova per errore viene
 // segnalata invece di passare inosservata. Non esegue le action (chiamano
@@ -38,7 +38,7 @@ function extractFunctionBody(source: string, fnName: string): string {
 
 const source = readFileSync(INVOICES_ACTIONS_PATH, "utf-8");
 
-describe("deleteInvoice cancella fisicamente la fattura (LOG-03 revocato)", () => {
+describe("deleteInvoice cancella fisicamente la fattura", () => {
   const body = extractFunctionBody(source, "deleteInvoice");
 
   it("chiama prisma.pagamento.delete", () => {
@@ -55,7 +55,7 @@ describe("deleteInvoice cancella fisicamente la fattura (LOG-03 revocato)", () =
   });
 });
 
-describe("updateInvoice blocca numero e anno (LOG-04)", () => {
+describe("updateInvoice blocca numero e anno", () => {
   const body = extractFunctionBody(source, "updateInvoice");
 
   it("confronta n_fattura con il valore esistente prima di aggiornare", () => {
@@ -71,7 +71,7 @@ describe("updateInvoice blocca numero e anno (LOG-04)", () => {
   });
 });
 
-describe("createInvoice verifica la consequenzialità cronologica (LOG-04)", () => {
+describe("createInvoice verifica la consequenzialità cronologica", () => {
   const body = extractFunctionBody(source, "createInvoice");
 
   it("chiama findChronologyConflict prima di creare la fattura", () => {
@@ -87,7 +87,7 @@ describe("createInvoice cattura lo snapshot anagrafica", () => {
   });
 });
 
-describe("createInvoice cattura lo snapshot layout PDF in modo atomico (LOG-11)", () => {
+describe("createInvoice cattura lo snapshot layout PDF in modo atomico", () => {
   const body = extractFunctionBody(source, "createInvoice");
 
   it("include pdfLayoutSnapshot nel data del create", () => {

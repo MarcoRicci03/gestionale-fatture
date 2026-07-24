@@ -8,7 +8,7 @@ import { it, expect, beforeAll } from "vitest";
 // corretto. Questo modulo non tocca il DOM: gira in un ambiente Node puro,
 // come faceva lo script originale sotto tsx.
 //
-// Regressione SEC-02: un JWT di sessione deve portare il tokenVersion con cui
+// Un JWT di sessione deve portare il tokenVersion con cui
 // è stato firmato, così getSession() (lib/auth/session.ts) può confrontarlo
 // con Utente.tokenVersion e invalidare i token emessi prima di un cambio o
 // reset password, anche se non ancora scaduti.

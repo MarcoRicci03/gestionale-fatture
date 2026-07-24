@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-// Regressione SEC-12: proxy.ts protegge tutte le route GET tranne quelle in
+// proxy.ts protegge tutte le route GET tranne quelle in
 // allowlist (login, api, asset Next.js, favicon, robots.txt), tramite un
 // negative lookahead nel matcher. Senza ancorare il lookahead a un confine di
 // segmento (/ o fine stringa), qualunque percorso che INIZIA con una di
@@ -50,7 +50,7 @@ it.each([
   ["/robots.txt", false, "robots.txt"],
   ["/dashboard", true, "pagina applicativa normale"],
   ["/", true, "root, redirige a /login o /dashboard mantenendo il controllo"],
-  // Regressione SEC-12: un percorso che INIZIA con una voce dell'allowlist ma
+  // Un percorso che INIZIA con una voce dell'allowlist ma
   // non è quella route deve restare protetto, non sfuggire al proxy per un
   // matching di solo prefisso.
   ["/loginhelp", true, 'non è "/login": il prefisso da solo non basta a escluderlo'],

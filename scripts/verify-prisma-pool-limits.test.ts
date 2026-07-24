@@ -2,7 +2,7 @@ import { it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Regressione SEC-14: `new Pool({ connectionString })` senza `max` non
+// `new Pool({ connectionString })` senza `max` non
 // impedisce di aprire connessioni fino a saturare `max_connections` lato
 // Postgres sotto carico o leak di connessioni; senza `idleTimeoutMillis`/
 // `connectionTimeoutMillis` una connessione inattiva o un DB irraggiungibile

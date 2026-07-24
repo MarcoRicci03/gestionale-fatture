@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-// Regressione SEC-06: next.config.ts non impostava alcun header di
+// next.config.ts non impostava alcun header di
 // sicurezza HTTP (CSP, HSTS, X-Frame-Options, X-Content-Type-Options,
 // Referrer-Policy, Permissions-Policy). Questo test chiama direttamente
 // `headers()` dalla config esportata (senza bisogno di un server Next.js

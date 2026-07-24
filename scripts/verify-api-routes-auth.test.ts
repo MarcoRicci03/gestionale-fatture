@@ -87,8 +87,7 @@ it("tutte le route API verificano la sessione", () => {
       "passare dal proxy (vedi proxy.ts): aggiungi requireUserId()/requireSession()/" +
       "requireAdmin() direttamente nell'handler (redirect a /login), oppure " +
       "getUserIdOrNull() con un controllo esplicito `=== null` che risponda con " +
-      "status 401 (preferibile per una route API — vedi SEC-13 in " +
-      "SECURITY_AUDIT.md), oppure, se è intenzionalmente pubblico, aggiungilo a " +
-      "PUBLIC_ROUTES in questo test."
+      "status 401 (preferibile per una route API), oppure, se è " +
+      "intenzionalmente pubblico, aggiungilo a PUBLIC_ROUTES in questo test."
   ).toEqual([]);
 });

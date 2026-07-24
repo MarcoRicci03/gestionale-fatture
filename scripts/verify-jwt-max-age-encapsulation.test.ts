@@ -8,7 +8,7 @@ import { it, expect, beforeAll } from "vitest";
 // corretto. Questo modulo non tocca il DOM: gira in un ambiente Node puro,
 // come faceva lo script originale sotto tsx.
 
-// Regressione SEC-17: getTokenMaxAgeSeconds usa decodeJwt (non verificato,
+// getTokenMaxAgeSeconds usa decodeJwt (non verificato,
 // legge il payload senza controllare la firma). Prima era esportata e
 // accettava un token qualsiasi come parametro: sicura solo perché l'unico
 // chiamante esistente le passava sempre un token appena firmato da questo

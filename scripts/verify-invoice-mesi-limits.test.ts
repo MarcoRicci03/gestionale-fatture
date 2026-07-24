@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { invoiceSchema } from "../lib/validations/invoice";
 import { MESI } from "../lib/constants/mesi";
 
-// Regressione LOG-07: mesi[] non aveva né un tetto di lunghezza né un
+// mesi[] non aveva né un tetto di lunghezza né un
 // controllo di unicità sul mese. Due righe con lo stesso mese violano
 // @@unique([id_Pagamento, mese]) su FatturaMese: l'eccezione P2002 non era
 // intercettata e l'utente vedeva il generico "Errore durante la creazione
@@ -26,7 +26,7 @@ function withMesi(mesi: { mese: string; prezzo: number }[]) {
   return { ...baseInvoice, mesi };
 }
 
-// Prezzo volutamente basso (LOG-01/SOGLIA_BOLLO): questi test riguardano
+// Prezzo volutamente basso (SOGLIA_BOLLO): questi test riguardano
 // solo il numero/l'unicità dei mesi, non la logica del bollo.
 
 it("rifiuta un array di 13 elementi (12 distinti + 1 ripetuto, max 12)", () => {

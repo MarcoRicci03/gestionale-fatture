@@ -3,7 +3,7 @@
 // senza lockout: qui basta contare le richieste in una finestra temporale,
 // non serve un blocco prolungato dopo N fallimenti. Riusato da
 // changePassword (lib/actions/account.ts) e dalla generazione PDF
-// (app/api/invoices/[id]/pdf/route.ts) — vedi SEC-08 in SECURITY_AUDIT.md.
+// (app/api/invoices/[id]/pdf/route.ts).
 export type RateLimitResult = {
   allowed: boolean;
   retryAfterSeconds?: number;

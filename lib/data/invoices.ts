@@ -69,7 +69,7 @@ export async function getChronologyNeighbors(
   next: { n_fattura: number; data: Date } | null;
 }> {
   // Nessun filtro di stato: il controllo di consequenzialità cronologica
-  // (LOG-04) considera tutte le fatture dell'anno.
+  // considera tutte le fatture dell'anno.
   const [previous, next] = await Promise.all([
     prisma.pagamento.findFirst({
       where: {
@@ -111,8 +111,8 @@ export async function getPayersAndPatients() {
   return { payers, patients };
 }
 
-// LOG-12: i confini di anno/mese sono costruiti con new Date(anno, mese, ...),
-// cioè in ora locale DEL PROCESSO. Le date fattura sono costruite a mezzogiorno
+// I confini di anno/mese sono costruiti con new Date(anno, mese, ...), cioè
+// in ora locale DEL PROCESSO. Le date fattura sono costruite a mezzogiorno
 // locale (lib/utils/date.ts) dal client Europe/Rome, quindi questi range devono
 // essere calcolati nello stesso fuso: il processo è pinnato a Europe/Rome
 // (Dockerfile ENV TZ, e prefisso TZ sugli script dev/start in package.json).

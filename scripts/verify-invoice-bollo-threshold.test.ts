@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { invoiceSchema } from "../lib/validations/invoice";
 import { SOGLIA_BOLLO } from "../lib/constants/bollo";
 
-// Regressione LOG-01: SOGLIA_BOLLO era applicata solo nel form client (un
+// SOGLIA_BOLLO era applicata solo nel form client (un
 // avviso non bloccante) — createInvoice/updateInvoice, chiamate direttamente
 // come Server Action, salvavano fatture sopra soglia senza bolloCodice
 // valorizzato, cioè documenti fiscalmente non conformi. Questo test verifica

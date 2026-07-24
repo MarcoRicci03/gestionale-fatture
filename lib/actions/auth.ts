@@ -25,8 +25,8 @@ export type LoginState = {
 // se questo hash avesse un cost diverso da quello reale, il tempo di verifica
 // per uno username inesistente/disabilitato sarebbe misurabilmente diverso da
 // quello di uno username esistente, rivelando l'esistenza dell'account tramite
-// timing (vedi SEC-05 in SECURITY_AUDIT.md). Non corrisponde a nessuna password
-// reale, serve solo a pareggiare i tempi di bcrypt.compare.
+// timing. Non corrisponde a nessuna password reale, serve solo a pareggiare i
+// tempi di bcrypt.compare.
 const DUMMY_HASH = "$2b$12$uEQH0NVA9flEIdsy4VyajO8CcJ6fP/Ygj9MSjRp0iGfhH8sylWycu";
 
 export async function login(

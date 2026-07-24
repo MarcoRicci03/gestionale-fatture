@@ -78,7 +78,7 @@ export async function requireUserId(): Promise<number> {
 // (che fa redirect("/login"), producendo un 307 con corpo HTML — una
 // risposta priva di senso per un client API), qui l'assenza di sessione
 // viene restituita come null, così il chiamante può rispondere con uno
-// status 401 esplicito (vedi SEC-13 in SECURITY_AUDIT.md).
+// status 401 esplicito.
 export async function getUserIdOrNull(): Promise<number | null> {
   const session = await getSession();
   return session ? session.id : null;
@@ -94,7 +94,7 @@ export async function requireAdmin(): Promise<Session> {
 
 // maxAgeSeconds va sempre calcolato da signSessionWithMaxAge (lib/auth/jwt.ts)
 // insieme al token: non esiste un modo di ottenerlo separatamente da un
-// token arbitrario, per costruzione (vedi SEC-17 in SECURITY_AUDIT.md).
+// token arbitrario, per costruzione.
 async function setSessionCookie(
   token: string,
   maxAgeSeconds: number

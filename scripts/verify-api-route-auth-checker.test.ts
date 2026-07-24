@@ -5,7 +5,7 @@ import {
   hasApiRouteAuthCheck,
 } from "./lib/api-route-auth-checks";
 
-// Regressione SEC-13: scripts/verify-api-routes-auth.test.ts ora accetta
+// scripts/verify-api-routes-auth.test.ts ora accetta
 // anche il pattern getUserIdOrNull() + 401 esplicito (oltre a
 // requireUserId/requireSession/requireAdmin, che restano validi da soli
 // perché fanno redirect strutturalmente). Questo test verifica che il

@@ -1,6 +1,6 @@
 import { it, expect, beforeAll } from "vitest";
 
-// Regressione SEC-03: con HS256 chiunque conosca JWT_SECRET può forgiare un
+// Con HS256 chiunque conosca JWT_SECRET può forgiare un
 // token di sessione valido per QUALSIASI utente (basta impostare `sub` a
 // piacere). lib/auth/jwt.ts deve rifiutare un segreto corto o un valore
 // segnaposto noto (es. "change-me"), non limitarsi a verificarne la

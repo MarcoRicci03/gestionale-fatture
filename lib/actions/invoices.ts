@@ -162,8 +162,8 @@ export async function createInvoice(
 
   let createdInvoiceId: number;
   try {
-    // LOG-11 in SECURITY_AUDIT.md: lo snapshot del layout PDF viene incluso
-    // direttamente nel create (come snapshotAnagrafica), non più con un update
+    // Lo snapshot del layout PDF viene incluso direttamente nel create (come
+    // snapshotAnagrafica), non più con un update
     // separato best-effort a valle. Così non può esistere una fattura persistita
     // con pdfLayoutSnapshot = null per via di un update fallito silenziosamente:
     // se questa lettura non riesce, l'intero create fallisce e non si crea nulla.
@@ -230,8 +230,8 @@ export async function updateInvoice(
     return { error: "Dati non validi" };
   }
 
-  // LOG-04 in SECURITY_AUDIT.md: n_fattura/anno non sono più modificabili
-  // dopo la creazione. Servono i valori esistenti per confrontarli con
+  // n_fattura/anno non sono più modificabili dopo la creazione. Servono i
+  // valori esistenti per confrontarli con
   // quelli inviati, prima di applicare qualunque altra modifica.
   const existing = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },

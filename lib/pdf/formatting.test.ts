@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { parseInlineFormatting } from "./formatting";
 
-// Regressione LOG-13 in SECURITY_AUDIT.md. parseInlineFormatting usa una regex
-// `g` a livello di modulo: questi test comportamentali coprono la segmentazione
+// parseInlineFormatting usa una regex `g` a livello di modulo: questi test
+// comportamentali coprono la segmentazione
 // e, soprattutto, verificano che chiamate consecutive non condividano stato
 // (bug che si presenterebbe se si tornasse a `.exec()` in un while con la regex
 // condivisa e un'uscita anticipata dal ciclo).

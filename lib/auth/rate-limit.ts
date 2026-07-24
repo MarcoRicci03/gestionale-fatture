@@ -2,11 +2,11 @@ const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 const LOCKOUT_MS = 15 * 60 * 1000;
 
-// SEC-04 in SECURITY_AUDIT.md: le Map vivono in memoria di processo (si
-// azzerano a ogni riavvio, non condivise tra repliche — accettato per ora,
-// l'app resta a singola istanza). Senza un tetto, un attaccante che manda
-// username/IP diversi a ogni tentativo (vedi SEC-01: con TRUSTED_PROXY=false
-// l'IP collassa sempre su "unknown", ma lo username resta arbitrario e non
+// Le Map vivono in memoria di processo (si azzerano a ogni riavvio, non
+// condivise tra repliche — accettato per ora, l'app resta a singola
+// istanza). Senza un tetto, un attaccante che manda username/IP diversi a
+// ogni tentativo (con TRUSTED_PROXY=false l'IP collassa sempre su
+// "unknown", ma lo username resta arbitrario e non
 // validato finché la query su Postgres non lo risolve) fa crescere le Map
 // senza limite. MAX_ENTRIES_PER_MAP impone un tetto fisso con eviction LRU
 // (per ordine di scrittura, non di lettura: ogni tentativo fallito scrive

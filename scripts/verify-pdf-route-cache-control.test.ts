@@ -2,7 +2,7 @@ import { it, expect } from "vitest";
 import { readFileSync, readdirSync } from "fs";
 import { join, relative } from "path";
 
-// Regressione SEC-07: un PDF di fattura contiene dati sanitari/fiscali del
+// Un PDF di fattura contiene dati sanitari/fiscali del
 // paziente e del pagante. Ogni route che serve `Content-Type:
 // application/pdf` deve marcare esplicitamente la risposta come non
 // cacheabile (`Cache-Control: private, no-store`), altrimenti proxy
