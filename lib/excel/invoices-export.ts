@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { getExportColumn, type ExportableInvoice } from "./column-catalog";
+import { sanitizeCellValue } from "./sanitize";
 
 export async function buildInvoicesWorkbook(
   invoices: ExportableInvoice[],
@@ -22,7 +23,9 @@ export async function buildInvoicesWorkbook(
   for (const invoice of invoices) {
     const row: Record<string, string | number> = {};
     for (const column of columns) {
-      row[column.key] = column.getValue(invoice);
+      const value = column.getValue(invoice);
+      row[column.key] =
+        typeof value === "string" ? sanitizeCellValue(value) : value;
     }
     sheet.addRow(row);
   }
