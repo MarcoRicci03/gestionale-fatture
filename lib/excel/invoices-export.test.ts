@@ -59,7 +59,7 @@ async function readCell(
   col: number
 ): Promise<ExcelJS.CellValue> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as any);
+  await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
   return workbook.getWorksheet("Fatture")!.getRow(row).getCell(col).value;
 }
 
