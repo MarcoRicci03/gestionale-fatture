@@ -39,7 +39,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 
 | Codice | Titolo | Stato |
 |---|---|---|
-| [SEC-01](#sec-01) | Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy | 🔴 |
+| [SEC-01](#sec-01) | Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy | ✅ |
 | [SEC-02](#sec-02) | Array `columns` dell'export Excel senza tetto: DoS autenticato | ✅ |
 | [SEC-03](#sec-03) | `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso | ✅ |
 | [SEC-04](#sec-04) | `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF | ✅ |
@@ -86,28 +86,29 @@ Eseguita all'inizio dell'analisi, tutto verde:
 # Sicurezza
 
 <a id="sec-01"></a>
-## SEC-01 — Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy 🔴
+## SEC-01 — Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy ✅ risolta
 
 **Severità:** alta
-**File:** `package.json` (riga 40)
+**File:** `package.json`
 
-`npm audit --omit=dev` riporta **18 vulnerabilità sulle sole dipendenze di produzione**. La catena `next@16.2.10` è la più rilevante, e una in particolare colpisce esattamente il meccanismo su cui questo progetto fonda la route protection:
+`npm audit --omit=dev` riportava **18 vulnerabilità sulle sole dipendenze di produzione**. La catena `next@16.2.10` era la più rilevante, e una in particolare colpiva esattamente il meccanismo su cui questo progetto fonda la route protection:
 
 - **[GHSA-6gpp-xcg3-4w24](https://github.com/advisories/GHSA-6gpp-xcg3-4w24)** — *Middleware / Proxy bypass in App Router applications using Turbopack*. Il progetto usa `proxy.ts` come unico gate per le richieste GET alle pagine protette, e Turbopack è attivo (`npm run dev`).
 - **[GHSA-955p-x3mx-jcvp](https://github.com/advisories/GHSA-955p-x3mx-jcvp)** — disclosure non autenticata degli endpoint delle Server Function.
 - **[GHSA-m99w-x7hq-7vfj](https://github.com/advisories/GHSA-m99w-x7hq-7vfj)** — DoS in App Router via Server Actions.
 - **[GHSA-4c39-4ccg-62r3](https://github.com/advisories/GHSA-4c39-4ccg-62r3)** — payload Server Action non limitato.
-- A cascata: `postcss` (3 advisory high, incluso arbitrary file read via `sourceMappingURL`) e `sharp`/libvips (4 CVE).
 
-**Attenuante:** il bypass del proxy da solo non espone dati. `app/(protected)/layout.tsx` chiama `requireSession()` e ogni funzione in `lib/data/*.ts` chiama `requireUserId()`, quindi la difesa in profondità regge. Ma il proxy è comunque documentato in `CLAUDE.md` come il livello di protezione delle GET, e non deve essere l'anello rotto.
+**Attenuante che restava valida:** il bypass del proxy da solo non esponeva dati. `app/(protected)/layout.tsx` chiama `requireSession()` e ogni funzione in `lib/data/*.ts` chiama `requireUserId()`, quindi la difesa in profondità reggeva comunque. Ma il proxy è documentato in `CLAUDE.md` come il livello di protezione delle GET, e non doveva restare l'anello rotto.
 
-**Fix:**
+**Fix applicato:**
 ```sh
 npm install next@16.2.12 eslint-config-next@16.2.12
 ```
-È un **aggiornamento di patch nella stessa minor** (16.2.10 → 16.2.12, l'ultima `latest`): rischio di regressione minimo. Poi rieseguire `npm test`, `npx tsc --noEmit`, `npm run build`.
+Aggiornamento di patch nella stessa minor (16.2.10 → 16.2.12, `latest` al momento del fix). `npm install <pacchetto>@<versione>` aggiunge di default un range caret (`^16.2.12`): corretto a mano in `package.json` per preservare il pin esatto che il progetto usava già per la coppia `next`/`eslint-config-next` (devono restare sulla stessa versione per convenzione Next.js — un range avrebbe permesso ai due di disallinearsi a un futuro `npm install`).
 
-Le due `moderate` residue (`uuid` dentro `exceljs`, `valibot` dentro `@prisma/dev`) non hanno un fix non-breaking: `uuid` è raggiungibile solo passando un `buf` esplicito, cosa che `exceljs` non fa; `valibot` è nel toolchain di sviluppo di Prisma, non nel runtime. Accettabili, da rivalutare al prossimo major di `exceljs`.
+Verificato con `npm audit --omit=dev --json`: le 4 advisory sopra sono sparite dall'elenco delle dipendenze di `next` dopo l'aggiornamento. Restano, invariate, solo `postcss`/`sharp` — dipendenze **bundle interne** di Next (stesso range vulnerabile su tutta la serie 16.x, incluso 16.2.12: nessuna versione patchata disponibile a monte, `npm audit fix --force` proporrebbe un downgrade a `next@9.3.3`, non applicabile) — e le due `moderate` già note (`uuid` dentro `exceljs`, `valibot` dentro `@prisma/dev`, nessun fix non-breaking disponibile). Il totale di `npm audit --omit=dev` resta quindi "18 vulnerabilità" per come npm aggrega i path, ma le 4 advisory dirette e sfruttabili di Next.js sono risolte.
+
+`npx tsc --noEmit`, `npm run lint`, `npm test` (279 test) e `npm run build` (Turbopack, tutte le route compilate) verificati dopo l'aggiornamento: nessuna regressione.
 
 ---
 
