@@ -16,6 +16,7 @@ import {
 import { getClientIp } from "@/lib/auth/client-ip";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { redactUsernameForAudit } from "@/lib/audit/redact-username";
 
 export type LoginState = {
   error?: string;
@@ -63,7 +64,13 @@ export async function login(
       azione: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
       userId: null,
       ip,
-      meta: { motivo: "utente_inesistente", usernameTentato: username },
+      // Troncato: l'errore di digitazione più comune al login è scrivere la
+      // password nel campo username, e questo valore finirebbe altrimenti in
+      // chiaro nell'audit log visibile a ogni admin (SEC-11).
+      meta: {
+        motivo: "utente_inesistente",
+        usernameTentato: redactUsernameForAudit(username),
+      },
     });
     return { error: "Credenziali non valide" };
   }

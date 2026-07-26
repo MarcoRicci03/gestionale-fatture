@@ -49,7 +49,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
 | [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | 🟡 |
 | [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
-| [SEC-11](#sec-11) | La password tentata può finire nell'audit log | 🟡 |
+| [SEC-11](#sec-11) | La password tentata può finire nell'audit log | ✅ |
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | 🔴 |
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
@@ -269,16 +269,18 @@ Nuovo `scripts/verify-e2e-safe-environment.test.ts` (7 test: `NODE_ENV=productio
 ---
 
 <a id="sec-11"></a>
-## SEC-11 — La password tentata può finire nell'audit log 🟡
+## SEC-11 — La password tentata può finire nell'audit log ✅ risolta
 
 **Severità:** bassa
 **File:** `lib/actions/auth.ts` (riga 66)
 
-Sul login fallito per utente inesistente viene scritto `meta: { motivo: "utente_inesistente", usernameTentato: username }`. È un dato utile, ma il campo username è quello che raccoglie l'errore di digitazione più comune in assoluto: password digitata nel campo username. In quel caso la password in chiaro finisce in `audit_logs.meta` e resta lì, visibile nella UI `/audit-log` a ogni admin.
+Sul login fallito per utente inesistente veniva scritto `meta: { motivo: "utente_inesistente", usernameTentato: username }`. È un dato utile, ma il campo username è quello che raccoglie l'errore di digitazione più comune in assoluto: password digitata nel campo username. In quel caso la password in chiaro finiva in `audit_logs.meta` e restava lì, visibile nella UI `/audit-log` a ogni admin.
 
-Il commento in `lib/audit/log.ts` (righe 23-24) dice esplicitamente "Non passare MAI in `meta` password (nemmeno tentate)" — l'intento c'è, ma il caso non è coperto.
+Il commento in `lib/audit/log.ts` (righe 23-24) dice esplicitamente "Non passare MAI in `meta` password (nemmeno tentate)" — l'intento c'è, ma il caso non era coperto.
 
-**Fix:** troncare a pochi caratteri (`username.slice(0, 3) + "…"`) oppure rimuovere il campo: `ip` e `azione` bastano già per rilevare un attacco a forza bruta.
+**Fix applicato:** nuovo `lib/audit/redact-username.ts` (`redactUsernameForAudit`), che tronca a 3 caratteri con ellissi (`username.slice(0, 3) + "…"`) — scelto invece di rimuovere del tutto il campo, per non perdere la capacità di riconoscere pattern ripetuti (stesso username tentato più volte, varianti simili). Sotto i 3 caratteri non tronca affatto: una password valida ha sempre almeno 12 caratteri (`lib/validations/user.ts`), quindi una stringa più corta della soglia non può comunque essere una password. `lib/actions/auth.ts` applica la funzione prima di scrivere `usernameTentato`.
+
+Nuovo `lib/audit/redact-username.test.ts` (4 test, incluso un caso esplicito con una password realistica digitata per errore nel campo username, per verificare che il valore troncato non la contenga più).
 
 ---
 
