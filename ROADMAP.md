@@ -134,22 +134,27 @@ L'editor non espone il campo (nessun controllo in `pdf-editor.tsx`, confermato p
 
 ---
 
-## SEC-05 — Nessuna protezione "ultimo admin": lockout permanente possibile 🟡
+## SEC-05 — Nessuna protezione "ultimo admin": lockout permanente possibile 🟢 risolta
 
 **Severità:** media
-**File:** `lib/actions/users.ts` (righe 86-88, 140-142, 190-192)
+**File:** `lib/actions/users.ts` (`updateUser`, `toggleUserEnabled`)
 
-`updateUser`, `resetUserPassword` e `toggleUserEnabled` impediscono correttamente all'admin di agire **su sé stesso**, ma nulla impedisce a due admin di neutralizzarsi a vicenda: A toglie `isAdmin` a B (o lo disabilita), poi B — o un terzo admin — fa lo stesso ad A. Si arriva a zero admin abilitati.
+`updateUser`, `resetUserPassword` e `toggleUserEnabled` impediscono correttamente all'admin di agire **su sé stesso**, ma nulla impediva a due admin di neutralizzarsi a vicenda in una race condition tra due richieste concorrenti (ciascuna vede l'altro admin ancora attivo al momento del proprio `requireAdmin()`, quindi entrambe superano il controllo ed entrambe scrivono): A toglie `isAdmin` a B mentre, quasi simultaneamente, B (o un terzo admin) fa lo stesso ad A. Si arriva a zero admin abilitati.
 
-A quel punto `/users` e `/audit-log` sono irraggiungibili (`requireAdmin` fa redirect a `/dashboard`) e **non esiste alcun percorso applicativo di recupero**: nessun seed, nessuna CLI, nessun account di servizio. L'unica via è un `UPDATE` a mano su Postgres. Lo stesso vale, con più forza, per il caso a un solo admin che si crea un secondo admin per errore e poi resta bloccato.
+A quel punto `/users` e `/audit-log` sono irraggiungibili (`requireAdmin` fa redirect a `/dashboard`) e **non esiste alcun percorso applicativo di recupero**: nessun seed, nessuna CLI, nessun account di servizio. L'unica via è un `UPDATE` a mano su Postgres.
 
-**Fix:** prima di togliere `isAdmin` o disabilitare un utente, contare gli admin abilitati rimanenti e rifiutare l'operazione se scenderebbero a zero:
+**Fix applicato:** prima di togliere `isAdmin` o disabilitare un utente, si contano gli admin abilitati rimanenti (esclusi dal conteggio l'utente target) e si rifiuta l'operazione se scenderebbero a zero:
 ```ts
 const adminAttivi = await prisma.utente.count({
   where: { isAdmin: true, abilitato: true, NOT: { id } },
 });
 if (adminAttivi === 0) return { error: "Deve restare almeno un amministratore abilitato" };
 ```
+Applicato a `updateUser` (quando il submit porterebbe `isAdmin`/`abilitato` a `false`) e a `toggleUserEnabled` (quando si disabilita). **Non** applicato a `resetUserPassword`: non tocca né `isAdmin` né `abilitato`, quindi non incide sul conteggio degli admin attivi — il suo self-check esistente (`session.id === id`) resta l'unica protezione pertinente lì. Il controllo non blocca mai la disabilitazione di un utente non-admin: `id !== session.id` è già garantito dai self-check esistenti, quindi l'admin che sta agendo (se ancora attivo) viene sempre conteggiato in `adminAttivi`, che scende a zero solo nel caso genuino "ultimo admin" (o nella race condition che questo fix restringe).
+
+Nota: la finestra di race non è eliminata del tutto (Postgres non serializza le due richieste senza una transazione/lock esplicito), solo ristretta al minimo — accettabile per il modello di minaccia di questo gestionale mono-studio; una vera eliminazione richiederebbe un vincolo a livello di database, non aggiunto qui perché sproporzionato rispetto al rischio residuo.
+
+Nuovo `scripts/verify-last-admin-guard.test.ts` (analisi statica, stesso approccio di `verify-invoice-lifecycle.test.ts`: le Server Action toccano `requireAdmin()`/Prisma, non eseguibili in un test Vitest puro senza un contesto di richiesta reale).
 
 ---
 

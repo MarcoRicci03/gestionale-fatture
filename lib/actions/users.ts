@@ -104,6 +104,21 @@ export async function updateUser(
     return { error: "Username già in uso" };
   }
 
+  // Se questo aggiornamento toglierebbe a `id` lo stato di admin abilitato,
+  // deve restare almeno un altro admin abilitato nel sistema — altrimenti
+  // /users e /audit-log diventano irraggiungibili (requireAdmin fa redirect)
+  // senza alcun percorso applicativo di recupero. `id !== session.id` è già
+  // garantito sopra, quindi l'admin che sta agendo (se ancora attivo) viene
+  // sempre conteggiato qui.
+  if (!isAdmin || !abilitato) {
+    const adminAttivi = await prisma.utente.count({
+      where: { isAdmin: true, abilitato: true, NOT: { id } },
+    });
+    if (adminAttivi === 0) {
+      return { error: "Deve restare almeno un amministratore abilitato" };
+    }
+  }
+
   try {
     await prisma.utente.update({
       where: { id },
@@ -197,6 +212,20 @@ export async function toggleUserEnabled(
 
   if (session.id === id) {
     return { error: "Non puoi disabilitare il tuo account" };
+  }
+
+  // Stessa guardia di updateUser: se si sta disabilitando `id` e nessun
+  // altro admin abilitato resterebbe, blocca. Se `id` non è admin questo
+  // conteggio non lo riguarda (adminAttivi include comunque l'admin che sta
+  // agendo, se ancora attivo), quindi non impedisce mai di disabilitare un
+  // utente normale.
+  if (!abilitato) {
+    const adminAttivi = await prisma.utente.count({
+      where: { isAdmin: true, abilitato: true, NOT: { id } },
+    });
+    if (adminAttivi === 0) {
+      return { error: "Deve restare almeno un amministratore abilitato" };
+    }
   }
 
   try {
