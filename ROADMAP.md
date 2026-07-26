@@ -14,6 +14,9 @@ Questo documento è un'analisi fresca: non eredita né presuppone i rilievi di a
 | 🔴 | Da sistemare — impatto reale su sicurezza, dati o capacità di andare in produzione |
 | 🟡 | Da valutare — rilievo valido, non urgente o con una decisione da prendere |
 | 🟢 | Cosmetico — nessun impatto funzionale |
+| ✅ | Risolta — fix applicato e verificato (nota "Fix applicato" nella sezione linkata) |
+
+Il codice di ogni rilievo, nella tabella qui sotto e nel testo, è un link diretto alla sua spiegazione completa.
 
 ---
 
@@ -36,24 +39,53 @@ Eseguita all'inizio dell'analisi, tutto verde:
 
 | Codice | Titolo | Stato |
 |---|---|---|
-| **DEP-01** | Nessun modo di creare il primo utente: app inutilizzabile su DB vuoto | 🔴 |
-| **DEP-02** | `prisma` è devDependency ma il container la invoca a runtime | 🔴 |
-| **DEP-03** | Nessun TLS: con `secure: true` il cookie di sessione non viene salvato | 🔴 |
-| **SEC-01** | Next.js 16.2.10 con 13 advisory high, incluso un bypass del proxy | 🔴 |
-| **LOG-01** | `BACKUP_RETENTION_DAYS` ignorato dallo script di backup | 🔴 |
-| **LOG-02** | Hard-delete fattura + numerazione `max+1` → numeri riusati | 🔴 |
-| **DOC-01** | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
-| **SEC-02** | `columns` dell'export Excel senza tetto → DoS | 🟡 |
-| **SEC-05** | Nessuna protezione "ultimo admin" | 🟡 |
-| **LOG-03** | La fattura emessa resta interamente modificabile, senza storico | 🟡 |
-| **LOG-05** | `getInvoices()` senza paginazione: tutto l'archivio nel browser | 🟡 |
-| **DEP-04…10** | Backup, healthcheck, CI, logging, off-site | 🟡 |
-| altri | vedi sezioni sotto | 🟡/🟢 |
+| [SEC-01](#sec-01) | Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy | 🔴 |
+| [SEC-02](#sec-02) | Array `columns` dell'export Excel senza tetto: DoS autenticato | ✅ |
+| [SEC-03](#sec-03) | `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso | ✅ |
+| [SEC-04](#sec-04) | `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF | ✅ |
+| [SEC-05](#sec-05) | Nessuna protezione "ultimo admin": lockout permanente possibile | ✅ |
+| [SEC-06](#sec-06) | `proxy.ts` lascia passare anche le richieste HEAD | ✅ |
+| [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | 🟡 |
+| [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
+| [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | 🟡 |
+| [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | 🟡 |
+| [SEC-11](#sec-11) | La password tentata può finire nell'audit log | 🟡 |
+| [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
+| [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | 🔴 |
+| [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
+| [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
+| [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
+| [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | 🟡 |
+| [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | 🟡 |
+| [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | 🟡 |
+| [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | 🟡 |
+| [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
+| [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
+| [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | 🟢 |
+| [DEP-01](#dep-01) | Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto | ✅ |
+| [DEP-02](#dep-02) | `prisma` è una devDependency ma il container la invoca a runtime | 🔴 |
+| [DEP-03](#dep-03) | Nessun TLS: con `secure: true` il cookie di sessione non viene salvato | 🔴 |
+| [DEP-04](#dep-04) | Il container di backup installa `gnupg` a ogni avvio | 🟡 |
+| [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | 🟡 |
+| [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | 🟡 |
+| [DEP-07](#dep-07) | Nessuna CI | 🟡 |
+| [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | 🟡 |
+| [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | 🟡 |
+| [DEP-10](#dep-10) | Nessun limite di risorse sui container | 🟢 |
+| [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
+| [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | 🟡 |
+| [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
+| [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
+| [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
+| [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | 🟡 |
+| [QUA-04](#qua-04) | Copertura e2e limitata al login | 🟡 |
+| [QUA-05](#qua-05) | `isBolloCodiceTaken` rilegge la sessione a ogni chiamata | 🟢 |
 
 ---
 
 # Sicurezza
 
+<a id="sec-01"></a>
 ## SEC-01 — Next.js 16.2.10: 13 advisory high, incluso un bypass del proxy 🔴
 
 **Severità:** alta
@@ -79,7 +111,8 @@ Le due `moderate` residue (`uuid` dentro `exceljs`, `valibot` dentro `@prisma/de
 
 ---
 
-## SEC-02 — Array `columns` dell'export Excel senza tetto: DoS autenticato 🟢 risolta
+<a id="sec-02"></a>
+## SEC-02 — Array `columns` dell'export Excel senza tetto: DoS autenticato ✅ risolta
 
 **Severità:** media
 **File:** `lib/validations/invoice-export.ts` (riga 12), `lib/excel/invoices-export.ts` (righe 9-20)
@@ -104,7 +137,8 @@ Aggiunto `scripts/verify-export-columns-bounds.test.ts` (6 test: tetto superato/
 
 ---
 
-## SEC-03 — `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso 🟢 risolta
+<a id="sec-03"></a>
+## SEC-03 — `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso ✅ risolta
 
 **Severità:** bassa (latente, non sfruttabile oggi)
 **File:** `lib/data/invoices.ts` (riga 31), `lib/pdf/types.ts` (riga 87)
@@ -121,7 +155,8 @@ Non c'era leak attivo: l'unico consumatore era `app/api/invoices/[id]/pdf/route.
 
 ---
 
-## SEC-04 — `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF 🟢 risolta
+<a id="sec-04"></a>
+## SEC-04 — `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF ✅ risolta
 
 **Severità:** bassa
 **File:** `lib/validations/pdf-settings.ts` (riga 85), `components/invoices/invoice-pdf-document.tsx` (righe 36-39)
@@ -134,7 +169,8 @@ L'editor non espone il campo (nessun controllo in `pdf-editor.tsx`, confermato p
 
 ---
 
-## SEC-05 — Nessuna protezione "ultimo admin": lockout permanente possibile 🟢 risolta
+<a id="sec-05"></a>
+## SEC-05 — Nessuna protezione "ultimo admin": lockout permanente possibile ✅ risolta
 
 **Severità:** media
 **File:** `lib/actions/users.ts` (`updateUser`, `toggleUserEnabled`)
@@ -158,7 +194,8 @@ Nuovo `scripts/verify-last-admin-guard.test.ts` (analisi statica, stesso approcc
 
 ---
 
-## SEC-06 — `proxy.ts` lascia passare anche le richieste HEAD 🟢 risolta
+<a id="sec-06"></a>
+## SEC-06 — `proxy.ts` lascia passare anche le richieste HEAD ✅ risolta
 
 **Severità:** bassa
 **File:** `proxy.ts` (righe 31-33)
@@ -177,6 +214,7 @@ Nuovo `scripts/verify-proxy-head-method.test.ts` — a differenza di `verify-pro
 
 ---
 
+<a id="sec-07"></a>
 ## SEC-07 — Header `X-Powered-By: Next.js` esposto 🟡
 
 **Severità:** bassa
@@ -186,6 +224,7 @@ Manca `poweredByHeader: false`. L'header rivela framework e, indirettamente, la 
 
 ---
 
+<a id="sec-08"></a>
 ## SEC-08 — CSP con `script-src 'unsafe-inline'` 🟡
 
 **Severità:** bassa (limite noto e documentato)
@@ -197,6 +236,7 @@ La CSP attuale è già un guadagno netto (blocca il caricamento da domini estern
 
 ---
 
+<a id="sec-09"></a>
 ## SEC-09 — Postgres di sviluppo esposto su tutte le interfacce 🟡
 
 **Severità:** bassa
@@ -213,6 +253,7 @@ Senza indirizzo, Docker pubblica su `0.0.0.0`: il DB di sviluppo — credenziali
 
 ---
 
+<a id="sec-10"></a>
 ## SEC-10 — Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` 🟡
 
 **Severità:** bassa
@@ -224,6 +265,7 @@ Senza indirizzo, Docker pubblica su `0.0.0.0`: il DB di sviluppo — credenziali
 
 ---
 
+<a id="sec-11"></a>
 ## SEC-11 — La password tentata può finire nell'audit log 🟡
 
 **Severità:** bassa
@@ -237,6 +279,7 @@ Il commento in `lib/audit/log.ts` (righe 23-24) dice esplicitamente "Non passare
 
 ---
 
+<a id="sec-12"></a>
 ## SEC-12 — Nessuna retention sull'audit log, e dati sanitari senza policy 🟡
 
 **Severità:** media (compliance, non tecnica)
@@ -253,6 +296,7 @@ Il contesto conta: si tratta di un gestionale per uno studio di logopedia. Il co
 
 # Logica / Correttezza
 
+<a id="log-01"></a>
 ## LOG-01 — `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni 🔴
 
 **Severità:** media — perdita di dati silenziosa
@@ -280,6 +324,7 @@ find "$BACKUP_DIR" -type f -name "*.gpg" -mtime +"$BACKUP_RETENTION_DAYS" -exec 
 
 ---
 
+<a id="log-02"></a>
 ## LOG-02 — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi 🔴
 
 **Severità:** media — integrità di un documento fiscale
@@ -305,6 +350,7 @@ In entrambi i casi la scelta va scritta nel README: è una decisione di dominio,
 
 ---
 
+<a id="log-03"></a>
 ## LOG-03 — La fattura emessa resta interamente modificabile, senza storico dei valori 🟡
 
 **Severità:** media
@@ -318,6 +364,7 @@ Il problema non è la modificabilità in sé (serve per correggere errori), ma c
 
 ---
 
+<a id="log-04"></a>
 ## LOG-04 — Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo 🟡
 
 **Severità:** bassa (solo sviluppo)
@@ -337,6 +384,7 @@ Ogni ricompilazione del modulo in dev crea un pool nuovo (fino a 10 connessioni)
 
 ---
 
+<a id="log-05"></a>
 ## LOG-05 — `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser 🟡
 
 **Severità:** media (prestazioni + esposizione dati)
@@ -355,6 +403,7 @@ Lo stesso schema, in scala minore, vale per `getPatients()`, `getPayers()` e `ge
 
 ---
 
+<a id="log-06"></a>
 ## LOG-06 — `nome` e `cognome` dell'utente senza limite di lunghezza 🟡
 
 **Severità:** bassa
@@ -373,6 +422,7 @@ La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copr
 
 ---
 
+<a id="log-07"></a>
 ## LOG-07 — Nessun vincolo sull'anno della fattura 🟡
 
 **Severità:** bassa
@@ -384,6 +434,7 @@ La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copr
 
 ---
 
+<a id="log-08"></a>
 ## LOG-08 — `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 🟡
 
 **Severità:** bassa
@@ -400,6 +451,7 @@ if (Number.isNaN(invoiceId)) return new Response("ID fattura non valido", { stat
 
 ---
 
+<a id="log-09"></a>
 ## LOG-09 — `restorePayer` riporta attivi anche i pazienti archiviati singolarmente 🟡
 
 **Severità:** bassa (comportamento voluto, ma con perdita di informazione)
@@ -411,6 +463,7 @@ Il ripristino di un pagante riattiva **tutti** i suoi pazienti archiviati, senza
 
 ---
 
+<a id="log-10"></a>
 ## LOG-10 — `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai 🟢
 
 **File:** `components/invoices/export-invoices-dialog.tsx` (righe 80-84)
@@ -419,6 +472,7 @@ Ramo morto: `app/api/invoices/export/route.ts` restituisce 400, 401, 404 e 429, 
 
 ---
 
+<a id="log-11"></a>
 ## LOG-11 — `archivePatient` non verifica lo stato di partenza 🟢
 
 **File:** `lib/actions/patients.ts` (righe 122-133)
@@ -431,7 +485,8 @@ A differenza di `restorePatient` (che filtra su `archiviato: true` e controlla `
 
 > Il progetto non è ancora in produzione. **DEP-01, DEP-02 e DEP-03 impediscono che un primo deploy funzioni**: vanno affrontati per primi.
 
-## DEP-01 — Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto 🟢 risolta
+<a id="dep-01"></a>
+## DEP-01 — Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto ✅ risolta
 
 **Severità:** bloccante
 **File:** `lib/actions/users.ts` (riga 32), `prisma/` (nessun seed), `package.json`
@@ -448,6 +503,7 @@ Ogni percorso di creazione utente passa da `requireAdmin()`. Su un database appe
 
 ---
 
+<a id="dep-02"></a>
 ## DEP-02 — `prisma` è una devDependency ma il container la invoca a runtime 🔴
 
 **Severità:** alta
@@ -484,6 +540,7 @@ Non trovandola in locale, `npx` prova a **scaricarla dal registry npm a ogni avv
 
 ---
 
+<a id="dep-03"></a>
 ## DEP-03 — Nessun TLS: con `secure: true` il cookie di sessione non viene salvato 🔴
 
 **Severità:** alta
@@ -506,6 +563,7 @@ Non c'è reverse proxy, non c'è terminazione TLS, non ci sono certificati. Ma i
 
 ---
 
+<a id="dep-04"></a>
 ## DEP-04 — Il container di backup installa `gnupg` a ogni avvio 🟡
 
 **Severità:** media
@@ -521,6 +579,7 @@ Stesso vizio di DEP-02: dipendenza dalla rete a ogni riavvio. Se `apk` fallisce 
 
 ---
 
+<a id="dep-05"></a>
 ## DEP-05 — Nessun healthcheck sul servizio `app` 🟡
 
 **Severità:** media
@@ -532,6 +591,7 @@ Il servizio `db` ha un healthcheck corretto (`pg_isready`); `app` no. Docker con
 
 ---
 
+<a id="dep-06"></a>
 ## DEP-06 — Backup mai verificati, chiave e copie sulla stessa macchina 🟡
 
 **Severità:** media
@@ -547,6 +607,7 @@ Il backup cifrato con GPG è ben fatto (AES256, `umask 077`, chiave obbligatoria
 
 ---
 
+<a id="dep-07"></a>
 ## DEP-07 — Nessuna CI 🟡
 
 **Severità:** media
@@ -556,6 +617,7 @@ Il progetto ha **233 test**, di cui una trentina di regressione su sicurezza scr
 
 ---
 
+<a id="dep-08"></a>
 ## DEP-08 — Nessun logging strutturato né rotazione 🟡
 
 **Severità:** media
@@ -567,6 +629,7 @@ Gli errori finiscono su `console.error` → stdout del container → driver di l
 
 ---
 
+<a id="dep-09"></a>
 ## DEP-09 — Indirizzo LAN cablato in `next.config.ts` 🟡
 
 **Severità:** bassa
@@ -582,6 +645,7 @@ Valore d'ambiente specifico di una macchina in un file versionato. Innocuo (vale
 
 ---
 
+<a id="dep-10"></a>
 ## DEP-10 — Nessun limite di risorse sui container 🟢
 
 **File:** `docker-compose.prod.yml`
@@ -592,6 +656,7 @@ Nessun `mem_limit`/`cpus`. Su una VPS piccola, un picco di generazione PDF o un 
 
 # Documentazione
 
+<a id="doc-01"></a>
 ## DOC-01 — `README.md` è ancora il boilerplate di `create-next-app` 🔴
 
 **Severità:** alta per un progetto self-hosted
@@ -610,6 +675,7 @@ Il README parla di `yarn dev`, di `next/font` e di come deployare su Vercel — 
 
 ---
 
+<a id="doc-02"></a>
 ## DOC-02 — Riferimenti a documenti che non esistono 🟡
 
 **File:** tre punti nel codice
@@ -624,6 +690,7 @@ In tutti e tre i casi il commento contiene già la spiegazione sostanziale: bast
 
 ---
 
+<a id="doc-03"></a>
 ## DOC-03 — `.gitignore` esclude `docs/` e i file di roadmap 🟡
 
 **File:** `.gitignore` (righe 55 e 57)
@@ -641,13 +708,15 @@ Per lo stesso motivo questo file si chiama `ROADMAP.md` e non `ROADMAP_FIX.md`: 
 
 # Qualità / Manutenzione
 
+<a id="qua-01"></a>
 ## QUA-01 — 2 warning ESLint su `mesiValues` 🟢
 
 **File:** `components/invoices/invoice-form.tsx` (riga 121)
 
 `react-hooks/exhaustive-deps`: `useWatch(...) ?? []` è un'espressione che produce un riferimento nuovo a ogni render, usata come dipendenza di due `useMemo` (righe 126 e 134), che quindi non memoizzano nulla. Cosmetico e a costo quasi nullo: avvolgere `mesiValues` in un proprio `useMemo`.
 
-## QUA-02 — `any` espliciti in `user-form.tsx` 🟢 risolta
+<a id="qua-02"></a>
+## QUA-02 — `any` espliciti in `user-form.tsx` ✅ risolta
 
 **File:** `components/users/user-form.tsx` (righe 108-113)
 
@@ -655,18 +724,21 @@ Due `eslint-disable-next-line @typescript-eslint/no-explicit-any` per tipizzare 
 
 **Fix applicato:** il componente `UserFields` condiviso è stato rimosso; i campi comuni (`username`, `nome`, `cognome`, `isAdmin`, `abilitato`) sono ora duplicati direttamente in `UserCreateForm` e `UserEditForm`, ciascuno tipizzato sul proprio `UserCreateFormData`/`UserUpdateFormData` senza cast. Effetto collaterale del lavoro su `PIANO_CREAZIONE_UTENTI.md` (il campo password, ora estratto in `TemporaryPasswordField`, era l'unico motivo per cui `UserFields` doveva restare generico/`any`).
 
+<a id="qua-03"></a>
 ## QUA-03 — `pdf-editor.tsx` a 1848 righe 🟡
 
 **File:** `components/settings/pdf-editor.tsx`
 
 Il file più grande del progetto, il triplo del secondo (`invoices-manager.tsx`, 854). Parte dell'estrazione è già stata fatta (`pdf-editor-mesi-panel`, `pdf-editor-rich-*`, `use-rich-block-editor`), il resto — gestione della history undo/redo, drag-and-drop con snap, pannello proprietà, anteprima — è ancora tutto insieme. Non è un bug, ma è il punto in cui una modifica futura ha più probabilità di rompere qualcosa di non correlato.
 
+<a id="qua-04"></a>
 ## QUA-04 — Copertura e2e limitata al login 🟡
 
 **File:** `e2e/login.spec.ts` (unico spec)
 
 La logica pura è molto ben coperta a livello unitario, ma i flussi che attraversano davvero lo stack — creare una fattura, scaricarne il PDF, esportare in Excel, archiviare un pagante con cascata — non hanno alcun test end-to-end. Sono proprio i flussi in cui un aggiornamento di Next.js o Prisma (cfr. SEC-01) può rompere qualcosa che nessun unit test vede.
 
+<a id="qua-05"></a>
 ## QUA-05 — `isBolloCodiceTaken` rilegge la sessione a ogni chiamata 🟢
 
 **File:** `lib/actions/invoices.ts` (righe 54-58)
