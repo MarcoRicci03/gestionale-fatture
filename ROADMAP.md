@@ -51,7 +51,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
 | [SEC-11](#sec-11) | La password tentata può finire nell'audit log | ✅ |
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
-| [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | 🔴 |
+| [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | ✅ |
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
@@ -302,7 +302,7 @@ Il contesto conta: si tratta di un gestionale per uno studio di logopedia. Il co
 # Logica / Correttezza
 
 <a id="log-01"></a>
-## LOG-01 — `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni 🔴
+## LOG-01 — `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni ✅ risolta
 
 **Severità:** media — perdita di dati silenziosa
 **File:** `scripts/backup-db.sh` (righe 10 e 34)
@@ -313,19 +313,23 @@ La variabile viene dichiarata con un default…
 : "${BACKUP_RETENTION_DAYS:=14}"
 ```
 
-…ma non viene **mai usata**. La cancellazione ha il numero cablato:
+…ma non veniva **mai usata**. La cancellazione aveva il numero cablato:
 
 ```sh
 find /backups -type f -name "*.gpg" -mtime +14 -exec rm {} \;
 ```
 
-`.env.prod.example` (riga 53) documenta la variabile come se funzionasse: *"Per quanti giorni conservare i dump in ./backups (default: 14)"*. Chi imposta `BACKUP_RETENTION_DAYS=90` per tenere un trimestre di storico continua a perdere i backup dopo 14 giorni, e se ne accorge il giorno in cui serve un ripristino vecchio. Anche `README-BACKUP.md` ripete il "14 giorni" come se fosse un dato di fatto.
+`.env.prod.example` (riga 53) documenta la variabile come se funzionasse: *"Per quanti giorni conservare i dump in ./backups (default: 14)"*. Chi impostava `BACKUP_RETENTION_DAYS=90` per tenere un trimestre di storico continuava comunque a perdere i backup dopo 14 giorni, accorgendosene solo il giorno in cui serviva un ripristino vecchio. Anche `README-BACKUP.md` ripeteva il "14 giorni" come se fosse un dato di fatto.
 
-**Fix:**
+**Fix applicato:**
 ```sh
 find "$BACKUP_DIR" -type f -name "*.gpg" -mtime +"$BACKUP_RETENTION_DAYS" -exec rm {} \;
 ```
-(usare anche `$BACKUP_DIR` invece di `/backups` cablato, per coerenza con la riga 9) e aggiornare `README-BACKUP.md` in modo che rimandi alla variabile invece di ripetere il numero.
+Anche `$BACKUP_DIR` invece di `/backups` cablato, per coerenza con la riga 9. `README-BACKUP.md` ora rimanda alla variabile invece di ripetere il numero.
+
+Verificato con un test comportamentale manuale (file `.gpg` con età diverse in una directory temporanea, non solo lettura statica dello script): con `BACKUP_RETENTION_DAYS=90` un file di 20 giorni — che con il bug sarebbe stato cancellato comunque — resta ora correttamente conservato.
+
+Nuovo `scripts/verify-backup-retention.test.ts` (analisi statica, stesso approccio di `verify-container-timezone.test.ts`: lo script gira come entrypoint di un container Docker, non eseguibile end-to-end in Vitest). Il test è stato a sua volta verificato contro la versione con il bug per confermare che l'avrebbe intercettato (2 delle 4 asserzioni falliscono sulla riga cablata originale).
 
 ---
 

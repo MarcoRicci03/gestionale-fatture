@@ -31,7 +31,7 @@ while true; do
     rm -f "$filename"
   fi
 
-  find /backups -type f -name "*.gpg" -mtime +14 -exec rm {} \;
+  find "$BACKUP_DIR" -type f -name "*.gpg" -mtime +"$BACKUP_RETENTION_DAYS" -exec rm {} \;
 
   sleep "$BACKUP_INTERVAL_SECONDS"
 done

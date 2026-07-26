@@ -1,6 +1,6 @@
 # Backup del database — ripristino
 
-I backup prodotti dal servizio `backup` in `docker-compose.prod.yml` sono dump `pg_dump` compressi con `gzip` e cifrati con GPG (AES256, simmetrico), salvati in `./backups` con nome `<database>-<timestamp>.sql.gz.gpg`. La chiave di cifratura è la variabile d'ambiente `BACKUP_ENCRYPTION_KEY` (definita in `.env.prod`). I file più vecchi di 14 giorni vengono rimossi automaticamente dallo script.
+I backup prodotti dal servizio `backup` in `docker-compose.prod.yml` sono dump `pg_dump` compressi con `gzip` e cifrati con GPG (AES256, simmetrico), salvati in `./backups` con nome `<database>-<timestamp>.sql.gz.gpg`. La chiave di cifratura è la variabile d'ambiente `BACKUP_ENCRYPTION_KEY` (definita in `.env.prod`). I file più vecchi di `BACKUP_RETENTION_DAYS` giorni (variabile d'ambiente, default 14 se non impostata — vedi `.env.prod.example`) vengono rimossi automaticamente dallo script.
 
 ## Procedura di ripristino
 
