@@ -158,7 +158,7 @@ Nuovo `scripts/verify-last-admin-guard.test.ts` (analisi statica, stesso approcc
 
 ---
 
-## SEC-06 — `proxy.ts` lascia passare anche le richieste HEAD 🟡
+## SEC-06 — `proxy.ts` lascia passare anche le richieste HEAD 🟢 risolta
 
 **Severità:** bassa
 **File:** `proxy.ts` (righe 31-33)
@@ -169,9 +169,11 @@ if (request.method !== "GET") {
 }
 ```
 
-La deroga esiste per le Server Actions (POST), che si autenticano da sole — scelta corretta e documentata. Ma la condizione include anche **HEAD**, che Next.js instrada come una GET: una HEAD su una pagina protetta salta il controllo di sessione del proxy. Il corpo non viene restituito, e `requireSession()` nel layout protetto blocca comunque l'accesso reale, quindi non c'è leak di dati; resta però un buco nell'invariante che il file dichiara di garantire.
+La deroga esiste per le Server Actions (POST), che si autenticano da sole — scelta corretta e documentata. Ma la condizione includeva anche **HEAD**, che Next.js instrada come una GET: una HEAD su una pagina protetta saltava il controllo di sessione del proxy. Il corpo non veniva restituito, e `requireSession()` nel layout protetto bloccava comunque l'accesso reale, quindi non c'era leak di dati; restava però un buco nell'invariante che il file dichiara di garantire.
 
-**Fix:** `if (request.method !== "GET" && request.method !== "HEAD")`. Aggiungere il caso a `verify-proxy-matcher.test.ts`.
+**Fix applicato:** `if (request.method !== "GET" && request.method !== "HEAD")`.
+
+Nuovo `scripts/verify-proxy-head-method.test.ts` — a differenza di `verify-proxy-matcher.test.ts` (che testa il matcher come RegExp standard senza invocare la funzione), qui serve il comportamento vero: `proxy()` chiamata con una `NextRequest` reale (costruibile senza un server Next.js in esecuzione), verificando che HEAD non autenticata venga reindirizzata a `/login` come una GET, che GET resti invariata, e che POST continui a passare senza reindirizzamento.
 
 ---
 

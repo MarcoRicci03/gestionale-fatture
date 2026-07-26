@@ -28,7 +28,14 @@ export async function proxy(request: NextRequest) {
   // requireAdmin nell'handler), come le Server Action. L'invariante è
   // garantita da `npm run verify:api-routes-auth`
   // (scripts/verify-api-routes-auth.ts).
-  if (request.method !== "GET") {
+  //
+  // HEAD va trattato come GET (Next.js instrada le HEAD sulle stesse route):
+  // senza escluderlo esplicitamente, una richiesta HEAD su una pagina
+  // protetta salterebbe il controllo di sessione qui sotto (SEC-06). Nessun
+  // leak di dati anche prima di questo fix — requireSession() nel layout
+  // protetto blocca comunque l'accesso reale — ma l'invariante che questo
+  // file dichiara di garantire aveva un buco.
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return NextResponse.next();
   }
 
