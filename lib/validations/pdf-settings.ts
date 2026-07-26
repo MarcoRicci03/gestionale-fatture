@@ -82,7 +82,18 @@ export const pdfSettingsSchema = z.object({
   marginRight: z.number().int().min(0).max(400).default(40),
   marginBottom: z.number().int().min(0).max(400).default(40),
   marginLeft: z.number().int().min(0).max(400).default(40),
-  fontFamily: z.string().min(1).max(100).default("Helvetica"),
+  // Solo le 3 famiglie che getFontFamily (invoice-pdf-document.tsx) sa
+  // risolvere in un font PDF standard reale (con le relative varianti
+  // Bold/Italic/BoldItalic): qualunque altra stringa produceva un font non
+  // registrato in @react-pdf/renderer, che lancia in generazione. L'editor
+  // non espone un controllo per questo campo (l'unico modo di impostarlo
+  // era chiamare updatePdfSettings direttamente), ma restava comunque
+  // raggiungibile da un client autenticato in quanto Server Action — e
+  // l'effetto, una volta rotto, si congelava in pdfLayoutSnapshot su ogni
+  // fattura creata da quel momento (lib/actions/invoices.ts).
+  fontFamily: z
+    .enum(["Helvetica", "Times-Roman", "Courier"])
+    .default("Helvetica"),
   fontSizeBase: z.number().int().min(6).max(72).default(11),
   // Tetto largo perché il layout può crescere con molti blocchi di testo/mesi
   // costruiti a mano nell'editor drag-and-drop: serve solo a impedire un

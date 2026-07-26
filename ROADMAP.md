@@ -121,16 +121,16 @@ Non c'era leak attivo: l'unico consumatore era `app/api/invoices/[id]/pdf/route.
 
 ---
 
-## SEC-04 — `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF 🟡
+## SEC-04 — `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF 🟢 risolta
 
 **Severità:** bassa
 **File:** `lib/validations/pdf-settings.ts` (riga 85), `components/invoices/invoice-pdf-document.tsx` (righe 36-39)
 
-Lo schema valida `fontFamily: z.string().min(1).max(100)`. `getFontFamily` gestisce esplicitamente solo `Helvetica`, `Times-Roman` e `Courier`; per qualunque altro valore ricade su `${base}-Bold` / `${base}-Italic`, e `@react-pdf/renderer` lancia su un font non registrato.
+Lo schema validava `fontFamily: z.string().min(1).max(100)`. `getFontFamily` gestisce esplicitamente solo `Helvetica`, `Times-Roman` e `Courier`; per qualunque altro valore ricadeva su `${base}-Bold` / `${base}-Italic`, e `@react-pdf/renderer` lanciava su un font non registrato.
 
-L'editor non espone il campo (nessun controllo in `pdf-editor.tsx`), quindi è raggiungibile solo chiamando direttamente la Server Action `updatePdfSettings` — cosa che, essendo un endpoint RPC, un client autenticato può fare. L'effetto è persistente e non ovvio da diagnosticare: la generazione PDF va in 500 per quell'utente, e il valore rotto viene **congelato in `pdfLayoutSnapshot`** su ogni fattura creata da quel momento (`lib/actions/invoices.ts` riga 170), quindi resta anche dopo aver corretto le impostazioni.
+L'editor non espone il campo (nessun controllo in `pdf-editor.tsx`, confermato per l'intero file), quindi era raggiungibile solo chiamando direttamente la Server Action `updatePdfSettings` — cosa che, essendo un endpoint RPC, un client autenticato può fare. L'effetto sarebbe stato persistente e non ovvio da diagnosticare: la generazione PDF sarebbe andata in 500 per quell'utente, e il valore rotto si sarebbe **congelato in `pdfLayoutSnapshot`** su ogni fattura creata da quel momento (`lib/actions/invoices.ts` riga 170), restando anche dopo aver corretto le impostazioni.
 
-**Fix:** `fontFamily: z.enum(["Helvetica", "Times-Roman", "Courier"]).default("Helvetica")`.
+**Fix applicato:** `fontFamily: z.enum(["Helvetica", "Times-Roman", "Courier"]).default("Helvetica")`. Nessun altro punto del codebase richiedeva modifiche: `PdfLayout.fontFamily`/`PdfSettingsInput.fontFamily` restano tipizzati `string` (più ampio dell'enum, quindi compatibile senza cast) e nessun `buildMockInvoice`/chiamante imposta un valore diverso dai tre ammessi. Nuovo `scripts/verify-pdf-font-family-enum.test.ts` (5 test: rifiuto di un valore arbitrario, accettazione dei tre valori validi, default).
 
 ---
 
