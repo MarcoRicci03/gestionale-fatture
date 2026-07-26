@@ -20,6 +20,7 @@ export const SAFE_USER_SELECT = {
   specializzazione: true,
   isAdmin: true,
   abilitato: true,
+  mustChangePassword: true,
   createdAt: true,
 } satisfies Prisma.UtenteSelect;
 

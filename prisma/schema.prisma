@@ -29,6 +29,12 @@ model Utente {
   // Così un cambio password revoca immediatamente ogni sessione firmata prima
   // (es. un cookie rubato), anche se il JWT non è ancora scaduto.
   tokenVersion     Int              @default(0)
+  // Impostato a true quando la password è stata scelta da un admin
+  // (createUser, resetUserPassword, seed del primo admin): è una credenziale
+  // temporanea che l'utente non ha scelto e che dovrebbe sostituire.
+  // changePassword (lib/actions/account.ts) lo riporta a false. Non blocca
+  // l'accesso: alimenta solo l'avviso nel layout protetto.
+  mustChangePassword Boolean        @default(false)
   createdAt        DateTime         @default(now())
 
   paganti          Pagante[]

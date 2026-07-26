@@ -53,6 +53,11 @@ export async function createUser(
         passwordHash: await hashPassword(password),
         isAdmin,
         abilitato,
+        // La password è stata scelta dall'admin, non dall'utente: è una
+        // credenziale temporanea (vedi TemporaryPasswordField). Segnala
+        // all'utente di cambiarla, senza bloccarlo (lib/auth/session.ts,
+        // components/account/temporary-password-notice.tsx).
+        mustChangePassword: true,
       },
     });
     createdUserId = created.id;
@@ -162,6 +167,9 @@ export async function resetUserPassword(
         // Revoca ogni sessione dell'utente aperta con la vecchia password
         // (vedi il commento su Utente.tokenVersion in schema.prisma).
         tokenVersion: { increment: 1 },
+        // Come createUser: la nuova password è stata scelta dall'admin, non
+        // dall'utente che la riceverà.
+        mustChangePassword: true,
       },
     });
   } catch (error) {

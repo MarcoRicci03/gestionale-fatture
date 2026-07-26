@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { TemporaryPasswordField } from "@/components/users/temporary-password-field";
 import { resetPasswordSchema, type ResetPasswordFormData } from "@/lib/validations/user";
 import { resetUserPassword } from "@/lib/actions/users";
 
@@ -19,13 +18,16 @@ export function ResetPasswordForm({ userId, onSuccess }: ResetPasswordFormProps)
   const [isPending, startTransition] = useTransition();
 
   const {
-    register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: "" },
   });
+
+  const password = useWatch({ control, name: "password" });
 
   const onSubmit = (data: ResetPasswordFormData) => {
     setServerError(null);
@@ -41,13 +43,14 @@ export function ResetPasswordForm({ userId, onSuccess }: ResetPasswordFormProps)
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="password">Nuova password</Label>
-        <Input id="password" type="password" {...register("password")} />
-        {errors.password && (
-          <p className="text-sm text-destructive">{errors.password.message}</p>
-        )}
-      </div>
+      <TemporaryPasswordField
+        label="Nuova password"
+        value={password ?? ""}
+        onValueChange={(value) =>
+          setValue("password", value, { shouldValidate: true })
+        }
+        error={errors.password?.message}
+      />
 
       {serverError && (
         <p className="text-sm text-destructive" role="alert">

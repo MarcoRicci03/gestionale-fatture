@@ -87,15 +87,22 @@ export function UsersManager({ users }: UsersManagerProps) {
                     </TableCell>
                     <TableCell>{user.isAdmin ? "Admin" : "Utente"}</TableCell>
                     <TableCell>
-                      {user.abilitato ? (
-                        <span className="inline-flex items-center gap-1 text-green-600">
-                          <CheckCircle className="h-4 w-4" /> Abilitato
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-destructive">
-                          <Ban className="h-4 w-4" /> Disabilitato
-                        </span>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {user.abilitato ? (
+                          <span className="inline-flex items-center gap-1 text-green-600">
+                            <CheckCircle className="h-4 w-4" /> Abilitato
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-destructive">
+                            <Ban className="h-4 w-4" /> Disabilitato
+                          </span>
+                        )}
+                        {user.mustChangePassword && (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                            <KeyRound className="h-3.5 w-3.5" /> Password temporanea
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="flex justify-end gap-1">
                       <Tooltip content="Reset password">
@@ -162,6 +169,11 @@ export function UsersManager({ users }: UsersManagerProps) {
                 <p className="text-sm text-muted-foreground">
                   Ruolo: {user.isAdmin ? "Admin" : "Utente"}
                 </p>
+                {user.mustChangePassword && (
+                  <p className="inline-flex items-center gap-1 text-xs text-amber-600">
+                    <KeyRound className="h-3.5 w-3.5" /> Password temporanea
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-1 border-t pt-3">
                   <Tooltip content="Reset password">
                     <Button

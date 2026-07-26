@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TemporaryPasswordField } from "@/components/users/temporary-password-field";
 import {
   userCreateSchema,
   userUpdateSchema,
@@ -27,6 +28,8 @@ function UserCreateForm({ onSuccess }: { onSuccess?: () => void }) {
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<UserCreateFormData>({
     resolver: zodResolver(userCreateSchema),
@@ -39,6 +42,8 @@ function UserCreateForm({ onSuccess }: { onSuccess?: () => void }) {
       abilitato: true,
     } satisfies UserCreateFormData,
   });
+
+  const password = useWatch({ control, name: "password" });
 
   const onSubmit = (data: UserCreateFormData) => {
     setServerError(null);
@@ -54,7 +59,44 @@ function UserCreateForm({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <UserFields register={register} errors={errors} showPassword />
+      <div className="space-y-2">
+        <Label htmlFor="username">Username</Label>
+        <Input id="username" {...register("username")} />
+        {errors.username && (
+          <p className="text-sm text-destructive">{errors.username.message}</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="nome">Nome</Label>
+          <Input id="nome" {...register("nome")} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cognome">Cognome</Label>
+          <Input id="cognome" {...register("cognome")} />
+        </div>
+      </div>
+
+      <TemporaryPasswordField
+        value={password ?? ""}
+        onValueChange={(value) =>
+          setValue("password", value, { shouldValidate: true })
+        }
+        error={errors.password?.message}
+        autoGenerate
+      />
+
+      <div className="flex items-center gap-2">
+        <input id="isAdmin" type="checkbox" {...register("isAdmin")} />
+        <Label htmlFor="isAdmin">Amministratore</Label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input id="abilitato" type="checkbox" {...register("abilitato")} />
+        <Label htmlFor="abilitato">Account abilitato</Label>
+      </div>
+
       <SubmitButton isPending={isPending} serverError={serverError} label="Crea utente" />
     </form>
   );
@@ -99,23 +141,6 @@ function UserEditForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <UserFields register={register} errors={errors} />
-      <SubmitButton isPending={isPending} serverError={serverError} label="Aggiorna" />
-    </form>
-  );
-}
-
-type FieldProps = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  register: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  errors: any;
-  showPassword?: boolean;
-};
-
-function UserFields({ register, errors, showPassword }: FieldProps) {
-  return (
-    <>
       <div className="space-y-2">
         <Label htmlFor="username">Username</Label>
         <Input id="username" {...register("username")} />
@@ -135,16 +160,6 @@ function UserFields({ register, errors, showPassword }: FieldProps) {
         </div>
       </div>
 
-      {showPassword && (
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" {...register("password")} />
-          {errors.password && (
-            <p className="text-sm text-destructive">{errors.password.message}</p>
-          )}
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
         <input id="isAdmin" type="checkbox" {...register("isAdmin")} />
         <Label htmlFor="isAdmin">Amministratore</Label>
@@ -154,7 +169,9 @@ function UserFields({ register, errors, showPassword }: FieldProps) {
         <input id="abilitato" type="checkbox" {...register("abilitato")} />
         <Label htmlFor="abilitato">Account abilitato</Label>
       </div>
-    </>
+
+      <SubmitButton isPending={isPending} serverError={serverError} label="Aggiorna" />
+    </form>
   );
 }
 

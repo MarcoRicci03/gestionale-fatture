@@ -15,6 +15,7 @@ export type Session = Pick<
   | "isAdmin"
   | "abilitato"
   | "specializzazione"
+  | "mustChangePassword"
 >;
 
 export async function getSession(): Promise<Session | null> {
@@ -58,6 +59,7 @@ export async function getSession(): Promise<Session | null> {
     isAdmin: user.isAdmin,
     abilitato: user.abilitato,
     specializzazione: user.specializzazione,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 

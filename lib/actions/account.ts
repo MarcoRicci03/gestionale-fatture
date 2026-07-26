@@ -67,6 +67,10 @@ export async function changePassword(
         // un cookie rubato): vedi il commento su Utente.tokenVersion in
         // schema.prisma.
         tokenVersion: { increment: 1 },
+        // L'utente ha scelto la propria password: l'avviso di password
+        // temporanea (impostato da createUser/resetUserPassword/seed) non
+        // ha più motivo di esistere.
+        mustChangePassword: false,
       },
     });
     updatedTokenVersion = updated.tokenVersion;

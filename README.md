@@ -1,5 +1,28 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Primo avvio (creazione del primo amministratore)
+
+Su un database appena migrato la tabella utenti è vuota: nessuno può accedere,
+perché la creazione di nuovi utenti richiede già una sessione admin. Prima di
+qualunque altra cosa, dopo aver eseguito le migration
+(`npx prisma migrate dev` / `npx prisma migrate deploy`), va lanciato lo script
+di bootstrap:
+
+```sh
+SEED_ADMIN_USERNAME=admin SEED_ADMIN_PASSWORD='una-password-di-almeno-12-caratteri' npm run seed
+```
+
+Lo script è idempotente: se esiste già un amministratore non fa nulla. La
+password impostata è temporanea (l'app lo segnala all'accesso finché non
+viene cambiata da `/account`). In produzione, con lo stack Docker:
+
+```sh
+docker compose -f docker-compose.prod.yml exec app node prisma/seed.mjs
+```
+
+leggendo `SEED_ADMIN_USERNAME`/`SEED_ADMIN_PASSWORD` da `.env.prod` (vedi
+`.env.prod.example`).
+
 ## Getting Started
 
 First, run the development server:
