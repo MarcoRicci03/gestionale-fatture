@@ -1728,7 +1728,14 @@ function Block({
       aria-label={`Blocco ${PRESETS[blocco.tipo].label}${isSelected ? ", selezionato" : ""}`}
       onPointerDown={handlePointerDown}
       onKeyDown={(e) => {
-        if (isPreview) return;
+        // Quando il blocco è in editing, l'editor TipTap nidificato
+        // (RichTextBlockEditor) è un contenteditable dentro questo stesso
+        // div: un keydown di Spazio/Invio digitato lì risale (bubbling) fino
+        // a qui. Senza questa guardia, preventDefault() sotto blocca
+        // l'inserimento del carattere nel testo — stesso motivo per cui
+        // handlePointerDown già ignora i click dentro
+        // "[data-rich-editor-content]".
+        if (isPreview || isEditing) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
