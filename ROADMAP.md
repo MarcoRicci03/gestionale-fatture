@@ -48,7 +48,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | 🟡 |
 | [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
 | [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | 🟡 |
-| [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | 🟡 |
+| [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
 | [SEC-11](#sec-11) | La password tentata può finire nell'audit log | 🟡 |
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | 🔴 |
@@ -255,14 +255,16 @@ Senza indirizzo, Docker pubblica su `0.0.0.0`: il DB di sviluppo — credenziali
 ---
 
 <a id="sec-10"></a>
-## SEC-10 — Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` 🟡
+## SEC-10 — Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` ✅ risolta
 
 **Severità:** bassa
 **File:** `e2e/global-setup.ts`, `e2e/fixtures/test-user.ts`
 
-`globalSetup` fa `prisma.utente.upsert` di `e2e_test` / `E2ePassw0rd!` con `abilitato: true` sul database indicato da `DATABASE_URL`, qualunque esso sia. Un `npm run test:e2e` lanciato per errore con l'ambiente di produzione caricato crea un account funzionante con credenziali pubbliche (sono in un file versionato) sul database reale.
+`globalSetup` fa `prisma.utente.upsert` di `e2e_test` / `E2ePassw0rd!` con `abilitato: true` sul database indicato da `DATABASE_URL`, qualunque esso sia. Un `npm run test:e2e` lanciato per errore con l'ambiente di produzione caricato creava un account funzionante con credenziali pubbliche (sono in un file versionato) sul database reale.
 
-**Fix:** guardia all'inizio di `globalSetup` che rifiuta di procedere se `NODE_ENV === "production"` o se l'host in `DATABASE_URL` non è `localhost`/`127.0.0.1`.
+**Fix applicato:** nuovo `e2e/safe-test-environment.ts` (`assertSafeTestEnvironment`), funzione pura e parametrizzata (non legge `process.env` direttamente, per essere testabile senza manipolare lo stato globale del processo) che rifiuta di procedere se `NODE_ENV === "production"` o se l'host di `DATABASE_URL` non è `localhost`/`127.0.0.1`. Chiamata in cima a `globalSetup`, **prima** di importare `lib/prisma`/`hashPassword`: verificato con un probe reale (`npx tsx`, `NODE_ENV=production`) che la guardia lancia immediatamente, senza alcun tentativo di connessione al database.
+
+Nuovo `scripts/verify-e2e-safe-environment.test.ts` (7 test: `NODE_ENV=production` rifiutato anche con DB locale, `DATABASE_URL` assente/non parsabile, host remoto rifiutato, `localhost`/`127.0.0.1` accettati, `NODE_ENV` assente accettato). Vive in `scripts/`, non accanto al modulo in `e2e/`, perché `vitest.config.ts` esclude `**/e2e/**` dalla raccolta test (quella cartella è di Playwright).
 
 ---
 
