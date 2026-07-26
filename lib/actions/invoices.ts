@@ -70,20 +70,36 @@ type RelationValidationResult =
   | { error: string }
   | { payer: Pagante; patient: Paziente };
 
+// `unchanged` è passato solo da updateInvoice: se l'id inviato coincide con
+// quello già salvato sulla fattura, il filtro archiviato: false viene
+// esentato per quella relazione, così un pagante/paziente archiviato DOPO
+// l'emissione della fattura non impedisce di continuare a modificarla senza
+// doverlo prima riassegnare. Riassegnare a un contatto diverso, o creare una
+// nuova fattura (createInvoice non passa questo parametro), richiede sempre
+// un contatto attivo.
 async function validateInvoiceRelations(
   userId: number,
   id_Pagante: number,
-  id_Paziente: number
+  id_Paziente: number,
+  unchanged?: { id_Pagante: number; id_Paziente: number }
 ): Promise<RelationValidationResult> {
   const payer = await prisma.pagante.findFirst({
-    where: { id: id_Pagante, id_Utente: userId, archiviato: false },
+    where: {
+      id: id_Pagante,
+      id_Utente: userId,
+      ...(unchanged?.id_Pagante === id_Pagante ? {} : { archiviato: false }),
+    },
   });
   if (!payer) {
     return { error: "Pagante selezionato non valido" };
   }
 
   const patient = await prisma.paziente.findFirst({
-    where: { id: id_Paziente, id_Utente: userId, archiviato: false },
+    where: {
+      id: id_Paziente,
+      id_Utente: userId,
+      ...(unchanged?.id_Paziente === id_Paziente ? {} : { archiviato: false }),
+    },
   });
   if (!patient) {
     return { error: "Paziente selezionato non valido" };
@@ -271,7 +287,8 @@ export async function updateInvoice(
   const relationResult = await validateInvoiceRelations(
     userId,
     id_Pagante,
-    id_Paziente
+    id_Paziente,
+    { id_Pagante: existing.id_Pagante, id_Paziente: existing.id_Paziente }
   );
   if ("error" in relationResult) {
     return { error: relationResult.error };

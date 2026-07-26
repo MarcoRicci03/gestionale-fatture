@@ -69,6 +69,32 @@ describe("updateInvoice blocca numero e anno", () => {
   it("verifica la consequenzialità cronologica chiamando findChronologyConflict", () => {
     expect(body).toMatch(/findChronologyConflict\s*\(/);
   });
+
+  // Un pagante/paziente archiviato DOPO l'emissione di una fattura non deve
+  // impedirne la modifica se non lo si sta riassegnando: validateInvoiceRelations
+  // esenta dal filtro archiviato: false solo l'id che coincide con quello già
+  // salvato (vedi lib/invoices/contact-options.ts per il fix lato form).
+  it("passa a validateInvoiceRelations gli id_Pagante/id_Paziente esistenti", () => {
+    expect(body).toMatch(
+      /validateInvoiceRelations\(\s*userId,\s*id_Pagante,\s*id_Paziente,\s*\{\s*id_Pagante:\s*existing\.id_Pagante,\s*id_Paziente:\s*existing\.id_Paziente\s*\}/
+    );
+  });
+});
+
+describe("validateInvoiceRelations esenta dal filtro archiviato solo l'id invariato", () => {
+  it("accetta un parametro opzionale 'unchanged'", () => {
+    expect(source).toMatch(
+      /unchanged\?:\s*\{\s*id_Pagante:\s*number;\s*id_Paziente:\s*number\s*\}/
+    );
+  });
+
+  it("il filtro archiviato: false su pagante è condizionato a unchanged.id_Pagante", () => {
+    expect(source).toMatch(/unchanged\?\.id_Pagante\s*===\s*id_Pagante/);
+  });
+
+  it("il filtro archiviato: false su paziente è condizionato a unchanged.id_Paziente", () => {
+    expect(source).toMatch(/unchanged\?\.id_Paziente\s*===\s*id_Paziente/);
+  });
 });
 
 describe("createInvoice verifica la consequenzialità cronologica", () => {
@@ -76,6 +102,16 @@ describe("createInvoice verifica la consequenzialità cronologica", () => {
 
   it("chiama findChronologyConflict prima di creare la fattura", () => {
     expect(body).toMatch(/findChronologyConflict\s*\(/);
+  });
+});
+
+describe("createInvoice richiede sempre un contatto attivo", () => {
+  const body = extractFunctionBody(source, "createInvoice");
+
+  it("chiama validateInvoiceRelations senza il parametro 'unchanged' (nessun existing da confrontare in creazione)", () => {
+    expect(body).toMatch(
+      /validateInvoiceRelations\(\s*userId,\s*id_Pagante,\s*id_Paziente\s*\)/
+    );
   });
 });
 

@@ -618,10 +618,17 @@ export function InvoicesManager({
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const patient = patients.find(
-                        (p) => p.id === viewingInvoice.paziente!.id
-                      );
-                      if (patient) setViewingPatient(patient);
+                      // Usa la relazione già caricata sulla fattura, non
+                      // l'elenco `patients` (filtrato sugli attivi): se il
+                      // paziente è stato archiviato dopo l'emissione, non
+                      // comparirebbe in quell'elenco e il bottone non
+                      // aprirebbe nulla. Stesso pattern già usato sopra per
+                      // "Vedi dettagli pagante" (viewingInvoice.pagante).
+                      if (!viewingInvoice.paziente) return;
+                      setViewingPatient({
+                        ...viewingInvoice.paziente,
+                        pagante: viewingInvoice.pagante,
+                      });
                     }}
                   >
                     Vedi dettagli paziente

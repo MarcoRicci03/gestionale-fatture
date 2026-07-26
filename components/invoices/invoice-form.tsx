@@ -22,6 +22,7 @@ import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { roundCurrency } from "@/lib/utils/currency";
+import { withCurrentPayer, withCurrentPatient } from "@/lib/invoices/contact-options";
 import { cn } from "@/lib/utils";
 import type { FatturaMese, Pagante, Paziente, $Enums } from "@prisma/client";
 
@@ -142,18 +143,33 @@ export function InvoiceForm({
     [fields]
   );
 
+  // Le tendine ricevono solo contatti attivi (getPayersAndPatients filtra
+  // archiviato: false): se il pagante/paziente di QUESTA fattura è stato
+  // archiviato nel frattempo, non comparirebbe più tra le opzioni e il campo
+  // apparirebbe vuoto pur restando correttamente collegato in DB. Si
+  // reinserisce solo il contatto già assegnato alla fattura in modifica, mai
+  // altri contatti archiviati (vedi lib/invoices/contact-options.ts).
+  const effectivePayers = useMemo(
+    () => withCurrentPayer(payers, inv?.pagante),
+    [payers, inv]
+  );
+  const effectivePatients = useMemo(
+    () => withCurrentPatient(patients, inv?.paziente, inv?.pagante),
+    [patients, inv]
+  );
+
   const filteredPatients = useMemo(() => {
-    if (!selectedPayerId) return patients;
-    return patients.filter((p) => p.id_Pagante === Number(selectedPayerId));
-  }, [selectedPayerId, patients]);
+    if (!selectedPayerId) return effectivePatients;
+    return effectivePatients.filter((p) => p.id_Pagante === Number(selectedPayerId));
+  }, [selectedPayerId, effectivePatients]);
 
   useEffect(() => {
     if (!selectedPayerId) return;
-    const payer = payers.find((p) => p.id === Number(selectedPayerId));
+    const payer = effectivePayers.find((p) => p.id === Number(selectedPayerId));
     if (!payer) return;
     setValue("citta", payer.citta);
     setValue("cap", payer.cap);
-  }, [selectedPayerId, payers, setValue]);
+  }, [selectedPayerId, effectivePayers, setValue]);
 
   useEffect(() => {
     if (invoice) return;
@@ -348,9 +364,10 @@ export function InvoiceForm({
             )}
           >
             <option value="">Seleziona pagante</option>
-            {payers.map((payer) => (
+            {effectivePayers.map((payer) => (
               <option key={payer.id} value={payer.id}>
                 {payer.cognome} {payer.nome}
+                {payer.archiviato ? " (archiviato)" : ""}
               </option>
             ))}
           </select>
@@ -375,6 +392,7 @@ export function InvoiceForm({
             {filteredPatients.map((patient) => (
               <option key={patient.id} value={patient.id}>
                 {patient.cognome} {patient.nome}
+                {patient.archiviato ? " (archiviato)" : ""}
               </option>
             ))}
           </select>
