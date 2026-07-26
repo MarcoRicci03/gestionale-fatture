@@ -79,20 +79,20 @@ Le due `moderate` residue (`uuid` dentro `exceljs`, `valibot` dentro `@prisma/de
 
 ---
 
-## SEC-02 — Array `columns` dell'export Excel senza tetto: DoS autenticato 🟡
+## SEC-02 — Array `columns` dell'export Excel senza tetto: DoS autenticato 🟢 risolta
 
 **Severità:** media
 **File:** `lib/validations/invoice-export.ts` (riga 12), `lib/excel/invoices-export.ts` (righe 9-20)
 
-Lo schema limita correttamente `ids` a `MAX_EXPORT_INVOICES = 2000`, ma su `columns` manca sia il `.max()` sia la deduplica:
+Lo schema limita correttamente `ids` a `MAX_EXPORT_INVOICES = 2000`, ma su `columns` mancava sia il `.max()` sia la deduplica:
 
 ```ts
 columns: z.array(z.enum(EXPORT_COLUMN_KEYS)).min(1),
 ```
 
-Ogni elemento deve essere una chiave valida, ma **nulla vieta di ripeterla**. Una POST a `/api/invoices/export` con `{"ids":[1], "columns":["n_fattura", ... × 200.000]}` supera la validazione e arriva a `buildInvoicesWorkbook`, che costruisce `sheet.columns` con 200.000 colonne (oltre il limite di 16.384 di OOXML) e le itera per ogni riga. Il workbook viene generato interamente in memoria prima di essere restituito: event loop bloccato e memoria satura. Il rate limit di 10 richieste/minuto non protegge, perché è il costo della singola richiesta a essere illimitato.
+Ogni elemento doveva essere una chiave valida, ma **nulla vietava di ripeterla**. Una POST a `/api/invoices/export` con `{"ids":[1], "columns":["n_fattura", ... × 200.000]}` superava la validazione e arrivava a `buildInvoicesWorkbook`, che costruisce `sheet.columns` con 200.000 colonne (oltre il limite di 16.384 di OOXML) e le itera per ogni riga. Il workbook veniva generato interamente in memoria prima di essere restituito: event loop bloccato e memoria satura. Il rate limit di 10 richieste/minuto non protegge, perché è il costo della singola richiesta a essere illimitato.
 
-**Fix:**
+**Fix applicato:**
 ```ts
 columns: z
   .array(z.enum(EXPORT_COLUMN_KEYS))
@@ -100,7 +100,7 @@ columns: z
   .max(EXPORT_COLUMN_KEYS.length)
   .transform((cols) => Array.from(new Set(cols))),
 ```
-Aggiungere un test in linea con lo stile del progetto (`scripts/verify-export-columns-bounds.test.ts`).
+Aggiunto `scripts/verify-export-columns-bounds.test.ts` (6 test: tetto superato/rispettato esattamente, deduplica, chiave non valida, array vuoto, intero catalogo senza duplicati).
 
 ---
 
