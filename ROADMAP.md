@@ -104,7 +104,7 @@ Aggiunto `scripts/verify-export-columns-bounds.test.ts` (6 test: tetto superato/
 
 ---
 
-## SEC-03 — `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso 🟡
+## SEC-03 — `getInvoiceById` carica l'intera riga `Utente`, `passwordHash` incluso 🟢 risolta
 
 **Severità:** bassa (latente, non sfruttabile oggi)
 **File:** `lib/data/invoices.ts` (riga 31), `lib/pdf/types.ts` (riga 87)
@@ -113,11 +113,11 @@ Aggiunto `scripts/verify-export-columns-bounds.test.ts` (6 test: tetto superato/
 include: { pagante: true, paziente: true, mesi: true, utente: true },
 ```
 
-`utente: true` senza `select` porta in memoria **tutti** i campi di `Utente`, compresi `passwordHash` e `tokenVersion`. Il tipo `InvoiceWithRelations` li dichiara esplicitamente (`utente: Utente`).
+`utente: true` senza `select` portava in memoria **tutti** i campi di `Utente`, compresi `passwordHash` e `tokenVersion`. Il tipo `InvoiceWithRelations` li dichiarava esplicitamente (`utente: Utente`).
 
-Oggi non c'è leak: l'unico consumatore è `app/api/invoices/[id]/pdf/route.ts`, che resta lato server. Ma il progetto ha già una disciplina esplicita opposta — `SAFE_USER_SELECT` in `lib/data/user-select.ts`, con tanto di `verify-safe-user-select.test.ts` — e qui viene aggirata. Basta un futuro `<QualcosaClient invoice={invoice} />` perché l'hash finisca nel payload RSC inviato al browser.
+Non c'era leak attivo: l'unico consumatore era `app/api/invoices/[id]/pdf/route.ts`, che resta lato server. Ma il progetto ha già una disciplina esplicita opposta — `SAFE_USER_SELECT` in `lib/data/user-select.ts`, con tanto di `verify-safe-user-select.test.ts` — e qui veniva aggirata. Sarebbe bastato un futuro `<QualcosaClient invoice={invoice} />` perché l'hash finisse nel payload RSC inviato al browser.
 
-**Fix:** sostituire `utente: true` con un `select` esplicito dei soli campi usati da `lib/pdf/placeholders.ts` (`nome`, `cognome`, `titolo`, `specializzazione`, `pIva`, `cf`, `via`, `cap`, `citta`, `provincia`) e allineare `InvoiceWithRelations`. Estendere `verify-safe-user-select.test.ts` a coprire anche questo punto.
+**Fix applicato:** nuovo `lib/data/invoice-mittente-select.ts` (`INVOICE_MITTENTE_SELECT`), select esplicito dei soli campi letti da `lib/pdf/placeholders.ts` (`nome`, `cognome`, `titolo`, `specializzazione`, `pIva`, `cf`, `via`, `cap`, `citta`, `provincia`) — più stretto di `SAFE_USER_SELECT`, pensato apposta per questo unico consumatore. `getInvoiceById` usa `utente: { select: INVOICE_MITTENTE_SELECT }` invece di `utente: true`; `InvoiceWithRelations.utente` (`lib/pdf/types.ts`) è ora tipizzato `InvoiceMittente` invece di `Utente`. Esteso `scripts/verify-safe-user-select.test.ts` con due test: assenza di `passwordHash` (stesso pattern di `SAFE_USER_SELECT`) e corrispondenza esatta con i campi effettivamente usati dai placeholder.
 
 ---
 

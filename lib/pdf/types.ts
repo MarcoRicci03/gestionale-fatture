@@ -1,5 +1,6 @@
-import type { Pagamento, Pagante, Paziente, Utente, FatturaMese } from "@prisma/client";
+import type { Pagamento, Pagante, Paziente, FatturaMese } from "@prisma/client";
 import type { RichTextDoc } from "./rich-text";
+import type { InvoiceMittente } from "@/lib/data/invoice-mittente-select";
 
 export type TipoBlocco =
   | "mittente"
@@ -84,7 +85,10 @@ export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
   pagante: Pagante;
   paziente: Paziente;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  utente: Utente;
+  // Select ristretto ai soli campi usati dai placeholder {{mittente.*}}
+  // (lib/pdf/placeholders.ts), non l'intera riga Utente: vedi
+  // lib/data/invoice-mittente-select.ts.
+  utente: InvoiceMittente;
 };
 
 export function isTextAlign(value: unknown): value is TextAlign {

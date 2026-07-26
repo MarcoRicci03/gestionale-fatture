@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
+import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";
 
 export async function getInvoices() {
   const userId = await requireUserId();
@@ -28,7 +29,16 @@ export async function getInvoiceById(id: number) {
   // un pagante/paziente archiviato.
   const invoice = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
-    include: { pagante: true, paziente: true, mesi: true, utente: true },
+    include: {
+      pagante: true,
+      paziente: true,
+      mesi: true,
+      // select esplicito, non `utente: true`: vedi
+      // lib/data/invoice-mittente-select.ts per il motivo (evitare che
+      // passwordHash entri in memoria e finisca, con un futuro chiamante
+      // client, nel payload RSC).
+      utente: { select: INVOICE_MITTENTE_SELECT },
+    },
   });
   if (!invoice) return null;
   return {
