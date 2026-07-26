@@ -2,13 +2,15 @@ import { it, expect } from "vitest";
 import { invoiceSchema } from "../lib/validations/invoice";
 import { SOGLIA_BOLLO } from "../lib/constants/bollo";
 
-// SOGLIA_BOLLO era applicata solo nel form client (un
-// avviso non bloccante) — createInvoice/updateInvoice, chiamate direttamente
-// come Server Action, salvavano fatture sopra soglia senza bolloCodice
-// valorizzato, cioè documenti fiscalmente non conformi. Questo test verifica
-// che invoiceSchema (usato sia dal client via zodResolver sia dalle Server
-// Action) rifiuti ora un totale sopra soglia senza bolloCodice, e continui ad
-// accettare i casi legittimi.
+// La marca da bollo resta dovuta per legge sopra SOGLIA_BOLLO (77,47€), ma
+// l'app non lo impone più a livello di validazione: un `superRefine` che
+// rifiutava il parse sopra soglia senza bolloCodice è stato rimosso su
+// scelta esplicita (comodità: il codice si aggiunge quando disponibile, e
+// deve restare possibile toglierlo in modifica anche restando sopra soglia).
+// invoiceSchema è condiviso da zodResolver (client) e da
+// createInvoice/updateInvoice (lib/actions/invoices.ts): questo test
+// verifica che né l'uno né l'altro blocchino più il caso, mentre il formato
+// del codice (14 cifre), quando lo si inserisce, resta validato.
 
 const baseInvoice = {
   id_Pagante: 1,
@@ -20,13 +22,29 @@ const baseInvoice = {
   cap: "00100",
 };
 
-it("rifiuta un totale sopra SOGLIA_BOLLO senza bolloCodice", () => {
+it("accetta un totale sopra SOGLIA_BOLLO senza bolloCodice (creazione)", () => {
   const result = invoiceSchema.safeParse({
     ...baseInvoice,
     mesi: [{ mese: "GENNAIO", prezzo: SOGLIA_BOLLO + 0.01 }],
     bolloCodice: "",
   });
-  expect(result.success).toBe(false);
+  expect(result.success).toBe(true);
+});
+
+it("consente di azzerare bolloCodice restando sopra SOGLIA_BOLLO (modifica)", () => {
+  // Stesso schema usato da updateInvoice: parse con bolloCodice vuoto su una
+  // fattura il cui totale resta sopra soglia deve avere successo, così è
+  // possibile rimuovere un codice inserito per errore senza dover anche
+  // abbassare l'importo sotto soglia.
+  const result = invoiceSchema.safeParse({
+    ...baseInvoice,
+    mesi: [{ mese: "GENNAIO", prezzo: SOGLIA_BOLLO + 50 }],
+    bolloCodice: "",
+  });
+  expect(result.success).toBe(true);
+  if (result.success) {
+    expect(result.data.bolloCodice).toBeUndefined();
+  }
 });
 
 it("accetta un totale sopra SOGLIA_BOLLO con bolloCodice valorizzato", () => {
@@ -38,10 +56,18 @@ it("accetta un totale sopra SOGLIA_BOLLO con bolloCodice valorizzato", () => {
   expect(result.success).toBe(true);
 });
 
+it("rifiuta un bolloCodice con formato non valido, anche sopra soglia", () => {
+  // L'obbligo di presenza è stato rimosso, ma se un codice viene fornito
+  // deve comunque rispettare il formato a 14 cifre numeriche.
+  const result = invoiceSchema.safeParse({
+    ...baseInvoice,
+    mesi: [{ mese: "GENNAIO", prezzo: SOGLIA_BOLLO + 0.01 }],
+    bolloCodice: "abc",
+  });
+  expect(result.success).toBe(false);
+});
+
 it("accetta un totale esattamente pari a SOGLIA_BOLLO senza bolloCodice", () => {
-  // Il rimedio richiede il bollo solo quando il totale SUPERA la soglia
-  // (> 77,47€), non quando la eguaglia — coerente con SOGLIA_BOLLO e con il
-  // testo del form ("Il totale supera...").
   const result = invoiceSchema.safeParse({
     ...baseInvoice,
     mesi: [{ mese: "GENNAIO", prezzo: SOGLIA_BOLLO }],
@@ -57,18 +83,4 @@ it("accetta un totale sotto SOGLIA_BOLLO senza bolloCodice", () => {
     bolloCodice: "",
   });
   expect(result.success).toBe(true);
-});
-
-it("somma la soglia su più mesi (non il prezzo di un singolo mese)", () => {
-  // Il totale rilevante è la somma di tutti i mesi, non il prezzo di un
-  // singolo mese: verifica che il refine sommi correttamente l'array.
-  const result = invoiceSchema.safeParse({
-    ...baseInvoice,
-    mesi: [
-      { mese: "GENNAIO", prezzo: 40 },
-      { mese: "FEBBRAIO", prezzo: 40 },
-    ],
-    bolloCodice: "",
-  });
-  expect(result.success).toBe(false);
 });

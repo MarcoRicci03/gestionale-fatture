@@ -23,16 +23,16 @@ describe("invoiceSchema", () => {
     if (r.success) expect(r.data.mesi[0].prezzo).toBe(50);
   });
 
-  it("richiede il codice bollo quando il totale supera la soglia", () => {
+  it("non richiede il codice bollo quando il totale supera la soglia (facoltativo per scelta)", () => {
+    // Vedi scripts/verify-invoice-bollo-threshold.test.ts per la copertura
+    // completa del comportamento: il bollo resta dovuto per legge, ma
+    // l'app non blocca più il salvataggio/la modifica senza codice.
     const r = invoiceSchema.safeParse({
       ...base,
       mesi: [{ mese: "GENNAIO", prezzo: String(SOGLIA_BOLLO + 1) }],
       bolloCodice: "",
     });
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(r.error.issues.some((i) => i.path.includes("bolloCodice"))).toBe(true);
-    }
+    expect(r.success).toBe(true);
   });
 
   it("rifiuta un prezzo non numerico invece di degradarlo a 0", () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseDateInput } from "@/lib/utils/date";
 import { MESI } from "@/lib/constants/mesi";
-import { BOLLO_CODICE_REGEX, SOGLIA_BOLLO } from "@/lib/constants/bollo";
+import { BOLLO_CODICE_REGEX } from "@/lib/constants/bollo";
 import { roundCurrency } from "@/lib/utils/currency";
 
 // Intero, oppure con separatore decimale punto e al massimo 2 cifre dopo la
@@ -81,21 +81,6 @@ export const invoiceSchema = z
       ])
       .transform((val) => (val === "" ? undefined : val))
       .optional(),
-  })
-  .superRefine((data, ctx) => {
-    // La soglia era imposta solo nel form client (solo un avviso, non
-    // bloccante) — una Server Action chiamata direttamente permetteva di
-    // salvare fatture sopra soglia senza marca da bollo. Il totale va
-    // ricalcolato qui, sui dati già validati/coercizzati, per non fidarsi di
-    // un totale eventualmente inviato dal client.
-    const totale = roundCurrency(data.mesi.reduce((somma, m) => somma + m.prezzo, 0));
-    if (totale > SOGLIA_BOLLO && !data.bolloCodice) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["bolloCodice"],
-        message: `Il totale supera ${SOGLIA_BOLLO}€: è obbligatorio indicare il codice della marca da bollo`,
-      });
-    }
   });
 
 export type InvoiceFormInput = z.input<typeof invoiceSchema>;
