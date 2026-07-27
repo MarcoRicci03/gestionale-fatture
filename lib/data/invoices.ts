@@ -1,9 +1,26 @@
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";
-import { buildInvoiceWhere } from "@/lib/invoices/list-query";
+import { buildInvoiceWhere, lastValidPage } from "@/lib/invoices/list-query";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
+import type { Prisma } from "@prisma/client";
+
+function findInvoicesPage(where: Prisma.PagamentoWhereInput, page: number) {
+  return prisma.pagamento.findMany({
+    where,
+    include: { pagante: true, paziente: true, mesi: true },
+    // `id` come tiebreaker: `data` non è univoca (più fatture nello stesso
+    // giorno) e Postgres non garantisce un ordine stabile tra le righe a
+    // parità di chiave d'ordinamento, né che quell'ordine resti lo stesso
+    // tra la query di pagina 1 e quella di pagina 2. Senza un secondo
+    // criterio univoco, una riga può comparire su due pagine consecutive o
+    // sparire del tutto mentre si pagina.
+    orderBy: [{ data: "desc" }, { id: "desc" }],
+    skip: (page - 1) * INVOICES_PAGE_SIZE,
+    take: INVOICES_PAGE_SIZE,
+  });
+}
 
 export async function getInvoices(filters: InvoiceFilters, page: number) {
   const userId = await requireUserId();
@@ -13,22 +30,31 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
   // lib/actions/patients.ts).
   const where = buildInvoiceWhere(userId, filters);
   const [invoices, totalCount] = await Promise.all([
-    prisma.pagamento.findMany({
-      where,
-      include: { pagante: true, paziente: true, mesi: true },
-      orderBy: { data: "desc" },
-      skip: (page - 1) * INVOICES_PAGE_SIZE,
-      take: INVOICES_PAGE_SIZE,
-    }),
+    findInvoicesPage(where, page),
     prisma.pagamento.count({ where }),
   ]);
+
+  // Se `page` è oltre l'ultima pagina disponibile per questo filtro (l'utente
+  // era sull'ultima pagina e ha cancellato l'unica fattura rimasta lì, o ha
+  // manomesso l'URL), la query sopra ha eseguito uno skip fuori range e ha
+  // restituito 0 righe: senza questa correzione la UI mostrerebbe il
+  // messaggio fuorviante "nessuna fattura corrisponde ai filtri" (falso, ce
+  // ne sono) senza nessun controllo di paginazione per tornare indietro. Si
+  // clampa alla pagina valida più vicina e si rifà la query solo in questo
+  // caso raro (il percorso comune, `page` già in range, resta una singola
+  // query in Promise.all sopra).
+  const clampedPage = Math.min(page, lastValidPage(totalCount, INVOICES_PAGE_SIZE));
+  const effectiveInvoices =
+    clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage);
+
   return {
-    invoices: invoices.map((invoice) => ({
+    invoices: effectiveInvoices.map((invoice) => ({
       ...invoice,
       prezzo_totale: invoice.prezzo_totale.toNumber(),
       mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
     })),
     totalCount,
+    page: clampedPage,
   };
 }
 

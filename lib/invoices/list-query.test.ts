@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { buildInvoiceWhere } from "./list-query";
+import { buildInvoiceWhere, lastValidPage } from "./list-query";
 import { parseDateInput } from "@/lib/utils/date";
 import { EMPTY_INVOICE_FILTERS } from "@/components/invoices/invoice-filters";
+
+describe("lastValidPage", () => {
+  it("0 risultati: pagina 1 (mai 0)", () => {
+    expect(lastValidPage(0, 25)).toBe(1);
+  });
+
+  it("risultati che riempiono esattamente una pagina: resta 1", () => {
+    expect(lastValidPage(25, 25)).toBe(1);
+  });
+
+  it("un risultato in più dell'ultima pagina piena: arrotonda per eccesso", () => {
+    expect(lastValidPage(26, 25)).toBe(2);
+  });
+
+  it("più pagine piene: divisione esatta", () => {
+    expect(lastValidPage(100, 25)).toBe(4);
+  });
+});
 
 describe("buildInvoiceWhere", () => {
   it("senza filtri: solo id_Utente", () => {

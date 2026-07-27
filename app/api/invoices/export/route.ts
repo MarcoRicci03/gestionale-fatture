@@ -60,7 +60,11 @@ export async function POST(request: Request) {
   const invoices = await prisma.pagamento.findMany({
     where,
     include: { pagante: true, paziente: true, mesi: true },
-    orderBy: { data: "desc" },
+    // Stesso tiebreaker di lib/data/invoices.ts::getInvoices: `data` non è
+    // univoca, quindi senza `id` come secondo criterio l'ordine tra fatture
+    // con la stessa data non è garantito stabile, e il contenuto del file
+    // esportato non sarebbe deterministico a parità di filtri/dati.
+    orderBy: [{ data: "desc" }, { id: "desc" }],
     // +1 per distinguere "esattamente al limite" da "oltre il limite" senza
     // una count() separata: se arrivano MAX_EXPORT_INVOICES + 1 righe, si
     // blocca invece di troncare silenziosamente l'export a metà.

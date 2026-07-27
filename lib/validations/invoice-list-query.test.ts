@@ -40,6 +40,20 @@ describe("parseInvoiceListQuery", () => {
     expect(parseInvoiceListQuery({ page: "-3" }, TODAY).page).toBe(1);
   });
 
+  it("page al limite superiore (1_000_000): accettato così com'è", () => {
+    expect(parseInvoiceListQuery({ page: "1000000" }, TODAY).page).toBe(1_000_000);
+  });
+
+  it("page oltre il limite superiore: fallback a 1, non uno skip enorme verso Postgres", () => {
+    expect(parseInvoiceListQuery({ page: "1000001" }, TODAY).page).toBe(1);
+  });
+
+  it("page assurdamente grande (URL manomesso, oltre Number.MAX_SAFE_INTEGER): fallback a 1", () => {
+    expect(
+      parseInvoiceListQuery({ page: "100000000000000000000" }, TODAY).page
+    ).toBe(1);
+  });
+
   it("valori ripetuti nell'URL (array): usa il primo", () => {
     const result = parseInvoiceListQuery({ f: "1", anno: ["2024", "2023"] }, TODAY);
     expect(result.filters.anno).toBe("2024");
