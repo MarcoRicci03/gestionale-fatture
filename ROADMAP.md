@@ -757,7 +757,7 @@ Il file più grande del progetto, il triplo del secondo (`invoices-manager.tsx`,
 <a id="qua-04"></a>
 ## QUA-04 — Copertura e2e limitata al login ✅ risolta
 
-**File:** `e2e/login.spec.ts` (unico spec)
+**File:** `e2e/login.spec.ts` (spec originale — vedi "Fix applicato" per gli altri)
 
 La logica pura è molto ben coperta a livello unitario, ma i flussi che attraversano davvero lo stack — creare una fattura, scaricarne il PDF, esportare in Excel, archiviare un pagante con cascata — non hanno alcun test end-to-end. Sono proprio i flussi in cui un aggiornamento di Next.js o Prisma (cfr. SEC-01) può rompere qualcosa che nessun unit test vede.
 

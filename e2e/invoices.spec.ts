@@ -32,12 +32,12 @@ test.describe("ciclo di vita di una fattura", () => {
     await page.goto("/invoices");
     await page.getByRole("button", { name: "Nuova fattura" }).click();
 
-    await page.getByLabel("Pagante").selectOption({ label: payerLabel });
+    await page.getByLabel("Pagante", { exact: true }).selectOption({ label: payerLabel });
     // Attende che l'effect di InvoiceForm abbia copiato città/CAP dal
     // pagante selezionato, prima di proseguire e sottomettere il form.
     await expect(page.getByLabel("Città")).toHaveValue("Roma");
 
-    await page.getByLabel("Paziente").selectOption({ label: patientLabel });
+    await page.getByLabel("Paziente", { exact: true }).selectOption({ label: patientLabel });
     await page.getByLabel("Modalità di pagamento").selectOption("CONTANTI");
     await page.locator('input[aria-label^="Importo per"]').fill("100");
 
