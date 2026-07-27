@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   PlusCircle,
   Pencil,
@@ -15,6 +16,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
+import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import {
   Dialog,
   DialogContent,
@@ -34,11 +36,12 @@ import { InvoiceForm } from "./invoice-form";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatDateDisplay, parseDateInput } from "@/lib/utils/date";
+import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
+import { InvoicesPagination } from "./invoices-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
@@ -54,19 +57,28 @@ type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
 
 type InvoicesManagerProps = {
   invoices: InvoiceWithRelations[];
+  totalCount: number;
+  page: number;
+  years: number[];
+  filters: InvoiceFilters;
   payers: Pagante[];
   patients: (Paziente & { pagante: Pagante | null })[];
   nextInvoiceNumber: number;
-  defaultInvoiceFilters: InvoiceFilters;
 };
 
 export function InvoicesManager({
   invoices,
+  totalCount,
+  page,
+  years,
+  filters,
   payers,
   patients,
   nextInvoiceNumber,
-  defaultInvoiceFilters,
 }: InvoicesManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceWithRelations | null>(null);
@@ -80,71 +92,61 @@ export function InvoicesManager({
   const [anagraficaRefreshError, setAnagraficaRefreshError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const resolvedAnagrafica = useMemo(() => {
-    if (!viewingInvoice?.pagante || !viewingInvoice?.paziente) return null;
-    return resolveAnagrafica({
-      snapshotAnagrafica: viewingInvoice.snapshotAnagrafica,
-      pagante: viewingInvoice.pagante,
-      paziente: viewingInvoice.paziente,
-    });
-  }, [viewingInvoice]);
+  const resolvedAnagrafica = viewingInvoice?.pagante && viewingInvoice?.paziente
+    ? resolveAnagrafica({
+        snapshotAnagrafica: viewingInvoice.snapshotAnagrafica,
+        pagante: viewingInvoice.pagante,
+        paziente: viewingInvoice.paziente,
+      })
+    : null;
 
-  const [filters, setFilters] = useState<InvoiceFilters>(defaultInvoiceFilters);
-  const [prevFilters, setPrevFilters] = useState(filters);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  // Azzera la selezione ogni volta che i filtri cambiano, per evitare di
-  // esportare "a sorpresa" righe non più visibili nell'elenco filtrato.
-  // Aggiornamento di stato durante il render (pattern consigliato da React
-  // per "adjusting state when a prop changes"), non in un effect, per non
-  // innescare un render a cascata evitabile.
-  if (filters !== prevFilters) {
+  // Azzera la selezione ogni volta che filtri o pagina cambiano (nuova
+  // navigazione dal server), per evitare di esportare "a sorpresa" righe non
+  // più visibili. Aggiornamento di stato durante il render (pattern
+  // consigliato da React per "adjusting state when a prop changes"), non in
+  // un effect, per non innescare un render a cascata evitabile.
+  const [prevFilters, setPrevFilters] = useState(filters);
+  const [prevPage, setPrevPage] = useState(page);
+  if (filters !== prevFilters || page !== prevPage) {
     setPrevFilters(filters);
+    setPrevPage(page);
     setSelectedIds(new Set());
   }
 
-  const years = useMemo(
-    () =>
-      Array.from(new Set(invoices.map((i) => i.anno))).sort((a, b) => b - a),
-    [invoices]
-  );
+  function navigate(nextFilters: InvoiceFilters, nextPage: number) {
+    const params = new URLSearchParams();
+    params.set("f", "1");
+    if (nextFilters.dataDa) params.set("dataDa", nextFilters.dataDa);
+    if (nextFilters.dataA) params.set("dataA", nextFilters.dataA);
+    if (nextFilters.persona) params.set("persona", nextFilters.persona);
+    if (nextFilters.modPag) params.set("modPag", nextFilters.modPag);
+    if (nextFilters.anno) params.set("anno", nextFilters.anno);
+    if (nextPage > 1) params.set("page", String(nextPage));
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
 
-  const filteredInvoices = useMemo(() => {
-    const dataDa = filters.dataDa ? parseDateInput(filters.dataDa) : null;
-    const dataA = filters.dataA ? parseDateInput(filters.dataA) : null;
-    const persona = filters.persona.trim().toLowerCase();
-    return invoices.filter((invoice) => {
-      if (dataDa && invoice.data < dataDa) return false;
-      if (dataA && invoice.data > dataA) return false;
-      if (persona) {
-        const paganteMatch = invoice.pagante
-          ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
-              .toLowerCase()
-              .includes(persona)
-          : false;
-        const pazienteMatch = invoice.paziente
-          ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
-              .toLowerCase()
-              .includes(persona)
-          : false;
-        if (!paganteMatch && !pazienteMatch) return false;
-      }
-      if (filters.modPag && invoice.mod_pag !== filters.modPag) return false;
-      if (filters.anno && invoice.anno !== Number(filters.anno)) return false;
-      return true;
-    });
-  }, [invoices, filters]);
+  const handleFiltersChange = (patch: Partial<InvoiceFilters>) => {
+    navigate({ ...filters, ...patch }, 1);
+  };
+
+  const handleReset = () => {
+    router.replace(pathname, { scroll: false });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    navigate(filters, nextPage);
+  };
 
   useEffect(() => {
     if (!selectAllRef.current) return;
-    const selectedInView = filteredInvoices.filter((i) =>
-      selectedIds.has(i.id)
-    ).length;
+    const selectedInView = invoices.filter((i) => selectedIds.has(i.id)).length;
     selectAllRef.current.indeterminate =
-      selectedInView > 0 && selectedInView < filteredInvoices.length;
-  }, [selectedIds, filteredInvoices]);
+      selectedInView > 0 && selectedInView < invoices.length;
+  }, [selectedIds, invoices]);
 
   const toggleSelected = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -156,15 +158,8 @@ export function InvoicesManager({
   };
 
   const toggleSelectAll = (checked: boolean) => {
-    setSelectedIds(
-      checked ? new Set(filteredInvoices.map((i) => i.id)) : new Set()
-    );
+    setSelectedIds(checked ? new Set(invoices.map((i) => i.id)) : new Set());
   };
-
-  const exportInvoiceIds =
-    selectedIds.size > 0
-      ? Array.from(selectedIds)
-      : filteredInvoices.map((i) => i.id);
 
   const handleOpenNew = () => {
     setEditingInvoice(null);
@@ -196,7 +191,7 @@ export function InvoicesManager({
           <Button
             variant="outline"
             onClick={() => setExportDialogOpen(true)}
-            disabled={filteredInvoices.length === 0}
+            disabled={totalCount === 0}
           >
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Esporta Excel
@@ -208,20 +203,20 @@ export function InvoicesManager({
         </div>
       </div>
 
-      {invoices.length === 0 ? (
+      {years.length === 0 ? (
         <p className="text-muted-foreground">Nessuna fattura emessa.</p>
       ) : (
         <>
           <InvoicesFilterBar
             filters={filters}
-            onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
-            onReset={() => setFilters(defaultInvoiceFilters)}
+            onChange={handleFiltersChange}
+            onReset={handleReset}
             payers={payers}
             patients={patients}
             years={years}
           />
 
-          {filteredInvoices.length === 0 ? (
+          {invoices.length === 0 ? (
             <p className="text-muted-foreground">
               Nessuna fattura corrisponde ai filtri selezionati.
             </p>
@@ -238,8 +233,8 @@ export function InvoicesManager({
                       ref={selectAllRef}
                       className="h-4 w-4 rounded border-input"
                       checked={
-                        filteredInvoices.length > 0 &&
-                        filteredInvoices.every((i) => selectedIds.has(i.id))
+                        invoices.length > 0 &&
+                        invoices.every((i) => selectedIds.has(i.id))
                       }
                       onChange={(e) => toggleSelectAll(e.target.checked)}
                       aria-label="Seleziona tutte le fatture visibili"
@@ -255,7 +250,7 @@ export function InvoicesManager({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInvoices.map((invoice) => (
+                {invoices.map((invoice) => (
                   <TableRow key={invoice.id}>
                     <TableCell>
                       <input
@@ -373,7 +368,7 @@ export function InvoicesManager({
           </div>
 
           <ul className="space-y-3 lg:hidden">
-            {filteredInvoices.map((invoice) => (
+            {invoices.map((invoice) => (
               <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2">
@@ -495,6 +490,13 @@ export function InvoicesManager({
               </li>
             ))}
           </ul>
+
+          <InvoicesPagination
+            page={page}
+            totalCount={totalCount}
+            pageSize={INVOICES_PAGE_SIZE}
+            onPageChange={handlePageChange}
+          />
           </>
           )}
         </>
@@ -503,7 +505,11 @@ export function InvoicesManager({
       <ExportInvoicesDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        invoiceIds={exportInvoiceIds}
+        selection={
+          selectedIds.size > 0
+            ? { kind: "ids", ids: Array.from(selectedIds) }
+            : { kind: "filters", filters, count: totalCount }
+        }
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
