@@ -147,20 +147,22 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
+  const onPdfLayoutNavigate = useCallback((nextSettings: ImpostazioniPdf) => {
+    setSelectedIds((prev) => {
+      const validIds = new Set<string>();
+      prev.forEach((id) => {
+        if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
+      });
+      return validIds;
+    });
+    setEditingBlockId((cur) =>
+      cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
+    );
+  }, []);
+
   const { settings, pushSettings, undo, redo, canUndo, canRedo } = usePdfLayoutHistory({
     initialSettings,
-    onNavigate: (nextSettings) => {
-      setSelectedIds((prev) => {
-        const validIds = new Set<string>();
-        prev.forEach((id) => {
-          if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
-        });
-        return validIds;
-      });
-      setEditingBlockId((cur) =>
-        cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
-      );
-    },
+    onNavigate: onPdfLayoutNavigate,
   });
 
   const [autoFit, setAutoFit] = useState(true);

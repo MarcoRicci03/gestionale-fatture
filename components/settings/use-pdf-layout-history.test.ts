@@ -97,6 +97,19 @@ describe("usePdfLayoutHistory", () => {
     expect(result.current.settings).toBe(initial);
   });
 
+  it("redo alla fine della history è un no-op e non chiama onNavigate", () => {
+    const initial = makeSettings({ fontSizeBase: 11 });
+    const second = makeSettings({ fontSizeBase: 14 });
+    const onNavigate = vi.fn();
+    const { result } = renderHook(() => usePdfLayoutHistory({ initialSettings: initial, onNavigate }));
+    act(() => result.current.pushSettings(second));
+    onNavigate.mockClear();
+    act(() => result.current.redo());
+    expect(result.current.settings).toBe(second);
+    expect(result.current.canRedo).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it("la history è limitata a 50 voci: dopo 60 push, sono possibili solo 49 undo", () => {
     const initial = makeSettings();
     const { result } = renderHook(() => usePdfLayoutHistory({ initialSettings: initial }));
