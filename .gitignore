@@ -53,5 +53,6 @@ next-env.d.ts
 .impeccable/
 .claude/
 docs/
+.superpowers/
 
 ROADMAP_FIX.md
