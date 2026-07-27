@@ -40,7 +40,7 @@ function renderRichStatic(testo: string, keyPrefix: string) {
     return (
       <div key={`${keyPrefix}-p-${pIdx}`}>
         {nodes.length === 0
-          ? " "
+          ? " "
           : nodes.map((node, nIdx) => {
               const key = `${keyPrefix}-${pIdx}-${nIdx}`;
               const marks = node.marks ?? [];
