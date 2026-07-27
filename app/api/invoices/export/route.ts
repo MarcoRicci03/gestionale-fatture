@@ -1,7 +1,8 @@
 import { getUserIdOrNull } from "@/lib/auth/session";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
 import { prisma } from "@/lib/prisma";
-import { invoiceExportSchema } from "@/lib/validations/invoice-export";
+import { invoiceExportSchema, MAX_EXPORT_INVOICES } from "@/lib/validations/invoice-export";
+import { buildInvoiceWhere } from "@/lib/invoices/list-query";
 import { buildInvoicesWorkbook } from "@/lib/excel/invoices-export";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
@@ -43,22 +44,35 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return new Response("Dati non validi", { status: 400 });
   }
-  const { ids, columns } = parsed.data;
+  const { columns } = parsed.data;
 
-  // Non ci si fida degli id selezionati lato client per l'isolamento
-  // multi-tenant: la query filtra sempre esplicitamente per id_Utente,
-  // ignorando silenziosamente eventuali id non posseduti dall'utente.
-  // Nessun filtro su pagante/paziente.archiviato: una fattura resta
-  // esportabile anche se il contatto collegato è stato archiviato (vedi
+  // Non ci si fida degli id/filtri ricevuti dal client per l'isolamento
+  // multi-tenant: in entrambi i rami il where include sempre id_Utente
+  // esplicito (buildInvoiceWhere lo fa già per il ramo filters). Nessun
+  // filtro su pagante/paziente.archiviato: una fattura resta esportabile
+  // anche se il contatto collegato è stato archiviato (vedi
   // lib/data/invoices.ts).
+  const where =
+    "ids" in parsed.data
+      ? { id_Utente: userId, id: { in: parsed.data.ids } }
+      : buildInvoiceWhere(userId, parsed.data.filters);
+
   const invoices = await prisma.pagamento.findMany({
-    where: {
-      id_Utente: userId,
-      id: { in: ids },
-    },
+    where,
     include: { pagante: true, paziente: true, mesi: true },
     orderBy: { data: "desc" },
+    // +1 per distinguere "esattamente al limite" da "oltre il limite" senza
+    // una count() separata: se arrivano MAX_EXPORT_INVOICES + 1 righe, si
+    // blocca invece di troncare silenziosamente l'export a metà.
+    take: MAX_EXPORT_INVOICES + 1,
   });
+
+  if (invoices.length > MAX_EXPORT_INVOICES) {
+    return new Response(
+      `Troppe fatture corrispondono ai filtri: restringi la selezione (massimo ${MAX_EXPORT_INVOICES})`,
+      { status: 400 }
+    );
+  }
 
   if (invoices.length === 0) {
     return new Response("Nessuna fattura trovata", { status: 404 });
