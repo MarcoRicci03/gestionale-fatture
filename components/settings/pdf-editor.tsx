@@ -65,6 +65,14 @@ import { parseTestoToRichContent } from "@/lib/pdf/rich-text";
 import { RichTextBlockEditor } from "@/components/settings/pdf-editor-rich-block";
 import { VariableChipBadge } from "@/components/settings/pdf-editor-rich-extensions";
 import { PdfEditorMesiPanel } from "@/components/settings/pdf-editor-mesi-panel";
+import {
+  PAGE_W,
+  PAGE_H,
+  clamp,
+  toNumber,
+  computeSnap,
+  type GuideLines,
+} from "@/lib/pdf/canvas-geometry";
 import type {
   Blocco,
   ImpostazioniPdf,
@@ -79,12 +87,8 @@ type PdfEditorProps = {
   userId: number;
 };
 
-const PAGE_W = 595;
-const PAGE_H = 842;
-const SNAP_THRESHOLD = 8;
 const MAX_HISTORY_LENGTH = 50;
 
-type GuideLines = { x?: number; y?: number };
 type DraggingState = { id: string; x: number; y: number };
 
 const DEFAULT_MESE_CONFIG: MeseConfig = {
@@ -135,15 +139,6 @@ const PRESETS: Record<
 
 function makeId() {
   return crypto.randomUUID();
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function toNumber(value: string) {
-  const n = Number(value);
-  return Number.isNaN(n) ? 0 : n;
 }
 
 export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
@@ -599,72 +594,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     return () => observer.disconnect();
   }, [autoFit, fitZoom]);
 
-  const computeSnap = useCallback(
-    (dragged: Blocco, x: number, y: number, others: Blocco[]) => {
-      const draggedLinesX = [
-        { value: x, type: "left" },
-        { value: x + dragged.width / 2, type: "center" },
-        { value: x + dragged.width, type: "right" },
-      ];
-      const draggedLinesY = [
-        { value: y, type: "top" },
-        { value: y + dragged.height / 2, type: "middle" },
-        { value: y + dragged.height, type: "bottom" },
-      ];
-
-      let snapX: { offset: number; line: number } | null = null;
-      let snapY: { offset: number; line: number } | null = null;
-
-      for (const other of others) {
-        if (other.id === dragged.id) continue;
-        const otherLinesX = [
-          other.x,
-          other.x + other.width / 2,
-          other.x + other.width,
-        ];
-        const otherLinesY = [
-          other.y,
-          other.y + other.height / 2,
-          other.y + other.height,
-        ];
-
-        for (const dl of draggedLinesX) {
-          for (const ol of otherLinesX) {
-            const diff = dl.value - ol;
-            if (Math.abs(diff) <= SNAP_THRESHOLD) {
-              if (!snapX || Math.abs(diff) < Math.abs(snapX.offset)) {
-                snapX = { offset: diff, line: ol };
-              }
-            }
-          }
-        }
-
-        for (const dl of draggedLinesY) {
-          for (const ol of otherLinesY) {
-            const diff = dl.value - ol;
-            if (Math.abs(diff) <= SNAP_THRESHOLD) {
-              if (!snapY || Math.abs(diff) < Math.abs(snapY.offset)) {
-                snapY = { offset: diff, line: ol };
-              }
-            }
-          }
-        }
-      }
-
-      const result = { x, y, guides: {} as GuideLines };
-      if (snapX) {
-        result.x = clamp(x - snapX.offset, 0, PAGE_W - dragged.width);
-        result.guides.x = snapX.line;
-      }
-      if (snapY) {
-        result.y = clamp(y - snapY.offset, 0, PAGE_H - dragged.height);
-        result.guides.y = snapY.line;
-      }
-      return result;
-    },
-    []
-  );
-
   const handleDragStart = useCallback(
     (id: string) => {
       const block = settings.blocchi.find((b) => b.id === id);
@@ -685,7 +614,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       setDragging({ id, x: snapped.x, y: snapped.y });
       setGuides(snapped.guides);
     },
-    [settings.blocchi, computeSnap]
+    [settings.blocchi]
   );
 
   const handleDragStop = useCallback(
