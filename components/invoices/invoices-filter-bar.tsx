@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,8 @@ function usePersonaSuggestions(
   );
 }
 
+const PERSONA_DEBOUNCE_MS = 300;
+
 type PersonaSearchFieldProps = {
   value: string;
   onValueChange: (value: string) => void;
@@ -65,14 +67,51 @@ function PersonaSearchField({
   suggestions,
 }: PersonaSearchFieldProps) {
   const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastExternalValue = useRef(value);
+
+  // Se il valore controllato cambia dall'esterno (es. "Reset filtri", o
+  // back/forward del browser che riporta a un altro URL), risincronizza il
+  // buffer locale. Non lo fa se il cambiamento coincide con l'ultimo valore
+  // già inviato da qui (altrimenti il proprio debounce si auto-annullerebbe
+  // ogni volta che onValueChange fa arrivare filters aggiornati dal server).
+  useEffect(() => {
+    if (value !== lastExternalValue.current) {
+      setInputValue(value);
+      lastExternalValue.current = value;
+    }
+  }, [value]);
+
+  const flush = (next: string) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    lastExternalValue.current = next;
+    onValueChange(next);
+  };
+
+  const handleChange = (next: string) => {
+    setInputValue(next);
+    setOpen(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      lastExternalValue.current = next;
+      onValueChange(next);
+    }, PERSONA_DEBOUNCE_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
-    const query = value.trim().toLowerCase();
+    const query = inputValue.trim().toLowerCase();
     if (!query) return [];
     return suggestions
       .filter((s) => s.label.toLowerCase().includes(query))
       .slice(0, 8);
-  }, [suggestions, value]);
+  }, [suggestions, inputValue]);
 
   const showSuggestions = open && filtered.length > 0;
 
@@ -82,13 +121,13 @@ function PersonaSearchField({
       <Input
         id="filtro-persona"
         placeholder="Cerca per nome..."
-        value={value}
-        onChange={(e) => {
-          onValueChange(e.target.value);
-          setOpen(true);
-        }}
+        value={inputValue}
+        onChange={(e) => handleChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onBlur={() => {
+          setOpen(false);
+          flush(inputValue);
+        }}
         role="combobox"
         aria-expanded={showSuggestions}
         aria-autocomplete="list"
@@ -106,8 +145,8 @@ function PersonaSearchField({
                 className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  onValueChange(s.label);
                   setOpen(false);
+                  flush(s.label);
                 }}
               >
                 <span>{s.label}</span>
