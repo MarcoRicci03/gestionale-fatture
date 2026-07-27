@@ -82,3 +82,11 @@ describe("header solo di produzione", () => {
     expect(hsts).toContain("max-age=");
   });
 });
+
+describe("poweredByHeader", () => {
+  it("è disattivato: Next.js non deve aggiungere X-Powered-By: Next.js (SEC-07)", async () => {
+    vi.resetModules();
+    const mod = await import("../next.config");
+    expect(mod.default.poweredByHeader).toBe(false);
+  });
+});

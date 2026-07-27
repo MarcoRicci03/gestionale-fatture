@@ -45,7 +45,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-04](#sec-04) | `fontFamily` accetta una stringa arbitraria e può rompere tutti i PDF | ✅ |
 | [SEC-05](#sec-05) | Nessuna protezione "ultimo admin": lockout permanente possibile | ✅ |
 | [SEC-06](#sec-06) | `proxy.ts` lascia passare anche le richieste HEAD | ✅ |
-| [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | 🟡 |
+| [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | ✅ |
 | [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
 | [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | 🟡 |
 | [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
@@ -216,12 +216,14 @@ Nuovo `scripts/verify-proxy-head-method.test.ts` — a differenza di `verify-pro
 ---
 
 <a id="sec-07"></a>
-## SEC-07 — Header `X-Powered-By: Next.js` esposto 🟡
+## SEC-07 — Header `X-Powered-By: Next.js` esposto ✅ risolta
 
 **Severità:** bassa
 **File:** `next.config.ts`
 
-Manca `poweredByHeader: false`. L'header rivela framework e, indirettamente, la superficie di advisory applicabili (cfr. SEC-01). Fix di una riga.
+Mancava `poweredByHeader: false`. L'header rivela framework e, indirettamente, la superficie di advisory applicabili (cfr. SEC-01).
+
+**Fix applicato:** `poweredByHeader: false` in `next.config.ts`. Esteso `scripts/verify-security-headers.test.ts` (che già importa dinamicamente `next.config.ts` per ispezionarne l'oggetto) con un test che verifica `poweredByHeader === false` sul config realmente esportato. Non è stato possibile verificare l'assenza dell'header con un server live in questo ambiente (limite di rete del sandbox); `poweredByHeader` è comunque un flag Next.js standard e ben documentato, verificato sull'oggetto di configurazione reale e con build di produzione pulita (`npm run build`).
 
 ---
 

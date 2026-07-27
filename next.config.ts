@@ -56,6 +56,10 @@ const nextConfig: NextConfig = {
   /* config options here */
   allowedDevOrigins: ['192.168.0.56'],
   output: "standalone",
+  // Senza questo, Next.js aggiunge di default l'header X-Powered-By:
+  // Next.js a ogni risposta, rivelando il framework e indirettamente la
+  // superficie di advisory applicabili (SEC-01/SEC-07).
+  poweredByHeader: false,
   async headers() {
     return [
       {
