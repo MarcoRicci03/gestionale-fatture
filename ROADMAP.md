@@ -77,7 +77,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
 | [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
 | [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
-| [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | 🟡 |
+| [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | ✅ |
 | [QUA-04](#qua-04) | Copertura e2e limitata al login | 🟡 |
 | [QUA-05](#qua-05) | `isBolloCodiceTaken` rilegge la sessione a ogni chiamata | 🟢 |
 
@@ -746,11 +746,13 @@ Due `eslint-disable-next-line @typescript-eslint/no-explicit-any` per tipizzare 
 **Fix applicato:** il componente `UserFields` condiviso è stato rimosso; i campi comuni (`username`, `nome`, `cognome`, `isAdmin`, `abilitato`) sono ora duplicati direttamente in `UserCreateForm` e `UserEditForm`, ciascuno tipizzato sul proprio `UserCreateFormData`/`UserUpdateFormData` senza cast. Effetto collaterale del lavoro su `PIANO_CREAZIONE_UTENTI.md` (il campo password, ora estratto in `TemporaryPasswordField`, era l'unico motivo per cui `UserFields` doveva restare generico/`any`).
 
 <a id="qua-03"></a>
-## QUA-03 — `pdf-editor.tsx` a 1848 righe 🟡
+## QUA-03 — `pdf-editor.tsx` a 1848 righe ✅ risolta
 
 **File:** `components/settings/pdf-editor.tsx`
 
 Il file più grande del progetto, il triplo del secondo (`invoices-manager.tsx`, 854). Parte dell'estrazione è già stata fatta (`pdf-editor-mesi-panel`, `pdf-editor-rich-*`, `use-rich-block-editor`), il resto — gestione della history undo/redo, drag-and-drop con snap, pannello proprietà, anteprima — è ancora tutto insieme. Non è un bug, ma è il punto in cui una modifica futura ha più probabilità di rompere qualcosa di non correlato.
+
+**Fix applicato:** scomposto in 12 file dedicati (537 righe residue in `pdf-editor.tsx`, da 1855), nessun cambio di comportamento. Geometria pura (snap, clamp, conversione numerica) in `lib/pdf/canvas-geometry.ts`, prima interamente priva di test e ora coperta. Stato e side-effect autocontenuti estratti in hook (`use-pdf-layout-history`, `use-canvas-zoom-pan`, `use-block-dragging`, `use-pdf-editor-keyboard-shortcuts`), coperti da test reali dove l'infrastruttura lo permette (zoom/pan restano verificati solo manualmente: dipendono da `ResizeObserver`/layout reale, che jsdom non calcola). Il rendering del singolo blocco (`pdf-editor-block.tsx`) e i pannelli UI (`pdf-editor-toolbar.tsx`, `pdf-editor-add-block-panel.tsx`, `pdf-editor-page-settings-panel.tsx`, `pdf-editor-block-properties-panel.tsx`) sono ora componenti presentazionali indipendenti. Verificato manualmente end-to-end nel browser (aggiunta blocchi di ogni tipo, drag, resize, undo/redo, zoom, pannello mesi, anteprima, margini pagina, copia/incolla da tastiera, salvataggio, reset) senza errori in console.
 
 <a id="qua-04"></a>
 ## QUA-04 — Copertura e2e limitata al login 🟡
@@ -780,4 +782,4 @@ LOG-02 (numerazione fatture — è una decisione di dominio, meglio prenderla pr
 SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
 
 **Da pianificare a parte** (interventi strutturali, non fix):
-SEC-08 (CSP con nonce) · QUA-03 (scomposizione dell'editor PDF) · QUA-04 (suite e2e sui flussi critici).
+SEC-08 (CSP con nonce) · QUA-04 (suite e2e sui flussi critici).
