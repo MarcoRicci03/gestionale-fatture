@@ -53,6 +53,7 @@ import { PdfEditorMesiPanel } from "@/components/settings/pdf-editor-mesi-panel"
 import { usePdfLayoutHistory } from "@/components/settings/use-pdf-layout-history";
 import { PRESETS, DEFAULT_MESE_CONFIG } from "@/components/settings/pdf-editor-presets";
 import { Block } from "@/components/settings/pdf-editor-block";
+import { useCanvasZoomPan } from "@/components/settings/use-canvas-zoom-pan";
 import {
   PAGE_W,
   PAGE_H,
@@ -81,8 +82,10 @@ function makeId() {
 }
 
 export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(0.55);
+  const { zoom, setZoom, autoFit, setAutoFit, fitZoom } = useCanvasZoomPan({ canvasRef });
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
@@ -105,7 +108,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     onNavigate: onPdfLayoutNavigate,
   });
 
-  const [autoFit, setAutoFit] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notification, setNotification] = useState<{
@@ -144,7 +146,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     isCut: boolean;
   } | null>(null);
   const pasteCountRef = useRef(0);
-  const canvasRef = useRef<HTMLDivElement>(null);
   const isMouseOverCanvas = useRef(false);
 
   const selectedBlock = useMemo(() => {
@@ -365,66 +366,10 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     undo,
     redo,
     pushSettings,
+    setAutoFit,
+    setZoom,
   ]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      setAutoFit(false);
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom((z) => clamp(z + delta, 0.3, 1.5));
-    };
-
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", handleWheel);
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    let isPanning = false;
-    let startX = 0;
-    let startY = 0;
-    let startScrollLeft = 0;
-    let startScrollTop = 0;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button !== 1) return;
-      e.preventDefault();
-      isPanning = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      startScrollLeft = canvas.scrollLeft;
-      startScrollTop = canvas.scrollTop;
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isPanning) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      canvas.scrollLeft = startScrollLeft - dx;
-      canvas.scrollTop = startScrollTop - dy;
-    };
-
-    const handleMouseUp = () => {
-      isPanning = false;
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    canvas.addEventListener("mousedown", handleMouseDown);
-    return () => {
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      handleMouseUp();
-    };
-  }, []);
 
   const duplicateBlock = useCallback((id: string) => {
     const block = settings.blocchi.find((b) => b.id === id);
@@ -455,31 +400,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     });
   }, [pushSettings]);
 
-  const fitZoom = useCallback(() => {
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const padding = 32; // spazio interno p-4 * 2
-    const availableW = rect.width - padding;
-    const availableH = rect.height - padding;
-    const scaleW = availableW / PAGE_W;
-    const scaleH = availableH / PAGE_H;
-    const next = clamp(Math.min(scaleW, scaleH) * 0.95, 0.3, 1.5);
-    setZoom(next);
-  }, []);
-
-  useEffect(() => {
-    if (!autoFit) return;
-    fitZoom();
-
-    const el = canvasRef.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver(() => {
-      fitZoom();
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [autoFit, fitZoom]);
 
   const handleDragStart = useCallback(
     (id: string) => {
