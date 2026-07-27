@@ -19,6 +19,15 @@ vi.mock("@/lib/actions/invoices", () => ({
   refreshInvoiceAnagrafica: vi.fn(async () => ({ success: true })),
 }));
 
+// ExportInvoicesDialog accetta ancora `invoiceIds` (contratto `selection`
+// introdotto qui ma implementato solo al Task 10): mockato per isolare questo
+// test dalla dipendenza cross-task, che non riguarda la navigazione testata
+// qui. Il mismatch di tipo resta e viene verificato separatamente con
+// `npx tsc --noEmit`.
+vi.mock("@/components/invoices/export-invoices-dialog", () => ({
+  ExportInvoicesDialog: vi.fn(() => null),
+}));
+
 const baseProps = {
   invoices: [],
   totalCount: 0,
