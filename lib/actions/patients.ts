@@ -123,10 +123,13 @@ export async function archivePatient(id: number): Promise<PatientActionState> {
   const userId = await requireUserId();
 
   try {
-    await prisma.paziente.update({
-      where: { id, id_Utente: userId },
+    const updated = await prisma.paziente.updateMany({
+      where: { id, id_Utente: userId, archiviato: false },
       data: { archiviato: true },
     });
+    if (updated.count === 0) {
+      return { error: "Paziente non trovato tra gli attivi" };
+    }
   } catch (error) {
     console.error("archivePatient error", error);
     return { error: "Errore durante l'archiviazione del paziente" };

@@ -61,7 +61,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | ✅ |
 | [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
 | [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
-| [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | 🟢 |
+| [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | ✅ |
 | [DEP-01](#dep-01) | Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto | ✅ |
 | [DEP-02](#dep-02) | `prisma` è una devDependency ma il container la invoca a runtime | 🔴 |
 | [DEP-03](#dep-03) | Nessun TLS: con `secure: true` il cookie di sessione non viene salvato | 🔴 |
@@ -492,11 +492,13 @@ Ramo morto: `app/api/invoices/export/route.ts` restituisce 400, 401, 404 e 429, 
 ---
 
 <a id="log-11"></a>
-## LOG-11 — `archivePatient` non verifica lo stato di partenza 🟢
+## LOG-11 — `archivePatient` non verifica lo stato di partenza ✅ risolta
 
 **File:** `lib/actions/patients.ts` (righe 122-133)
 
 A differenza di `restorePatient` (che filtra su `archiviato: true` e controlla `updated.count`), `archivePatient` fa `update` senza condizione sullo stato: archiviare un paziente già archiviato riesce e scrive comunque un evento di audit. Idempotente, nessun danno, solo rumore nel log.
+
+**Fix applicato:** `archivePatient` usa ora `updateMany` con `archiviato: false` nel `where` (stesso pattern di `restorePatient`, speculare) e controlla `updated.count === 0`, restituendo un errore ("Paziente non trovato tra gli attivi") invece di procedere e scrivere comunque l'evento di audit. Nota a margine, non affrontata qui perché fuori dallo scope di questo rilievo: `archivePayer` (`lib/actions/payers.ts`) ha lo stesso pattern senza guardia sullo stato di partenza.
 
 ---
 
