@@ -14,8 +14,6 @@ import {
   ArrowDown,
   ArrowUp,
   Bold,
-  ChevronDown,
-  ChevronRight,
   Code2,
   Copy,
   Eye,
@@ -49,6 +47,8 @@ import { useCanvasZoomPan } from "@/components/settings/use-canvas-zoom-pan";
 import { useBlockDragging } from "@/components/settings/use-block-dragging";
 import { usePdfEditorKeyboardShortcuts } from "@/components/settings/use-pdf-editor-keyboard-shortcuts";
 import { PdfEditorToolbar } from "@/components/settings/pdf-editor-toolbar";
+import { PdfEditorAddBlockPanel } from "@/components/settings/pdf-editor-add-block-panel";
+import { PdfEditorPageSettingsPanel } from "@/components/settings/pdf-editor-page-settings-panel";
 import {
   PAGE_W,
   PAGE_H,
@@ -403,68 +403,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
 
       <div className="flex flex-col gap-4 lg:h-[calc(100vh-340px)] lg:flex-row lg:items-start">
         {/* Toolbar sinistra */}
-        <div className="order-2 flex flex-col gap-2 lg:order-1 lg:w-44 lg:max-h-full lg:overflow-auto">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
-            Aggiungi blocco
-          </p>
-          {(Object.keys(PRESETS) as TipoBlocco[]).map((tipo) => {
-            const Icon = PRESETS[tipo].icon;
-            return (
-              <Button
-                key={tipo}
-                variant="outline"
-                className="justify-start"
-                size="sm"
-                onClick={() => addBlock(tipo)}
-                disabled={previewMode}
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {PRESETS[tipo].label}
-              </Button>
-            );
-          })}
-
-          <div className="mt-4 rounded-md border p-3 text-xs text-muted-foreground">
-            <p className="mb-2 font-semibold uppercase">Comandi rapidi</p>
-            <div className="space-y-1">
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">A</span> — Seleziona tutti
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">+</span> — Zoom avanti
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">-</span> — Zoom indietro
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">Z</span> — Annulla
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Tasto</span> +{" "}
-                <span className="rounded border px-1 font-mono">centrale</span> — Pan
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">C</span> — Copia
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">X</span> — Taglia
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Ctrl</span> +{" "}
-                <span className="rounded border px-1 font-mono">V</span> — Incolla
-              </p>
-              <p>
-                <span className="rounded border px-1 font-mono">Canc</span> — Elimina
-              </p>
-            </div>
-          </div>
-        </div>
+        <PdfEditorAddBlockPanel previewMode={previewMode} onAddBlock={addBlock} />
 
         {/* Canvas */}
         <div
@@ -573,89 +512,15 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
         {/* Pannello proprietà */}
         <div className="order-3 flex w-full flex-col gap-3 lg:w-72 lg:max-h-full lg:overflow-auto">
           {!previewMode && (
-            <div className="rounded-lg border p-3">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between text-sm font-medium"
-                onClick={() => setPageSettingsOpen((v) => !v)}
-              >
-                <span>Impostazioni pagina</span>
-                {pageSettingsOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </button>
-              {pageSettingsOpen && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground">
-                    Margini foglio
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="marginTop">Alto</Label>
-                      <Input
-                        id="marginTop"
-                        type="number"
-                        min={0}
-                        max={400}
-                        value={settings.marginTop}
-                        onChange={(e) =>
-                          updateSettings({
-                            marginTop: clamp(toNumber(e.target.value), 0, 400),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="marginRight">Destra</Label>
-                      <Input
-                        id="marginRight"
-                        type="number"
-                        min={0}
-                        max={400}
-                        value={settings.marginRight}
-                        onChange={(e) =>
-                          updateSettings({
-                            marginRight: clamp(toNumber(e.target.value), 0, 400),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="marginBottom">Basso</Label>
-                      <Input
-                        id="marginBottom"
-                        type="number"
-                        min={0}
-                        max={400}
-                        value={settings.marginBottom}
-                        onChange={(e) =>
-                          updateSettings({
-                            marginBottom: clamp(toNumber(e.target.value), 0, 400),
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="marginLeft">Sinistra</Label>
-                      <Input
-                        id="marginLeft"
-                        type="number"
-                        min={0}
-                        max={400}
-                        value={settings.marginLeft}
-                        onChange={(e) =>
-                          updateSettings({
-                            marginLeft: clamp(toNumber(e.target.value), 0, 400),
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <PdfEditorPageSettingsPanel
+              open={pageSettingsOpen}
+              onToggleOpen={() => setPageSettingsOpen((v) => !v)}
+              marginTop={settings.marginTop}
+              marginRight={settings.marginRight}
+              marginBottom={settings.marginBottom}
+              marginLeft={settings.marginLeft}
+              onChangeMargins={updateSettings}
+            />
           )}
           {selectedBlock && !previewMode ? (
             <div className="space-y-4 rounded-lg border p-4">
