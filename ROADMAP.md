@@ -58,7 +58,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | ✅ |
-| [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | 🟡 |
+| [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | ✅ |
 | [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
 | [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
 | [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | 🟢 |
@@ -452,7 +452,7 @@ La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copr
 ---
 
 <a id="log-08"></a>
-## LOG-08 — `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 🟡
+## LOG-08 — `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 ✅ risolta
 
 **Severità:** bassa
 **File:** `app/api/invoices/[id]/pdf/route.ts` (righe 36-40)
@@ -465,6 +465,8 @@ if (Number.isNaN(invoiceId)) return new Response("ID fattura non valido", { stat
 `Number.isNaN` non copre tutto: `Number("Infinity")` → `Infinity`, `Number("1e12")` → un intero fuori dal range `int4` di Postgres. In entrambi i casi Prisma lancia, l'eccezione non è catturata e il client riceve un 500 generico invece del 400 corretto.
 
 **Fix:** `if (!Number.isInteger(invoiceId) || invoiceId <= 0 || invoiceId > 2_147_483_647)`.
+
+**Fix applicato:** la condizione è stata estratta in `isValidInvoiceId` (`lib/validations/invoice-id.ts`), unica funzione pura che la route importa e usa. Estratta invece di lasciarla inline perché importare `route.ts` in un test trascina `lib/prisma.ts` (che lancia senza `DATABASE_URL`) — spostarla in `lib/validations/` permette un test reale sul comportamento (`Number("Infinity")`, `Number("1e12")`, limiti del range) invece di un'analisi statica sul sorgente.
 
 ---
 
@@ -773,7 +775,7 @@ DEP-01 (primo admin) → DEP-02 (prisma nel container) → DEP-03 (TLS + reverse
 LOG-02 (numerazione fatture — è una decisione di dominio, meglio prenderla prima che esistano fatture emesse) → SEC-05 (ultimo admin) → SEC-02 (tetto colonne export) → DEP-04, DEP-05, DEP-06 (backup e healthcheck) → DEP-07 (CI).
 
 **Poi, con calma:**
-SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-08, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
+SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
 
 **Da pianificare a parte** (interventi strutturali, non fix):
 SEC-08 (CSP con nonce) · QUA-03 (scomposizione dell'editor PDF) · QUA-04 (suite e2e sui flussi critici).

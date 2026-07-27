@@ -2,6 +2,7 @@ import { getUserIdOrNull } from "@/lib/auth/session";
 import { getInvoiceById } from "@/lib/data/invoices";
 import { generateInvoicePdf } from "@/lib/pdf/invoices";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
+import { isValidInvoiceId } from "@/lib/validations/invoice-id";
 
 // La generazione PDF (@react-pdf/renderer) è costosa in CPU: senza un
 // limite, un client autenticato può saturare il processo Node richiedendo
@@ -35,7 +36,7 @@ export async function GET(
   const { id } = await params;
   const invoiceId = Number(id);
 
-  if (Number.isNaN(invoiceId)) {
+  if (!isValidInvoiceId(invoiceId)) {
     return new Response("ID fattura non valido", { status: 400 });
   }
 
