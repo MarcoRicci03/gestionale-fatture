@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
+import type { InvoiceFilters } from "./invoice-filters";
 import { EMPTY_INVOICE_FILTERS } from "./invoice-filters";
 
 function setup(onChange = vi.fn()) {
@@ -17,6 +18,31 @@ function setup(onChange = vi.fn()) {
     />
   );
   return onChange;
+}
+
+function renderFilterBar(filters: InvoiceFilters, onChange = vi.fn()) {
+  const utils = render(
+    <InvoicesFilterBar
+      filters={filters}
+      onChange={onChange}
+      onReset={vi.fn()}
+      payers={[]}
+      patients={[]}
+      years={[2025, 2026]}
+    />
+  );
+  const rerenderWithFilters = (nextFilters: InvoiceFilters) =>
+    utils.rerender(
+      <InvoicesFilterBar
+        filters={nextFilters}
+        onChange={onChange}
+        onReset={vi.fn()}
+        payers={[]}
+        patients={[]}
+        years={[2025, 2026]}
+      />
+    );
+  return { onChange, rerenderWithFilters };
 }
 
 describe("InvoicesFilterBar - campo persona", () => {
@@ -57,5 +83,22 @@ describe("InvoicesFilterBar - campo persona", () => {
     await user.click(screen.getByLabelText("Anno"));
     await user.click(screen.getByRole("option", { name: "2025" }));
     expect(onChange).toHaveBeenCalledWith({ anno: "2025" });
+  });
+
+  it("un cambio esterno del valore (es. dopo 'Reset filtri') durante il debounce vince: non richiama onChange con il valore digitato stale", async () => {
+    const user = userEvent.setup({ delay: null });
+    const initialFilters: InvoiceFilters = { ...EMPTY_INVOICE_FILTERS, persona: "Mario" };
+    const { onChange, rerenderWithFilters } = renderFilterBar(initialFilters);
+
+    const input = screen.getByLabelText("Pagante o paziente");
+    await user.type(input, "X");
+    // Prima che il debounce (300ms) scada, il genitore riporta filters.persona
+    // a "" (es. l'utente ha cliccato "Reset filtri" a t+100ms).
+    vi.advanceTimersByTime(100);
+    rerenderWithFilters({ ...EMPTY_INVOICE_FILTERS, persona: "" });
+
+    vi.advanceTimersByTime(300);
+
+    expect(onChange).not.toHaveBeenCalledWith({ persona: "MarioX" });
   });
 });

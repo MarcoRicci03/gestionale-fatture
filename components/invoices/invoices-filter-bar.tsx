@@ -80,6 +80,14 @@ function PersonaSearchField({
     if (value !== lastExternalValue.current) {
       setInputValue(value);
       lastExternalValue.current = value;
+      // Un cambio genuino dall'esterno (es. "Reset filtri") deve vincere su
+      // un debounce ancora in corso: altrimenti il timer pendente scadrebbe
+      // comunque e rimanderebbe su il valore digitato stale, riportando il
+      // filtro a uno stato che l'utente ha appena esplicitamente cancellato.
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
   }, [value]);
 
