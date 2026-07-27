@@ -65,6 +65,7 @@ import { parseTestoToRichContent } from "@/lib/pdf/rich-text";
 import { RichTextBlockEditor } from "@/components/settings/pdf-editor-rich-block";
 import { VariableChipBadge } from "@/components/settings/pdf-editor-rich-extensions";
 import { PdfEditorMesiPanel } from "@/components/settings/pdf-editor-mesi-panel";
+import { usePdfLayoutHistory } from "@/components/settings/use-pdf-layout-history";
 import {
   PAGE_W,
   PAGE_H,
@@ -86,8 +87,6 @@ type PdfEditorProps = {
   initialSettings: ImpostazioniPdf;
   userId: number;
 };
-
-const MAX_HISTORY_LENGTH = 50;
 
 type DraggingState = { id: string; x: number; y: number };
 
@@ -142,82 +141,28 @@ function makeId() {
 }
 
 export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
-  const [editorState, setEditorState] = useState<{
-    history: ImpostazioniPdf[];
-    index: number;
-  }>({
-    history: [initialSettings],
-    index: 0,
-  });
-  const settings = editorState.history[editorState.index];
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(0.55);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
-  const pushSettings = useCallback(
-    (
-      next:
-        | ImpostazioniPdf
-        | ((prev: ImpostazioniPdf) => ImpostazioniPdf)
-    ) => {
-      setEditorState((state) => {
-        const current = state.history[state.index];
-        const resolved =
-          typeof next === "function"
-            ? (next as (prev: ImpostazioniPdf) => ImpostazioniPdf)(current)
-            : next;
-        if (resolved === current) return state;
-        let nextHistory = [
-          ...state.history.slice(0, state.index + 1),
-          resolved,
-        ];
-        let nextIndex = state.index + 1;
-        if (nextHistory.length > MAX_HISTORY_LENGTH) {
-          const overflow = nextHistory.length - MAX_HISTORY_LENGTH;
-          nextHistory = nextHistory.slice(overflow);
-          nextIndex -= overflow;
-        }
-        return { history: nextHistory, index: nextIndex };
+  const { settings, pushSettings, undo, redo, canUndo, canRedo } = usePdfLayoutHistory({
+    initialSettings,
+    onNavigate: (nextSettings) => {
+      setSelectedIds((prev) => {
+        const validIds = new Set<string>();
+        prev.forEach((id) => {
+          if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
+        });
+        return validIds;
       });
+      setEditingBlockId((cur) =>
+        cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
+      );
     },
-    []
-  );
+  });
 
-  const undo = useCallback(() => {
-    if (editorState.index <= 0) return;
-    const nextIndex = editorState.index - 1;
-    const nextSettings = editorState.history[nextIndex];
-    setEditorState({ ...editorState, index: nextIndex });
-    const validIds = new Set<string>();
-    selectedIds.forEach((id) => {
-      if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
-    });
-    setSelectedIds(validIds);
-    setEditingBlockId((cur) =>
-      cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
-    );
-  }, [editorState, selectedIds]);
-
-  const redo = useCallback(() => {
-    if (editorState.index >= editorState.history.length - 1) return;
-    const nextIndex = editorState.index + 1;
-    const nextSettings = editorState.history[nextIndex];
-    setEditorState({ ...editorState, index: nextIndex });
-    const validIds = new Set<string>();
-    selectedIds.forEach((id) => {
-      if (nextSettings.blocchi.some((b) => b.id === id)) validIds.add(id);
-    });
-    setSelectedIds(validIds);
-    setEditingBlockId((cur) =>
-      cur && nextSettings.blocchi.some((b) => b.id === cur) ? cur : null
-    );
-  }, [editorState, selectedIds]);
-
-  const canUndo = editorState.index > 0;
-  const canRedo = editorState.index < editorState.history.length - 1;
   const [autoFit, setAutoFit] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
   const [isPending, startTransition] = useTransition();
