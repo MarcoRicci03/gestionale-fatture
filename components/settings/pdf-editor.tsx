@@ -20,16 +20,8 @@ import {
   Copy,
   Eye,
   EyeOff,
-  Grid3x3,
   Italic,
-  Maximize,
-  Minus,
-  Plus,
-  Redo2,
-  RefreshCcw,
-  Save,
   Trash2,
-  Undo2,
 } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +48,7 @@ import { Block } from "@/components/settings/pdf-editor-block";
 import { useCanvasZoomPan } from "@/components/settings/use-canvas-zoom-pan";
 import { useBlockDragging } from "@/components/settings/use-block-dragging";
 import { usePdfEditorKeyboardShortcuts } from "@/components/settings/use-pdf-editor-keyboard-shortcuts";
+import { PdfEditorToolbar } from "@/components/settings/pdf-editor-toolbar";
 import {
   PAGE_W,
   PAGE_H,
@@ -355,96 +348,37 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
 
   return (
     <div className="relative flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant={autoFit ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => {
-              setAutoFit(true);
-              fitZoom();
-            }}
-            title="Adatta alla finestra"
-          >
-            <Maximize className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setAutoFit(false);
-              setZoom((z) => clamp(z - 0.1, 0.3, 1.5));
-            }}
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[4rem] text-center text-sm font-medium">
-            {Math.round(zoom * 100)}%
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setAutoFit(false);
-              setZoom((z) => clamp(z + 0.1, 0.3, 1.5));
-            }}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={showGrid ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setShowGrid((v) => !v)}
-          >
-            <Grid3x3 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={previewMode ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => {
-              setPreviewMode((v) => !v);
-              setSelectedIds(new Set());
-              stopEditing();
-            }}
-          >
-            <Eye className="mr-1 h-4 w-4" />
-            {previewMode ? "Modifica" : "Anteprima"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={undo}
-            disabled={!canUndo}
-            title="Annulla"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={redo}
-            disabled={!canRedo}
-            title="Ripeti"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setResetOpen(true)}
-          >
-            <RefreshCcw className="mr-1 h-4 w-4" />
-            Reset
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={isPending}>
-            <Save className="mr-1 h-4 w-4" />
-            {isPending ? "Salvataggio..." : "Salva modifiche"}
-          </Button>
-        </div>
-      </div>
+      <PdfEditorToolbar
+        zoom={zoom}
+        autoFit={autoFit}
+        showGrid={showGrid}
+        previewMode={previewMode}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        isSaving={isPending}
+        onFitToWindow={() => {
+          setAutoFit(true);
+          fitZoom();
+        }}
+        onZoomOut={() => {
+          setAutoFit(false);
+          setZoom((z) => clamp(z - 0.1, 0.3, 1.5));
+        }}
+        onZoomIn={() => {
+          setAutoFit(false);
+          setZoom((z) => clamp(z + 0.1, 0.3, 1.5));
+        }}
+        onToggleGrid={() => setShowGrid((v) => !v)}
+        onTogglePreview={() => {
+          setPreviewMode((v) => !v);
+          setSelectedIds(new Set());
+          stopEditing();
+        }}
+        onUndo={undo}
+        onRedo={redo}
+        onOpenReset={() => setResetOpen(true)}
+        onSave={handleSave}
+      />
 
       {notification && (
         <div
