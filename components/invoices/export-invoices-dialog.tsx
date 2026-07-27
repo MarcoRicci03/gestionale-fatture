@@ -17,6 +17,7 @@ import {
   type ExportColumnCategory,
 } from "@/lib/excel/column-catalog";
 import { MAX_EXPORT_INVOICES } from "@/lib/validations/invoice-export";
+import type { InvoiceFilters } from "./invoice-filters";
 
 const DEFAULT_SELECTED_COLUMNS = new Set(EXPORT_COLUMNS.map((c) => c.key));
 
@@ -27,16 +28,20 @@ const CATEGORY_ORDER: ExportColumnCategory[] = [
   "dettaglio",
 ];
 
+type ExportSelection =
+  | { kind: "ids"; ids: number[] }
+  | { kind: "filters"; filters: InvoiceFilters; count: number };
+
 type ExportInvoicesDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoiceIds: number[];
+  selection: ExportSelection;
 };
 
 export function ExportInvoicesDialog({
   open,
   onOpenChange,
-  invoiceIds,
+  selection,
 }: ExportInvoicesDialogProps) {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(
     () => new Set(DEFAULT_SELECTED_COLUMNS)
@@ -44,7 +49,7 @@ export function ExportInvoicesDialog({
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const exportCount = invoiceIds.length;
+  const exportCount = selection.kind === "ids" ? selection.ids.length : selection.count;
   const overLimit = exportCount > MAX_EXPORT_INVOICES;
 
   const toggleColumn = (key: string, checked: boolean) => {
@@ -64,7 +69,9 @@ export function ExportInvoicesDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ids: invoiceIds,
+          ...(selection.kind === "ids"
+            ? { ids: selection.ids }
+            : { filters: selection.filters }),
           columns: Array.from(selectedColumns),
         }),
       });
