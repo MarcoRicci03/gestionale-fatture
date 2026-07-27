@@ -6,6 +6,12 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL non configurato nelle variabili d'ambiente");
 }
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+  pool : Pool | undefined;
+};
+
 // Limiti espliciti sul pool: senza `max`, `pg` non impedisce di aprire
 // connessioni fino a saturare `max_connections` lato Postgres sotto carico o
 // leak di connessioni; `idleTimeoutMillis`/`connectionTimeoutMillis` evitano
@@ -20,12 +26,9 @@ const pool = new Pool({
 
 const adapter = new PrismaPg(pool);
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.pool = pool;
 }

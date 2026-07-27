@@ -47,14 +47,14 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-06](#sec-06) | `proxy.ts` lascia passare anche le richieste HEAD | ✅ |
 | [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | ✅ |
 | [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
-| [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | 🟡 |
+| [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | ✅ |
 | [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
 | [SEC-11](#sec-11) | La password tentata può finire nell'audit log | ✅ |
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | ✅ |
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
-| [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
+| [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | ✅ |
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | ✅ |
@@ -240,7 +240,7 @@ La CSP attuale è già un guadagno netto (blocca il caricamento da domini estern
 ---
 
 <a id="sec-09"></a>
-## SEC-09 — Postgres di sviluppo esposto su tutte le interfacce 🟡
+## SEC-09 — Postgres di sviluppo esposto su tutte le interfacce ✅ risolta
 
 **Severità:** bassa
 **File:** `docker-compose.dev.yml` (righe 9-11)
@@ -252,7 +252,7 @@ ports:
 
 Senza indirizzo, Docker pubblica su `0.0.0.0`: il DB di sviluppo — credenziali `admin` / `password_dev`, in chiaro nel file versionato — è raggiungibile da chiunque sia sulla stessa rete (wifi di un bar, rete d'ufficio). Se il DB locale contiene dati reali di pazienti anche solo per prova, il problema è concreto.
 
-**Fix:** `- "127.0.0.1:5432:5432"`.
+**Fix applicato:** `- "127.0.0.1:5432:5432"`.
 
 ---
 
@@ -376,12 +376,12 @@ Il problema non è la modificabilità in sé (serve per correggere errori), ma c
 ---
 
 <a id="log-04"></a>
-## LOG-04 — Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo 🟡
+## LOG-04 — Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo ✅ risolta
 
 **Severità:** bassa (solo sviluppo)
 **File:** `lib/prisma.ts` (righe 14-30)
 
-Il singleton su `globalThis` protegge `PrismaClient`, ma **non il `Pool`**, che viene costruito a livello di modulo:
+Il singleton su `globalThis` protegge `PrismaClient`, ma **non il `Pool`**, che veniva costruito a livello di modulo:
 
 ```ts
 const pool = new Pool({ connectionString, max: 10, ... });   // ← nuovo a ogni valutazione del modulo
@@ -389,9 +389,9 @@ const adapter = new PrismaPg(pool);
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });  // ← riusa il vecchio
 ```
 
-Ogni ricompilazione del modulo in dev crea un pool nuovo (fino a 10 connessioni) che non viene mai chiuso, mentre il client riusato continua a puntare al primo. Su una sessione di sviluppo lunga si arriva a saturare `max_connections` di Postgres, con errori apparentemente casuali. È esattamente il problema che il commento nel file dice di voler evitare, applicato solo a metà.
+Ogni ricompilazione del modulo in dev creava un pool nuovo (fino a 10 connessioni) che non veniva mai chiuso, mentre il client riusato continuava a puntare al primo. Su una sessione di sviluppo lunga si arrivava a saturare `max_connections` di Postgres, con errori apparentemente casuali. Era esattamente il problema che il commento nel file dice di voler evitare, applicato solo a metà.
 
-**Fix:** memoizzare anche il pool su `globalThis`, con la stessa guardia.
+**Fix applicato:** `pool` memoizzato su `globalThis` insieme a `prisma`, stessa guardia (`globalForPrisma.pool = pool` sotto `NODE_ENV !== "production"`), dichiarato prima della creazione del `Pool` così l'assegnazione finale può referenziarlo.
 
 ---
 
