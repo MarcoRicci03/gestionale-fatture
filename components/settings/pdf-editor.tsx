@@ -54,13 +54,12 @@ import { usePdfLayoutHistory } from "@/components/settings/use-pdf-layout-histor
 import { PRESETS, DEFAULT_MESE_CONFIG } from "@/components/settings/pdf-editor-presets";
 import { Block } from "@/components/settings/pdf-editor-block";
 import { useCanvasZoomPan } from "@/components/settings/use-canvas-zoom-pan";
+import { useBlockDragging } from "@/components/settings/use-block-dragging";
 import {
   PAGE_W,
   PAGE_H,
   clamp,
   toNumber,
-  computeSnap,
-  type GuideLines,
 } from "@/lib/pdf/canvas-geometry";
 import type {
   Blocco,
@@ -74,8 +73,6 @@ type PdfEditorProps = {
   initialSettings: ImpostazioniPdf;
   userId: number;
 };
-
-type DraggingState = { id: string; x: number; y: number };
 
 function makeId() {
   return crypto.randomUUID();
@@ -139,8 +136,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   const [resetOpen, setResetOpen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
-  const [dragging, setDragging] = useState<DraggingState | null>(null);
-  const [guides, setGuides] = useState<GuideLines>({});
   const [clipboard, setClipboard] = useState<{
     blocks: Blocco[];
     isCut: boolean;
@@ -174,6 +169,12 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       ),
     }));
   }, [pushSettings]);
+
+  const { dragging, guides, handleDragStart, handleDrag, handleDragStop } = useBlockDragging({
+    blocchi: settings.blocchi,
+    updateBlock,
+    onDragStart: (id) => setSelectedIds(new Set([id])),
+  });
 
   const updateSettings = useCallback(
     (patch: Partial<PdfLayout>) => {
@@ -399,42 +400,6 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
       return { ...prev, blocchi: next };
     });
   }, [pushSettings]);
-
-
-  const handleDragStart = useCallback(
-    (id: string) => {
-      const block = settings.blocchi.find((b) => b.id === id);
-      if (!block) return;
-      setDragging({ id, x: block.x, y: block.y });
-      setSelectedIds(new Set([id]));
-      setGuides({});
-    },
-    [settings.blocchi, setSelectedIds]
-  );
-
-  const handleDrag = useCallback(
-    (id: string, x: number, y: number) => {
-      const block = settings.blocchi.find((b) => b.id === id);
-      if (!block) return;
-      const others = settings.blocchi.filter((b) => b.id !== id);
-      const snapped = computeSnap(block, x, y, others);
-      setDragging({ id, x: snapped.x, y: snapped.y });
-      setGuides(snapped.guides);
-    },
-    [settings.blocchi]
-  );
-
-  const handleDragStop = useCallback(
-    (id: string) => {
-      setDragging((current) => {
-        if (!current || current.id !== id) return current;
-        updateBlock(id, { x: current.x, y: current.y });
-        return null;
-      });
-      setGuides({});
-    },
-    [updateBlock]
-  );
 
   const handleSave = useCallback(() => {
     setNotification(null);
