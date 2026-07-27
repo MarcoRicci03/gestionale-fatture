@@ -55,7 +55,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
-| [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | 🟡 |
+| [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | 🟡 |
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | 🟡 |
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | 🟡 |
@@ -396,7 +396,7 @@ Ogni ricompilazione del modulo in dev crea un pool nuovo (fino a 10 connessioni)
 ---
 
 <a id="log-05"></a>
-## LOG-05 — `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser 🟡
+## LOG-05 — `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser ✅ risolta
 
 **Severità:** media (prestazioni + esposizione dati)
 **File:** `lib/data/invoices.ts` (righe 4-22), `app/(protected)/invoices/page.tsx`, `components/invoices/invoices-manager.tsx`
@@ -411,6 +411,8 @@ Due effetti che peggiorano nel tempo:
 Lo stesso schema, in scala minore, vale per `getPatients()`, `getPayers()` e `getAuditLog()` (quest'ultimo almeno ha `take: 200`).
 
 **Fix:** spostare i filtri sul server (search params → `where` di Prisma) e paginare. È il refactor più corposo di questa lista; ha senso pianificarlo, non improvvisarlo.
+
+**Fix applicato:** filtri e paginazione spostati lato server. `lib/invoices/list-query.ts` traduce i filtri (data, persona, modalità, anno) in un `where` Prisma condiviso tra la lista (`getInvoices`, ora con `skip`/`take`, pagina da `INVOICES_PAGE_SIZE`) e l'export (`app/api/invoices/export/route.ts`, che ora accetta anche `filters` oltre a `ids` espliciti, per poter esportare risultati non caricati lato client). `app/(protected)/invoices/page.tsx` legge filtri e pagina da `searchParams`; `InvoicesManager` non calcola più nulla client-side, naviga via `router.replace`. Il confronto sul nome (`persona`) passa da "sottostringa contigua di `cognome nome`" a "ogni parola cercata compare in cognome o nome di pagante o paziente" — comportamento diverso ma più permissivo, necessario per evitare una query SQL raw sulla concatenazione dei due campi.
 
 ---
 
@@ -770,4 +772,4 @@ LOG-02 (numerazione fatture — è una decisione di dominio, meglio prenderla pr
 SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-06, LOG-07, LOG-08, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
 
 **Da pianificare a parte** (interventi strutturali, non fix):
-LOG-05 (paginazione e filtri server-side) · SEC-08 (CSP con nonce) · QUA-03 (scomposizione dell'editor PDF) · QUA-04 (suite e2e sui flussi critici).
+SEC-08 (CSP con nonce) · QUA-03 (scomposizione dell'editor PDF) · QUA-04 (suite e2e sui flussi critici).
