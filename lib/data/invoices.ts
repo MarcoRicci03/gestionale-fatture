@@ -1,25 +1,51 @@
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";
+import { buildInvoiceWhere } from "@/lib/invoices/list-query";
+import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
+import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 
-export async function getInvoices() {
+export async function getInvoices(filters: InvoiceFilters, page: number) {
   const userId = await requireUserId();
   // Nessun filtro su pagante/paziente.archiviato: una fattura è un documento
   // fiscale e resta visibile anche se il pagante o il paziente collegato
   // sono stati archiviati nel frattempo (vedi lib/actions/payers.ts,
   // lib/actions/patients.ts).
-  const invoices = await prisma.pagamento.findMany({
+  const where = buildInvoiceWhere(userId, filters);
+  const [invoices, totalCount] = await Promise.all([
+    prisma.pagamento.findMany({
+      where,
+      include: { pagante: true, paziente: true, mesi: true },
+      orderBy: { data: "desc" },
+      skip: (page - 1) * INVOICES_PAGE_SIZE,
+      take: INVOICES_PAGE_SIZE,
+    }),
+    prisma.pagamento.count({ where }),
+  ]);
+  return {
+    invoices: invoices.map((invoice) => ({
+      ...invoice,
+      prezzo_totale: invoice.prezzo_totale.toNumber(),
+      mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
+    })),
+    totalCount,
+  };
+}
+
+// Anni distinti su TUTTE le fatture dell'utente, non solo sulla pagina/i
+// filtri correnti: popola il menu a tendina "Anno" del filtro, che deve
+// restare stabile indipendentemente da cosa mostra la pagina in quel
+// momento (stesso comportamento di oggi, quando "years" era calcolato lato
+// client sull'intero array non filtrato).
+export async function getInvoiceYears(): Promise<number[]> {
+  const userId = await requireUserId();
+  const rows = await prisma.pagamento.findMany({
     where: { id_Utente: userId },
-    include: { pagante: true, paziente: true, mesi: true },
-    orderBy: { data: "desc" },
+    select: { anno: true },
+    distinct: ["anno"],
+    orderBy: { anno: "desc" },
   });
-  // Prisma.Decimal non è serializzabile attraverso il boundary Server -> Client
-  // Component: va convertito a number prima di restituire i dati.
-  return invoices.map((invoice) => ({
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  }));
+  return rows.map((r) => r.anno);
 }
 
 export async function getInvoiceById(id: number) {
