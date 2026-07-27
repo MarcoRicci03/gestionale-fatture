@@ -78,7 +78,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
 | [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
 | [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | ✅ |
-| [QUA-04](#qua-04) | Copertura e2e limitata al login | ✅ |
+| [QUA-04](#qua-04) | Copertura e2e limitata al login | 🟡 |
 | [QUA-05](#qua-05) | `isBolloCodiceTaken` rilegge la sessione a ogni chiamata | 🟢 |
 
 ---
@@ -755,13 +755,11 @@ Il file più grande del progetto, il triplo del secondo (`invoices-manager.tsx`,
 **Fix applicato:** scomposto in 12 file dedicati (537 righe residue in `pdf-editor.tsx`, da 1855), nessun cambio di comportamento. Geometria pura (snap, clamp, conversione numerica) in `lib/pdf/canvas-geometry.ts`, prima interamente priva di test e ora coperta. Stato e side-effect autocontenuti estratti in hook (`use-pdf-layout-history`, `use-canvas-zoom-pan`, `use-block-dragging`, `use-pdf-editor-keyboard-shortcuts`), coperti da test reali dove l'infrastruttura lo permette (zoom/pan restano verificati solo manualmente: dipendono da `ResizeObserver`/layout reale, che jsdom non calcola). Il rendering del singolo blocco (`pdf-editor-block.tsx`) e i pannelli UI (`pdf-editor-toolbar.tsx`, `pdf-editor-add-block-panel.tsx`, `pdf-editor-page-settings-panel.tsx`, `pdf-editor-block-properties-panel.tsx`) sono ora componenti presentazionali indipendenti. Verificato manualmente end-to-end nel browser in due passaggi: aggiunta blocchi di ogni tipo, drag, undo/redo, pannello mesi, anteprima, margini pagina, copia/incolla da tastiera, salvataggio; e (dopo un rilievo della review finale sulla copertura del passaggio manuale) ridimensionamento dalla maniglia, pan col tasto centrale, zoom con Ctrl+rotellina, "adatta alla finestra" dopo un resize della finestra, editing ricco via doppio click con uscita su Esc, reset con conferma effettiva, e persistenza dopo salvataggio+ricarica pagina — senza errori in console.
 
 <a id="qua-04"></a>
-## QUA-04 — Copertura e2e limitata al login ✅ risolta
+## QUA-04 — Copertura e2e limitata al login 🟡
 
 **File:** `e2e/login.spec.ts` (unico spec)
 
 La logica pura è molto ben coperta a livello unitario, ma i flussi che attraversano davvero lo stack — creare una fattura, scaricarne il PDF, esportare in Excel, archiviare un pagante con cascata — non hanno alcun test end-to-end. Sono proprio i flussi in cui un aggiornamento di Next.js o Prisma (cfr. SEC-01) può rompere qualcosa che nessun unit test vede.
-
-**Fix applicato:** aggiunti `e2e/invoices.spec.ts` (creazione fattura + download PDF), `e2e/invoices-export.spec.ts` (esportazione Excel) e `e2e/payers-archive.spec.ts` (archiviazione pagante con cascata). I dati prerequisiti (pagante/paziente/fattura) sono creati con chiamate Prisma dirette in `e2e/fixtures/prisma-test-fixtures.ts` (stesso pattern di `e2e/global-setup.ts`), con suffisso univoco per run e pulizia in `afterAll`. `playwright.config.ts` gira ora con `workers: 1`, perché i nuovi spec condividono lo stesso `TEST_USER` e quindi la stessa numerazione fatture per anno (senza retry su collisione).
 
 <a id="qua-05"></a>
 ## QUA-05 — `isBolloCodiceTaken` rilegge la sessione a ogni chiamata 🟢
@@ -784,4 +782,4 @@ LOG-02 (numerazione fatture — è una decisione di dominio, meglio prenderla pr
 SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
 
 **Da pianificare a parte** (interventi strutturali, non fix):
-SEC-08 (CSP con nonce).
+SEC-08 (CSP con nonce) · QUA-04 (suite e2e sui flussi critici).
