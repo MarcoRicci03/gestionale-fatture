@@ -57,7 +57,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
-| [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | 🟡 |
+| [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | ✅ |
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | 🟡 |
 | [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
 | [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
@@ -438,7 +438,7 @@ La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copr
 ---
 
 <a id="log-07"></a>
-## LOG-07 — Nessun vincolo sull'anno della fattura 🟡
+## LOG-07 — Nessun vincolo sull'anno della fattura ✅ risolta
 
 **Severità:** bassa
 **File:** `lib/validations/invoice.ts` (righe 16-22)
@@ -446,6 +446,8 @@ La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copr
 `data` accetta qualunque stringa `yyyy-MM-dd` sintatticamente valida, e `anno` ne deriva (`invoiceDate.getFullYear()`, `lib/actions/invoices.ts` riga 141). È possibile creare una fattura datata 1850 o 4000: la numerazione per anno resta coerente, ma il dato è insensato e sporca gli aggregati e il filtro anni della UI (`invoices-manager.tsx` riga 108).
 
 **Fix:** `.refine` sull'anno in una finestra ragionevole (es. 2000 → anno corrente + 1).
+
+**Fix applicato:** aggiunto un `.refine` a livello di oggetto in `invoiceSchema` (`lib/validations/invoice.ts`) che rifiuta `data` fuori dalla finestra 2000 → anno corrente + 1 (il +1 per non bloccare fatture di inizio anno emesse in anticipo a dicembre). Essendo l'unico punto in cui `data`/`anno` vengono validati prima di `createInvoice`/`updateInvoice` (entrambi derivano `anno` da `invoiceDate.getFullYear()` sullo stesso valore già validato), un solo fix in `lib/validations/invoice.ts` copre entrambi i flussi.
 
 ---
 
@@ -771,7 +773,7 @@ DEP-01 (primo admin) → DEP-02 (prisma nel container) → DEP-03 (TLS + reverse
 LOG-02 (numerazione fatture — è una decisione di dominio, meglio prenderla prima che esistano fatture emesse) → SEC-05 (ultimo admin) → SEC-02 (tetto colonne export) → DEP-04, DEP-05, DEP-06 (backup e healthcheck) → DEP-07 (CI).
 
 **Poi, con calma:**
-SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-06, LOG-07, LOG-08, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
+SEC-03, SEC-04, SEC-06, SEC-07, SEC-09, SEC-10, SEC-11, SEC-12 · LOG-03, LOG-04, LOG-08, LOG-09 · DEP-08, DEP-09 · DOC-02, DOC-03 · QUA-01…05.
 
 **Da pianificare a parte** (interventi strutturali, non fix):
 SEC-08 (CSP con nonce) · QUA-03 (scomposizione dell'editor PDF) · QUA-04 (suite e2e sui flussi critici).

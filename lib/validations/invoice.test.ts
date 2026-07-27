@@ -53,4 +53,42 @@ describe("invoiceSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it("rifiuta una data anteriore al 2000", () => {
+    const r = invoiceSchema.safeParse({
+      ...base,
+      data: "1850-01-01",
+      mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rifiuta una data oltre l'anno corrente + 1", () => {
+    const tooFarInFuture = new Date().getFullYear() + 2;
+    const r = invoiceSchema.safeParse({
+      ...base,
+      data: `${tooFarInFuture}-01-01`,
+      mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("accetta una data nell'anno corrente + 1", () => {
+    const nextYear = new Date().getFullYear() + 1;
+    const r = invoiceSchema.safeParse({
+      ...base,
+      data: `${nextYear}-01-01`,
+      mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accetta l'anno 2000, il limite inferiore", () => {
+    const r = invoiceSchema.safeParse({
+      ...base,
+      data: "2000-01-01",
+      mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+    });
+    expect(r.success).toBe(true);
+  });
 });

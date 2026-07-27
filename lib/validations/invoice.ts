@@ -9,6 +9,13 @@ import { roundCurrency } from "@/lib/utils/currency";
 // eventuale separatore decimale italiano (virgola) in punto.
 const PREZZO_REGEX = /^\d+(\.\d{1,2})?$/;
 
+// Limite inferiore fisso (nessuna fattura reale precede il 2000 in questo
+// studio) e superiore agganciato all'anno corrente + 1 (per non bloccare
+// fatture di inizio anno emesse in anticipo a dicembre). `data` è sintatticamente
+// valida per qualunque anno a 4 cifre; senza questo vincolo un anno come 1850
+// o 4000 passava e sporcava numerazione, aggregati e filtro anni della UI.
+const ANNO_FATTURA_MIN = 2000;
+
 export const invoiceSchema = z
   .object({
     id_Pagante: z.coerce.number().int().positive("Seleziona un pagante"),
@@ -81,7 +88,17 @@ export const invoiceSchema = z
       ])
       .transform((val) => (val === "" ? undefined : val))
       .optional(),
-  });
+  })
+  .refine(
+    (val) => {
+      const anno = val.data.getFullYear();
+      return anno >= ANNO_FATTURA_MIN && anno <= new Date().getFullYear() + 1;
+    },
+    {
+      message: `L'anno della fattura deve essere compreso tra ${ANNO_FATTURA_MIN} e l'anno prossimo`,
+      path: ["data"],
+    }
+  );
 
 export type InvoiceFormInput = z.input<typeof invoiceSchema>;
 export type InvoiceFormData = z.output<typeof invoiceSchema>;
