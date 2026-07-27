@@ -55,6 +55,7 @@ import { PRESETS, DEFAULT_MESE_CONFIG } from "@/components/settings/pdf-editor-p
 import { Block } from "@/components/settings/pdf-editor-block";
 import { useCanvasZoomPan } from "@/components/settings/use-canvas-zoom-pan";
 import { useBlockDragging } from "@/components/settings/use-block-dragging";
+import { usePdfEditorKeyboardShortcuts } from "@/components/settings/use-pdf-editor-keyboard-shortcuts";
 import {
   PAGE_W,
   PAGE_H,
@@ -268,109 +269,21 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
     setEditingBlockId((cur) => (cur === id ? null : cur));
   }, [pushSettings]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isMod = e.ctrlKey || e.metaKey;
-      const isZoomIn = isMod && (e.key === "+" || e.key === "Add" || e.key === "=");
-      const isZoomOut = isMod && (e.key === "-" || e.key === "Subtract");
-
-      if (
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
-        target.isContentEditable
-      ) {
-        if (!(isMouseOverCanvas.current && (isZoomIn || isZoomOut))) return;
-      }
-
-      if (isZoomIn) {
-        e.preventDefault();
-        setAutoFit(false);
-        setZoom((z) => clamp(z + 0.1, 0.3, 1.5));
-        return;
-      }
-      if (isZoomOut) {
-        e.preventDefault();
-        setAutoFit(false);
-        setZoom((z) => clamp(z - 0.1, 0.3, 1.5));
-        return;
-      }
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedIds.size > 0) {
-          e.preventDefault();
-          selectedIds.forEach((id) => removeBlock(id));
-        }
-        return;
-      }
-
-      if (!isMod) return;
-
-      if ((e.key === "z" || e.key === "Z") && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      } else if ((e.key === "z" || e.key === "Z") && e.shiftKey) {
-        e.preventDefault();
-        redo();
-      } else if (e.key === "y" || e.key === "Y") {
-        e.preventDefault();
-        redo();
-      } else if (e.key === "a" || e.key === "A") {
-        e.preventDefault();
-        setSelectedIds((prev) => {
-          if (prev.size === settings.blocchi.length) return new Set();
-          return new Set(settings.blocchi.map((b) => b.id));
-        });
-      } else if ((e.key === "c" || e.key === "C") && selectedIds.size > 0) {
-        e.preventDefault();
-        const blocks = settings.blocchi.filter((b) => selectedIds.has(b.id));
-        setClipboard({ blocks: blocks.map((b) => ({ ...b })), isCut: false });
-        pasteCountRef.current = 0;
-      } else if ((e.key === "x" || e.key === "X") && selectedIds.size > 0) {
-        e.preventDefault();
-        const blocks = settings.blocchi.filter((b) => selectedIds.has(b.id));
-        setClipboard({ blocks: blocks.map((b) => ({ ...b })), isCut: true });
-        pasteCountRef.current = 0;
-        blocks.forEach((b) => removeBlock(b.id));
-      } else if ((e.key === "v" || e.key === "V") && clipboard) {
-        e.preventDefault();
-        pasteCountRef.current += 1;
-        const offset = pasteCountRef.current * 20;
-        const newIds: string[] = [];
-        const newBlocks = clipboard.blocks.map((block) => {
-          const id = makeId();
-          newIds.push(id);
-          return {
-            ...block,
-            id,
-            x: clamp(block.x + offset, 0, PAGE_W - block.width),
-            y: clamp(block.y + offset, 0, PAGE_H - block.height),
-          };
-        });
-        pushSettings((prev) => ({
-          ...prev,
-          blocchi: [...prev.blocchi, ...newBlocks],
-        }));
-        setSelectedIds(new Set(newIds));
-        if (clipboard.isCut) {
-          setClipboard(null);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
+  usePdfEditorKeyboardShortcuts({
+    blocchi: settings.blocchi,
     selectedIds,
-    settings.blocchi,
+    setSelectedIds,
     clipboard,
+    setClipboard,
+    pasteCountRef,
+    isMouseOverCanvas,
     removeBlock,
     undo,
     redo,
     pushSettings,
     setAutoFit,
     setZoom,
-  ]);
-
+  });
 
   const duplicateBlock = useCallback((id: string) => {
     const block = settings.blocchi.find((b) => b.id === id);
