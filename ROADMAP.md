@@ -56,7 +56,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | 🟡 |
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
-| [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | 🟡 |
+| [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | 🟡 |
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | 🟡 |
 | [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
@@ -417,7 +417,7 @@ Lo stesso schema, in scala minore, vale per `getPatients()`, `getPayers()` e `ge
 ---
 
 <a id="log-06"></a>
-## LOG-06 — `nome` e `cognome` dell'utente senza limite di lunghezza 🟡
+## LOG-06 — `nome` e `cognome` dell'utente senza limite di lunghezza ✅ risolta
 
 **Severità:** bassa
 **File:** `lib/validations/user.ts` (righe 9-10)
@@ -432,6 +432,8 @@ Nessun `.max()`, a differenza di ogni altro schema del progetto (`patientSchema`
 La svista si spiega guardando `scripts/verify-input-length-limits.test.ts`: copre `invoiceSchema`, `patientSchema`, `payerSchema`, `profileUpdateSchema` e `bloccoSchema`, ma **non `userCreateSchema`/`userUpdateSchema`**. Il test che avrebbe intercettato il caso non lo guarda.
 
 **Fix:** `.max(100)` su entrambi i campi e un blocco `describe("userCreateSchema")` nel test esistente.
+
+**Fix applicato:** aggiunto `.max(100)` a `nome`/`cognome` in `userCommonSchema` (`lib/validations/user.ts`, condiviso da `userCreateSchema` e `userUpdateSchema`). Estesi `scripts/verify-input-length-limits.test.ts` con `describe("userCreateSchema")` e `describe("userUpdateSchema")`.
 
 ---
 

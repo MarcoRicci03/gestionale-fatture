@@ -4,6 +4,7 @@ import { patientSchema } from "../lib/validations/patient";
 import { payerSchema } from "../lib/validations/payer";
 import { profileUpdateSchema } from "../lib/validations/profile";
 import { pdfSettingsSchema, bloccoSchema } from "../lib/validations/pdf-settings";
+import { userCreateSchema, userUpdateSchema } from "../lib/validations/user";
 
 // Diversi campi testuali accettavano stringhe di
 // lunghezza arbitraria (nessun .max()), e i blob "ricchi" dell'editor PDF
@@ -137,6 +138,49 @@ describe("bloccoSchema", () => {
         makeBlocco({ richContent: { type: "doc", content: [{ type: "text", text: "ok" }] } })
       ).success
     ).toBe(true);
+  });
+});
+
+const baseValidUser = {
+  username: "marioRossi",
+  isAdmin: false,
+  abilitato: true,
+};
+
+describe("userCreateSchema", () => {
+  const baseValidCreate = { ...baseValidUser, password: "una-password-lunga-1" };
+
+  it("rifiuta nome oltre 100 caratteri", () => {
+    expect(
+      userCreateSchema.safeParse({ ...baseValidCreate, nome: "x".repeat(101) }).success
+    ).toBe(false);
+  });
+  it("rifiuta cognome oltre 100 caratteri", () => {
+    expect(
+      userCreateSchema.safeParse({ ...baseValidCreate, cognome: "x".repeat(101) }).success
+    ).toBe(false);
+  });
+  it("accetta nome e cognome a 100 caratteri", () => {
+    expect(
+      userCreateSchema.safeParse({
+        ...baseValidCreate,
+        nome: "x".repeat(100),
+        cognome: "x".repeat(100),
+      }).success
+    ).toBe(true);
+  });
+});
+
+describe("userUpdateSchema", () => {
+  it("rifiuta nome oltre 100 caratteri", () => {
+    expect(
+      userUpdateSchema.safeParse({ ...baseValidUser, nome: "x".repeat(101) }).success
+    ).toBe(false);
+  });
+  it("rifiuta cognome oltre 100 caratteri", () => {
+    expect(
+      userUpdateSchema.safeParse({ ...baseValidUser, cognome: "x".repeat(101) }).success
+    ).toBe(false);
   });
 });
 

@@ -6,8 +6,8 @@ const userCommonSchema = {
     .string()
     .min(3, "L'username deve avere almeno 3 caratteri")
     .max(50, "L'username deve avere al massimo 50 caratteri"),
-  nome: z.string().optional(),
-  cognome: z.string().optional(),
+  nome: z.string().max(100).optional(),
+  cognome: z.string().max(100).optional(),
   isAdmin: z.boolean(),
   abilitato: z.boolean(),
 } as const;
