@@ -117,7 +117,24 @@ export function InvoicesManager({
     setSelectedIds(new Set());
   }
 
+  // Tiene traccia dei filtri più recenti verso cui si è navigato, aggiornata
+  // sincronamente ad ogni chiamata a `navigate()` (non solo quando la prop
+  // `filters` cambia): `filters` è una prop da Server Component e resta al
+  // valore precedente finché il round-trip RSC non è tornato, quindi due
+  // cambi filtro ravvicinati (es. il flush del debounce di "persona" seguito
+  // a ruota da un click su un Select) leggerebbero entrambi la STESSA
+  // `filters` stale dalla chiusura e il secondo `navigate` perderebbe
+  // silenziosamente la patch del primo. Risincronizzata in un effect (non
+  // durante il render, vietato per i ref da react-hooks/refs) quando una
+  // navigazione esterna reale arriva (prop `filters` cambiata, es.
+  // back/forward del browser), per non restare disallineata.
+  const latestFiltersRef = useRef(filters);
+  useEffect(() => {
+    latestFiltersRef.current = filters;
+  }, [filters]);
+
   function navigate(nextFilters: InvoiceFilters, nextPage: number) {
+    latestFiltersRef.current = nextFilters;
     const params = new URLSearchParams();
     params.set("f", "1");
     if (nextFilters.dataDa) params.set("dataDa", nextFilters.dataDa);
@@ -130,7 +147,7 @@ export function InvoicesManager({
   }
 
   const handleFiltersChange = (patch: Partial<InvoiceFilters>) => {
-    navigate({ ...filters, ...patch }, 1);
+    navigate({ ...latestFiltersRef.current, ...patch }, 1);
   };
 
   const handleReset = () => {
@@ -138,7 +155,7 @@ export function InvoicesManager({
   };
 
   const handlePageChange = (nextPage: number) => {
-    navigate(filters, nextPage);
+    navigate(latestFiltersRef.current, nextPage);
   };
 
   useEffect(() => {
