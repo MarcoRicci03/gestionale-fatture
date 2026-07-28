@@ -60,7 +60,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | ✅ |
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | ✅ |
 | [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | ✅ |
-| [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
+| [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | ✅ |
 | [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | ✅ |
 | [DEP-01](#dep-01) | Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto | ✅ |
 | [DEP-02](#dep-02) | `prisma` è una devDependency ma il container la invoca a runtime | ✅ |
@@ -495,11 +495,13 @@ Verificato con: nuovi test di analisi statica (`scripts/verify-payer-archive-cas
 ---
 
 <a id="log-10"></a>
-## LOG-10 — `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai 🟢
+## LOG-10 — `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai ✅ risolta
 
 **File:** `components/invoices/export-invoices-dialog.tsx` (righe 80-84)
 
 Ramo morto: `app/api/invoices/export/route.ts` restituisce 400, 401, 404 e 429, mai 413. Da rimuovere o da rendere reale lato server.
+
+**Fix applicato:** rimosso il ramo `else if (response.status === 413)`. Confermato leggendo `app/api/invoices/export/route.ts`: il tetto sul numero di fatture esportabili (`MAX_EXPORT_INVOICES`) risponde con **400**, non 413, e il corpo della richiesta (id/filtri) non ha un limite di dimensione applicativo che possa mai far scattare un 413 da questo endpoint — nessun altro riferimento a 413 nel codebase.
 
 ---
 

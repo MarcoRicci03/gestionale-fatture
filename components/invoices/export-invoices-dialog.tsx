@@ -84,10 +84,6 @@ export function ExportInvoicesDialog({
               ? `Troppe richieste, riprova tra ${retryAfter} secondi.`
               : "Troppe richieste, riprova tra qualche istante."
           );
-        } else if (response.status === 413) {
-          setError(
-            "Il file generato è troppo grande: restringi i filtri o la selezione."
-          );
         } else {
           setError("Esportazione non riuscita. Riprova.");
         }
