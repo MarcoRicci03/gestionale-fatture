@@ -123,9 +123,14 @@ export async function archivePatient(id: number): Promise<PatientActionState> {
   const userId = await requireUserId();
 
   try {
+    // archiviatoInCascata: false esplicito (non solo il default): questa è
+    // un'archiviazione manuale del singolo paziente, mai una cascata da
+    // archivePayer (LOG-09) — necessario anche per il caso in cui il
+    // paziente avesse ancora true da una cascata passata seguita da un
+    // ripristino non passato da restorePayer.
     const updated = await prisma.paziente.updateMany({
       where: { id, id_Utente: userId, archiviato: false },
-      data: { archiviato: true },
+      data: { archiviato: true, archiviatoInCascata: false },
     });
     if (updated.count === 0) {
       return { error: "Paziente non trovato tra gli attivi" };
@@ -151,9 +156,13 @@ export async function restorePatient(id: number): Promise<PatientActionState> {
   const userId = await requireUserId();
 
   try {
+    // archiviatoInCascata: false esplicito (LOG-09): ripristino manuale del
+    // singolo paziente, indipendente da restorePayer — azzera comunque il
+    // flag per non lasciare una cascata passata a "ricordarsi" sul prossimo
+    // ciclo di archiviazione/ripristino.
     const updated = await prisma.paziente.updateMany({
       where: { id, id_Utente: userId, archiviato: true },
-      data: { archiviato: false },
+      data: { archiviato: false, archiviatoInCascata: false },
     });
     if (updated.count === 0) {
       return { error: "Paziente non trovato tra gli archiviati" };

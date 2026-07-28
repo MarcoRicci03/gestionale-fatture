@@ -59,7 +59,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
 | [LOG-07](#log-07) | Nessun vincolo sull'anno della fattura | ✅ |
 | [LOG-08](#log-08) | `/api/invoices/[id]/pdf`: id non finito → 500 invece di 400 | ✅ |
-| [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | 🟡 |
+| [LOG-09](#log-09) | `restorePayer` riporta attivi anche i pazienti archiviati singolarmente | ✅ |
 | [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
 | [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | ✅ |
 | [DEP-01](#dep-01) | Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto | ✅ |
@@ -475,7 +475,7 @@ if (Number.isNaN(invoiceId)) return new Response("ID fattura non valido", { stat
 ---
 
 <a id="log-09"></a>
-## LOG-09 — `restorePayer` riporta attivi anche i pazienti archiviati singolarmente 🟡
+## LOG-09 — `restorePayer` riporta attivi anche i pazienti archiviati singolarmente ✅ risolta
 
 **Severità:** bassa (comportamento voluto, ma con perdita di informazione)
 **File:** `lib/actions/payers.ts` (righe 240-243)
@@ -483,6 +483,14 @@ if (Number.isNaN(invoiceId)) return new Response("ID fattura non valido", { stat
 Il ripristino di un pagante riattiva **tutti** i suoi pazienti archiviati, senza distinguere quelli archiviati dalla cascata (`archivePayer`) da quelli che l'utente aveva archiviato singolarmente prima. Il commento lo dichiara intenzionale ("Ripristino simmetrico"), ma per l'utente è una sorpresa: un paziente che aveva deliberatamente archiviato ricompare tra gli attivi.
 
 **Fix:** o si registra nello stato quali pazienti sono stati archiviati in cascata (campo o meta), oppure — soluzione più economica — si avvisa nella `ConfirmDialog` di ripristino quanti pazienti torneranno attivi.
+
+**Fix applicato (opzione 1 — registrato nello stato):** nuovo campo `Paziente.archiviatoInCascata` (migrazione `20260728143851_add_paziente_archiviato_in_cascata`), impostato/azzerato esplicitamente ad ogni transizione:
+- `archivePayer`: la cascata imposta `archiviatoInCascata: true` sui pazienti che archivia ora.
+- `restorePayer`: la cascata ripristina **solo** `{archiviato: true, archiviatoInCascata: true}`, azzerando il flag sui pazienti ripristinati — un paziente archiviato manualmente prima non torna più attivo come effetto collaterale.
+- `archivePatient`/`restorePatient` (manuali, `lib/actions/patients.ts`): impostano esplicitamente `archiviatoInCascata: false` ad ogni transizione, per non lasciare una cascata passata a "ricordarsi" su un ciclo di archiviazione/ripristino indipendente dal pagante.
+- `getArchivedPayers` (`lib/data/payers.ts`): il conteggio `pazientiArchiviati` mostrato da `RestorePayerButton` ("Verranno ripristinati anche N pazienti collegati") ora conta solo i pazienti archiviati in cascata — senza questo fix sarebbe rimasto disallineato dal nuovo comportamento di `restorePayer`, promettendo un numero di ripristini superiore a quello reale.
+
+Verificato con: nuovi test di analisi statica (`scripts/verify-payer-archive-cascade.test.ts` esteso, `scripts/verify-patient-manual-archive-cascade-flag.test.ts`, `scripts/verify-restore-payer-count.test.ts`) e un nuovo test e2e reale (`e2e/payers-archive.spec.ts`) che dimostra attraverso l'interfaccia: un paziente archiviato manualmente prima del pagante resta archiviato dopo il ripristino del pagante, mentre quello archiviato in cascata torna attivo — esattamente la proprietà che prima non valeva.
 
 ---
 

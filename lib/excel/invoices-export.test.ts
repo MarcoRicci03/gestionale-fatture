@@ -24,6 +24,7 @@ const PAZIENTE: Paziente = {
   nome: "Giulia",
   cognome: "Rossi",
   archiviato: false,
+  archiviatoInCascata: false,
 };
 
 function baseInvoice(

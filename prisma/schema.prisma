@@ -90,6 +90,18 @@ model Paziente {
   cognome    String
   // Vedi commento su Pagante.archiviato: stesso rename, stesso @map.
   archiviato Boolean     @default(false) @map("eliminato")
+  // true SOLO se questo paziente è archiviato/attivo per effetto della
+  // cascata di archivePayer/restorePayer (lib/actions/payers.ts), non per
+  // un'archiviazione/ripristino manuale del singolo paziente. Distingue "il
+  // pagante è stato archiviato e ha portato via anche i suoi pazienti" da
+  // "questo paziente era già archiviato per conto suo" — senza, ripristinare
+  // il pagante riattivava anche pazienti che l'utente aveva deliberatamente
+  // archiviato in precedenza (LOG-09). Impostato/azzerato esplicitamente ad
+  // ogni transizione di `archiviato` (cascata O manuale), mai lasciato
+  // implicito: ha senso solo mentre `archiviato` è true, ma va tenuto
+  // corretto anche quando torna false per non "ricordare" una cascata
+  // passata alla prossima archiviazione manuale.
+  archiviatoInCascata Boolean @default(false)
 
   utente     Utente      @relation(fields: [id_Utente], references: [id])
   // onDelete: Cascade (era SET NULL): un hard-delete del pagante (azione

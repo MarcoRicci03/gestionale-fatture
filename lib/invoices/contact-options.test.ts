@@ -26,6 +26,7 @@ function makePatient(overrides: Partial<Paziente> = {}): Paziente {
     nome: "Giulia",
     cognome: "Rossi",
     archiviato: false,
+    archiviatoInCascata: false,
     ...overrides,
   };
 }

@@ -31,6 +31,7 @@ const PAZIENTE: Paziente = {
   nome: "Giulia",
   cognome: "Rossi",
   archiviato: false,
+  archiviatoInCascata: false,
 };
 
 const SNAPSHOT_VALIDO: SnapshotAnagrafica = {

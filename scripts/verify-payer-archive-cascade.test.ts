@@ -47,6 +47,12 @@ describe("archivePayer archivia in cascata i pazienti attivi del pagante", () =>
     );
   });
 
+  it("marca i pazienti archiviati ora come archiviati IN CASCATA (LOG-09), non manualmente", () => {
+    expect(body).toMatch(
+      /tx\.paziente\.updateMany\s*\(\s*\{[\s\S]*?data:\s*\{\s*archiviato:\s*true,\s*archiviatoInCascata:\s*true/
+    );
+  });
+
   it("registra nell'audit quanti pazienti sono stati archiviati in cascata", () => {
     expect(body).toMatch(/pazientiArchiviatiInCascata/);
   });
@@ -62,6 +68,18 @@ describe("restorePayer ripristina in cascata i pazienti archiviati del pagante",
   it("ripristina anche i pazienti archiviati collegati (paziente.updateMany con archiviato: false)", () => {
     expect(body).toMatch(
       /tx\.paziente\.updateMany\s*\(\s*\{[\s\S]*?data:\s*\{\s*archiviato:\s*false/
+    );
+  });
+
+  it("ripristina SOLO i pazienti archiviati in cascata (LOG-09), non quelli archiviati manualmente prima", () => {
+    expect(body).toMatch(
+      /tx\.paziente\.updateMany\s*\(\s*\{\s*where:\s*\{[\s\S]*?archiviato:\s*true,\s*archiviatoInCascata:\s*true/
+    );
+  });
+
+  it("azzera archiviatoInCascata sui pazienti ripristinati, per non far rimanere una cascata passata su una futura archiviazione manuale", () => {
+    expect(body).toMatch(
+      /tx\.paziente\.updateMany\s*\(\s*\{[\s\S]*?data:\s*\{\s*archiviato:\s*false,\s*archiviatoInCascata:\s*false/
     );
   });
 });

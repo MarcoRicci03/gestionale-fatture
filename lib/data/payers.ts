@@ -55,7 +55,7 @@ export async function getArchivedPayers() {
       _max: { anno: true },
     }),
     prisma.paziente.groupBy({
-      by: ["id_Pagante", "archiviato"],
+      by: ["id_Pagante", "archiviato", "archiviatoInCascata"],
       where: { id_Utente: userId, id_Pagante: { in: ids } },
       _count: { _all: true },
     }),
@@ -65,8 +65,12 @@ export async function getArchivedPayers() {
 
   return payers.map((payer) => {
     const fatture = fattureMap.get(payer.id);
+    // Solo i pazienti archiviati IN CASCATA da questo pagante: sono quelli
+    // che restorePayer ripristinerà davvero (LOG-09) — un paziente
+    // archiviato manualmente non torna attivo insieme al pagante, quindi non
+    // va conteggiato nella dialog di RestorePayerButton.
     const pazientiArchiviati = pazientiByPayer
-      .filter((p) => p.id_Pagante === payer.id && p.archiviato)
+      .filter((p) => p.id_Pagante === payer.id && p.archiviato && p.archiviatoInCascata)
       .reduce((sum, p) => sum + p._count._all, 0);
     const pazientiNonArchiviati = pazientiByPayer
       .filter((p) => p.id_Pagante === payer.id && !p.archiviato)

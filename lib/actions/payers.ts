@@ -172,10 +172,14 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
         data: { archiviato: true },
       });
       // I pazienti di un pagante archiviato non devono restare negli elenchi
-      // operativi né nelle tendine: seguono il pagante.
+      // operativi né nelle tendine: seguono il pagante. archiviatoInCascata
+      // distingue questa archiviazione (a cascata) da una manuale
+      // (archivePatient in lib/actions/patients.ts) — serve a restorePayer
+      // per non riattivare pazienti che l'utente aveva archiviato per conto
+      // suo prima (LOG-09).
       const result = await tx.paziente.updateMany({
         where: { id_Utente: userId, id_Pagante: id, archiviato: false },
-        data: { archiviato: true },
+        data: { archiviato: true, archiviatoInCascata: true },
       });
       pazientiArchiviati = result.count;
     });
@@ -235,11 +239,22 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
         where: { id, id_Utente: userId },
         data: { archiviato: false },
       });
-      // Ripristino simmetrico: tornano attivi tutti i pazienti archiviati del
-      // pagante, indipendentemente da quando/come sono stati archiviati.
+      // Ripristina SOLO i pazienti archiviati dalla cascata di archivePayer
+      // (archiviatoInCascata: true), non quelli che l'utente aveva
+      // archiviato singolarmente prima (LOG-09): senza questo filtro, un
+      // paziente archiviato deliberatamente in precedenza ricomparirebbe tra
+      // gli attivi come effetto collaterale a sorpresa del ripristino del
+      // pagante. archiviatoInCascata viene azzerato sui pazienti ripristinati
+      // qui, per non lasciare una cascata passata a "ricordarsi" su una
+      // futura archiviazione manuale dello stesso paziente.
       const result = await tx.paziente.updateMany({
-        where: { id_Utente: userId, id_Pagante: id, archiviato: true },
-        data: { archiviato: false },
+        where: {
+          id_Utente: userId,
+          id_Pagante: id,
+          archiviato: true,
+          archiviatoInCascata: true,
+        },
+        data: { archiviato: false, archiviatoInCascata: false },
       });
       pazientiRipristinati = result.count;
     });
