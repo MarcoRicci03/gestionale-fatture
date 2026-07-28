@@ -30,6 +30,10 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    # DEP-10: limiti conservativi per una VPS piccola (~2GB RAM); da
+    # ritarare in base alle specifiche reali della macchina scelta.
+    mem_limit: 512m
+    cpus: 1.0
     networks:
       - internal
 
@@ -58,6 +62,8 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    mem_limit: 768m
+    cpus: 1.0
     networks:
       - internal
 
@@ -85,6 +91,8 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    mem_limit: 256m
+    cpus: 0.5
     networks:
       - internal
 
@@ -107,6 +115,8 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    mem_limit: 128m
+    cpus: 0.25
     networks:
       - internal
 
