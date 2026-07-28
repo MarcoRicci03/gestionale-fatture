@@ -12,7 +12,7 @@ import {
 // Regressione: il rate limiter di login deve isolare i tentativi falliti per
 // coppia (username, IP), non solo per username — altrimenti un attaccante
 // che conosce uno username può bloccare per 15 minuti l'accesso legittimo
-// semplicemente fallendo 5 volte da un IP qualsiasi (vedi ROADMAP_FIX.md).
+// semplicemente fallendo 5 volte da un IP qualsiasi.
 
 it("isola il lockout per coppia (username, ip)", () => {
   const username = "verify-rate-limit-user";
