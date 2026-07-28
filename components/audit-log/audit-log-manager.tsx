@@ -41,8 +41,7 @@ function formatData(createdAt: Date): string {
 
 function formatMeta(meta: AuditLogEntry["meta"]): string {
   if (!meta) return "-";
-  const json = JSON.stringify(meta);
-  return json.length > 80 ? `${json.slice(0, 80)}…` : json;
+  return JSON.stringify(meta);
 }
 
 // Altezza fissa dell'area scrollabile (tabella desktop e card mobile): con
@@ -105,7 +104,10 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
                     <TableCell>{formatAzione(entry.azione)}</TableCell>
                     <TableCell>{formatEntita(entry)}</TableCell>
                     <TableCell>{entry.ip ?? "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate font-mono text-xs text-muted-foreground">
+                    <TableCell
+                      className="max-w-xs truncate font-mono text-xs text-muted-foreground"
+                      title={entry.meta ? JSON.stringify(entry.meta) : undefined}
+                    >
                       {formatMeta(entry.meta)}
                     </TableCell>
                   </TableRow>

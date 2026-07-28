@@ -36,6 +36,46 @@ function extractFunctionBody(source: string, fnName: string): string {
   throw new Error(`Corpo di ${fnName} non terminato correttamente`);
 }
 
+// Estrae il testo tra la parentesi/graffa/parentesi-quadra di apertura in
+// openIndex e la sua chiusura corrispondente, contando la profondità (serve a
+// isolare gli argomenti di una chiamata senza affidarsi a regex non-greedy,
+// che si spezzerebbero sulle graffe annidate, es. mesi.map((m) => ({ ... })).
+function extractBalanced(source: string, openIndex: number): string {
+  const open = source[openIndex];
+  const close = open === "(" ? ")" : open === "{" ? "}" : "]";
+  let depth = 0;
+  for (let i = openIndex; i < source.length; i++) {
+    if (source[i] === open) depth++;
+    else if (source[i] === close) {
+      depth--;
+      if (depth === 0) return source.slice(openIndex, i + 1);
+    }
+  }
+  throw new Error("Blocco non terminato correttamente");
+}
+
+// Divide la lista di argomenti di una chiamata (comprensiva delle parentesi
+// esterne) nei singoli argomenti di primo livello, senza spezzarsi su
+// graffe/parentesi annidate all'interno di un singolo argomento.
+function splitTopLevelArgs(callWithParens: string): string[] {
+  const inner = callWithParens.slice(1, -1);
+  const args: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of inner) {
+    if (ch === "{" || ch === "(" || ch === "[") depth++;
+    if (ch === "}" || ch === ")" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      args.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) args.push(current);
+  return args;
+}
+
 const source = readFileSync(INVOICES_ACTIONS_PATH, "utf-8");
 
 describe("deleteInvoice cancella fisicamente la fattura", () => {
@@ -181,6 +221,22 @@ describe("updateInvoice registra nell'audit i campi effettivamente cambiati (LOG
 
   it("chiama buildInvoiceChangeDiff prima di logAudit", () => {
     expect(body).toMatch(/buildInvoiceChangeDiff\s*\(/);
+  });
+
+  it("passa lo snapshot 'existing' (prima dell'update) come primo argomento e i valori aggiornati come secondo, non invertiti", () => {
+    // Analisi statica sugli argomenti reali della chiamata (non solo sul nome
+    // della funzione): un futuro swap prima/dopo invertirebbe ogni valore
+    // da/a nel diff di audit, quindi va rilevato esplicitamente.
+    const callNameIndex = body.search(/buildInvoiceChangeDiff\s*\(/);
+    const openParenIndex = body.indexOf("(", callNameIndex);
+    const fullCall = extractBalanced(body, openParenIndex);
+    const [firstArg, secondArg] = splitTopLevelArgs(fullCall);
+
+    expect(firstArg).toMatch(/existing\.id_Pagante/);
+    expect(firstArg).toMatch(/existing\.mesi/);
+
+    expect(secondArg).not.toMatch(/existing\./);
+    expect(secondArg).toMatch(/\bid_Pagante,/);
   });
 
   it("passa 'modifiche' nel meta dell'evento INVOICE_UPDATE, non solo n_fattura/anno", () => {
