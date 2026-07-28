@@ -25,6 +25,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - internal
 
@@ -48,6 +53,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - internal
 
@@ -70,6 +80,11 @@ services:
       - ./scripts/backup-db.sh:/backup-db.sh:ro
       - ./backups:/backups
       - ./rclone.conf:/rclone.conf:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - internal
 
@@ -87,6 +102,11 @@ services:
       db:
         condition: service_healthy
     entrypoint: ["node", "scripts/audit-log-retention.mjs"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - internal
 

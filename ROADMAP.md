@@ -69,7 +69,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | ✅ |
 | [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | ✅ (punti 1-2; il punto 3, chiave in un password manager, resta organizzativo) |
 | [DEP-07](#dep-07) | Nessuna CI | 🟡 |
-| [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | 🟡 |
+| [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | ✅ |
 | [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
 | [DEP-10](#dep-10) | Nessun limite di risorse sui container | 🟢 |
 | [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
@@ -665,7 +665,7 @@ Il progetto ha **233 test**, di cui una trentina di regressione su sicurezza scr
 ---
 
 <a id="dep-08"></a>
-## DEP-08 — Nessun logging strutturato né rotazione 🟡
+## DEP-08 — Nessun logging strutturato né rotazione ✅ risolta
 
 **Severità:** media
 **File:** trasversale (`console.error` nelle Server Actions), `docker-compose.prod.yml`
@@ -673,6 +673,8 @@ Il progetto ha **233 test**, di cui una trentina di regressione su sicurezza scr
 Gli errori finiscono su `console.error` → stdout del container → driver di log di Docker, senza limiti di dimensione (`json-file` di default cresce senza tetto e può riempire il disco) e senza alcun alerting: un errore ricorrente in produzione resta invisibile finché non se ne accorge l'utente.
 
 **Fix minimo:** blocco `logging` con `max-size`/`max-file` su ogni servizio del compose.
+
+**Fix applicato:** aggiunto `logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }` su tutti e 4 i servizi di `docker-compose.prod.yml` (`db`, `app`, `backup`, `audit-log-retention`), per un tetto di ~50MB di log per servizio prima della rotazione. L'alerting sui log resta fuori scope (nessuno strumento di aggregazione log in uso).
 
 ---
 
