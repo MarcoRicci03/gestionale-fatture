@@ -1,59 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gestionale Fatture
 
-## Primo avvio (creazione del primo amministratore)
+Gestionale fatture per uno studio professionale (single-tenant per utente: ogni
+account vede solo i propri paganti, pazienti e fatture). Next.js 16 (App
+Router, Turbopack) + PostgreSQL via Prisma, autenticazione custom via JWT in
+cookie (nessun provider esterno).
 
-Su un database appena migrato la tabella utenti è vuota: nessuno può accedere,
-perché la creazione di nuovi utenti richiede già una sessione admin. Prima di
-qualunque altra cosa, dopo aver eseguito le migration
-(`npx prisma migrate dev` / `npx prisma migrate deploy`), va lanciato lo script
-di bootstrap:
+Per l'architettura in dettaglio vedi [`CLAUDE.md`](./CLAUDE.md) e
+[`AGENTS.md`](./AGENTS.md) — pensati per un assistente AI, ma sono la
+documentazione più aggiornata anche per chi sviluppa.
 
-```sh
-SEED_ADMIN_USERNAME=admin SEED_ADMIN_PASSWORD='una-password-di-almeno-12-caratteri' npm run seed
-```
+## Prerequisiti
 
-Lo script è idempotente: se esiste già un amministratore non fa nulla. La
-password impostata è temporanea (l'app lo segnala all'accesso finché non
-viene cambiata da `/account`). In produzione, con lo stack Docker:
+- Node.js 20+
+- Docker e Docker Compose (per Postgres in sviluppo e per lo stack di
+  produzione)
 
-```sh
-docker compose -f docker-compose.prod.yml exec app node prisma/seed.mjs
-```
+## Sviluppo locale
 
-leggendo `SEED_ADMIN_USERNAME`/`SEED_ADMIN_PASSWORD` da `.env.prod` (vedi
-`.env.prod.example`).
+1. Installa le dipendenze:
 
-## Getting Started
+   ```sh
+   npm install
+   ```
 
-First, run the development server:
+2. Avvia Postgres locale (container `postgres-dev`, db `gestionale`, utente
+   `admin`):
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+   ```sh
+   docker compose -f docker-compose.dev.yml up -d
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Crea un file `.env` nella root con almeno:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   ```sh
+   DATABASE_URL="postgresql://admin:password_dev@localhost:5432/gestionale?schema=public"
+   JWT_SECRET="genera-un-valore-casuale-di-almeno-32-byte"  # es. openssl rand -base64 48
+   JWT_EXPIRES_IN="7d"
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   Opzionali: `TRUSTED_PROXY` e `DEV_ALLOWED_ORIGINS` — vedi `CLAUDE.md` per
+   quando servono.
 
-## Learn More
+4. Applica le migration:
 
-To learn more about Next.js, take a look at the following resources:
+   ```sh
+   npx prisma migrate dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. Crea il primo amministratore (su un DB appena migrato la tabella utenti è
+   vuota: nessuno può accedere, perché creare nuovi utenti richiede già una
+   sessione admin):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```sh
+   SEED_ADMIN_USERNAME=admin SEED_ADMIN_PASSWORD='una-password-di-almeno-12-caratteri' npm run seed
+   ```
 
-## Deploy on Vercel
+   Lo script è idempotente (non fa nulla se un admin esiste già). La password
+   è temporanea: l'app segnala di cambiarla al primo accesso, da `/account`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+6. Avvia il dev server:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```sh
+   npm run dev
+   ```
+
+   Apri [http://localhost:3000](http://localhost:3000).
+
+## Comandi utili
+
+- `npm run build` / `npm run start` — build di produzione e avvio.
+- `npm run lint` — ESLint.
+- `npx tsc --noEmit` — type-check.
+- `npm test` — suite Vitest (unit + regressioni di sicurezza/logica in
+  `scripts/verify-*.test.ts`). `npm run test:watch` per la modalità watch.
+- `npm run test:e2e` — suite Playwright (`e2e/`).
+- `npx prisma studio` — esplora il database.
+
+## Deploy in produzione
+
+Lo stack di produzione (`docker-compose.prod.yml`) comprende l'app, Postgres,
+un servizio di backup automatico cifrato e un servizio di retention
+dell'audit log.
+
+1. Copia `.env.prod.example` in `.env.prod` e valorizza tutte le variabili
+   (credenziali Postgres, `DATABASE_URL`, `JWT_SECRET`, chiave di cifratura
+   dei backup, ecc. — ogni variabile è commentata nel file stesso).
+
+2. Costruisci e avvia lo stack:
+
+   ```sh
+   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+   ```
+
+3. Applica le migration e crea il primo amministratore nel container `app`:
+
+   ```sh
+   docker compose -f docker-compose.prod.yml exec app npx prisma migrate deploy
+   docker compose -f docker-compose.prod.yml exec app node prisma/seed.mjs
+   ```
+
+   Le credenziali del primo admin sono lette da `SEED_ADMIN_USERNAME` /
+   `SEED_ADMIN_PASSWORD` in `.env.prod`.
+
+**TLS obbligatorio prima di esporre il servizio pubblicamente.** L'app
+imposta il cookie di sessione come `Secure` in produzione: senza HTTPS il
+browser lo scarta silenziosamente e il login sembra riuscire ma torna sempre
+a `/login`, senza alcun errore visibile. Lo stack pubblica l'app in chiaro
+sulla porta `APP_PORT` (default 3000): metti davanti un reverse proxy con
+terminazione TLS (es. Caddy, nginx + certbot) prima di renderlo raggiungibile
+da fuori la macchina.
+
+Backup e ripristino del database sono documentati in
+[`README-BACKUP.md`](./README-BACKUP.md).
