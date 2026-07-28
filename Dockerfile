@@ -33,7 +33,7 @@ WORKDIR /app
 
 # openssl: per eseguire l'engine di Prisma al runtime.
 # tzdata: senza il database dei fusi, Node su Alpine ignora TZ e resta su UTC
-# (vedi LOG-12 in SECURITY_AUDIT.md).
+# (vedi LOG-12 sotto).
 RUN apk add --no-cache openssl tzdata
 
 ENV NODE_ENV=production

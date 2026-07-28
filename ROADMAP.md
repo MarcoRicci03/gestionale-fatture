@@ -73,7 +73,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
 | [DEP-10](#dep-10) | Nessun limite di risorse sui container | ✅ |
 | [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | ✅ |
-| [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | 🟡 |
+| [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | ✅ |
 | [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
 | [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
 | [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
@@ -733,7 +733,7 @@ Il README parla di `yarn dev`, di `next/font` e di come deployare su Vercel — 
 ---
 
 <a id="doc-02"></a>
-## DOC-02 — Riferimenti a documenti che non esistono 🟡
+## DOC-02 — Riferimenti a documenti che non esistono ✅ risolta
 
 **File:** tre punti nel codice
 
@@ -744,6 +744,8 @@ Il README parla di `yarn dev`, di `next/font` e di come deployare su Vercel — 
 | `scripts/verify-rate-limit-ip-scope.test.ts` | 15 | `ROADMAP_FIX.md` | mai versionato (è in `.gitignore`) |
 
 In tutti e tre i casi il commento contiene già la spiegazione sostanziale: basta togliere il rimando, non serve ripristinare i documenti.
+
+**Fix applicato:** rimosso il rimando ai tre file inesistenti, mantenendo intatta la spiegazione sostanziale in ognuno dei tre commenti. Nel `Dockerfile`, `SECURITY_AUDIT.md` è sostituito da un rimando interno (`vedi LOG-12 sotto`, dove l'etichetta `LOG-12:` è già presente qualche riga più sotto nello stesso file).
 
 ---
 
