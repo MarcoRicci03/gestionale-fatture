@@ -38,6 +38,11 @@ yarn-error.log*
 .env.prod
 !.env.prod.example
 
+# credenziali rclone per la copia off-site dei backup (DEP-06): contiene
+# token OAuth, non va committato — vedi rclone.conf.example
+rclone.conf
+!rclone.conf.example
+
 # vercel
 .vercel
 

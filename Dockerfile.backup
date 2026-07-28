@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# gnupg installato una volta in build, non ad ogni avvio del container
-# (vedi DEP-04 in ROADMAP.md).
+# gnupg e rclone installati una volta in build, non ad ogni avvio del
+# container (vedi DEP-04 in ROADMAP.md). rclone serve per la copia off-site
+# opzionale dei backup (DEP-06) — resta inerte finché RCLONE_REMOTE non è
+# configurata.
 FROM postgres:16-alpine
-RUN apk add --no-cache gnupg
+RUN apk add --no-cache gnupg rclone
 ENTRYPOINT ["sh", "/backup-db.sh"]

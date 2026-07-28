@@ -62,12 +62,14 @@ services:
     environment:
       POSTGRES_HOST: db
       BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./scripts/backup-db.sh:/backup-db.sh:ro
       - ./backups:/backups
+      - ./rclone.conf:/rclone.conf:ro
     networks:
       - internal
 

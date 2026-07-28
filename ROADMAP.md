@@ -67,7 +67,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DEP-03](#dep-03) | Nessun TLS: con `secure: true` il cookie di sessione non viene salvato | 🔴 |
 | [DEP-04](#dep-04) | Il container di backup installa `gnupg` a ogni avvio | ✅ |
 | [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | ✅ |
-| [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | 🟡 |
+| [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | ✅ (punti 1-2; il punto 3, chiave in un password manager, resta organizzativo) |
 | [DEP-07](#dep-07) | Nessuna CI | 🟡 |
 | [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | 🟡 |
 | [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
@@ -79,7 +79,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
 | [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | ✅ |
 | [QUA-04](#qua-04) | Copertura e2e limitata al login | ✅ |
-| [QUA-05](#qua-05) | `isBolloCodiceTaken` rilegge la sessione a ogni chiamata | 🟢 |
+| [QUA-05](#qua-05) | `isBolloCodiceTaken` rilegge la sessione a ogni chiamata | ✅ |
 
 ---
 
@@ -623,7 +623,7 @@ Il servizio `db` ha un healthcheck corretto (`pg_isready`); `app` no. Docker con
 ---
 
 <a id="dep-06"></a>
-## DEP-06 — Backup mai verificati, chiave e copie sulla stessa macchina 🟡
+## DEP-06 — Backup mai verificati, chiave e copie sulla stessa macchina ✅ risolta (punti 1-2)
 
 **Severità:** media
 **File:** `scripts/backup-db.sh`, `docker-compose.prod.yml` (righe 59-61), `README-BACKUP.md`
@@ -635,6 +635,12 @@ Il backup cifrato con GPG è ben fatto (AES256, `umask 077`, chiave obbligatoria
 3. **Chiave co-locata.** `BACKUP_ENCRYPTION_KEY` sta in `.env.prod`, sullo stesso host dei backup cifrati. Chi accede alla macchina ha entrambi; chi perde la macchina perde entrambi. Il commento in `.env.prod.example` (righe 56-58) dice giustamente di conservarla altrove, ma è solo un'esortazione.
 
 **Fix:** sincronizzazione periodica di `./backups` su una destinazione esterna (`rclone`/`restic` verso storage remoto, o anche solo un disco che non sia quello del server); prova di ripristino documentata su un DB usa-e-getta, da rifare almeno una volta l'anno; passphrase salvata in un password manager, non solo in `.env.prod`.
+
+**Fix applicato (punti 1-2):**
+- **Verifica automatica del ripristino** (`scripts/backup-db.sh`): ogni backup viene decifrato e ripristinato in un database usa-e-getta (`<database>_backup_verify`) sullo stesso server Postgres subito dopo la creazione, poi eliminato — non più "una volta l'anno come minimo", ma ad ogni esecuzione. Il dump in chiaro va solo in `/tmp` del container (mai nel bind mount `./backups` condiviso con l'host). Una verifica fallita logga chiaramente l'errore ma non cancella il backup. Verificato con build Docker reale contro il Postgres di sviluppo: percorso di successo ("verifica ripristino OK") e percorso di fallimento (passphrase sbagliata, rilevata correttamente, file originale non toccato) entrambi testati end-to-end.
+- **Copia off-site opzionale via `rclone`** (aggiunto a `Dockerfile.backup`): gated da `RCLONE_REMOTE` in `.env.prod` — vuota di default, nessuna rottura per chi non l'ha configurata. Credenziali in `rclone.conf` (nuovo file, stesso pattern di `.env.prod`/`.env.prod.example`: non versionato, con un `rclone.conf.example` che documenta il setup per Google Drive o altri provider supportati da rclone). rclone copia solo il file `.gpg` già cifrato, mai il contenuto in chiaro.
+- Nuovo test di analisi statica `scripts/verify-backup-integrity.test.ts` (stesso approccio di `verify-backup-retention.test.ts`, lo script non è eseguibile end-to-end in Vitest): blocca le proprietà di sicurezza chiave (dump in chiaro solo in `/tmp`, backup non cancellato su verifica fallita, sync off-site gated da `RCLONE_REMOTE`, rclone copia solo il file cifrato).
+- **Punto 3 (chiave in un password manager) resta esplicitamente organizzativo**, non tecnico — non posso agire sul password manager dell'utente; il promemoria in `.env.prod.example`/`README-BACKUP.md` resta l'unica cosa fattibile da codice.
 
 ---
 
@@ -776,11 +782,13 @@ La logica pura è molto ben coperta a livello unitario, ma i flussi che attraver
 **Fix applicato:** aggiunti `e2e/invoices.spec.ts` (creazione fattura + download PDF), `e2e/invoices-export.spec.ts` (esportazione Excel) e `e2e/payers-archive.spec.ts` (archiviazione pagante con cascata). I dati prerequisiti (pagante/paziente/fattura) sono creati con chiamate Prisma dirette in `e2e/fixtures/prisma-test-fixtures.ts` (stesso pattern di `e2e/global-setup.ts`), con suffisso univoco per run e pulizia in `afterAll`. `playwright.config.ts` gira ora con `workers: 1`, perché i nuovi spec condividono lo stesso `TEST_USER` e quindi la stessa numerazione fatture per anno (senza retry su collisione).
 
 <a id="qua-05"></a>
-## QUA-05 — `isBolloCodiceTaken` rilegge la sessione a ogni chiamata 🟢
+## QUA-05 — `isBolloCodiceTaken` rilegge la sessione a ogni chiamata ✅ risolta
 
 **File:** `lib/actions/invoices.ts` (righe 54-58)
 
 La funzione chiama `requireUserId()` al proprio interno invece di ricevere `userId` come parametro, come fanno tutte le sorelle (`isInvoiceNumberTaken`, `validateInvoiceRelations`). Una query in più su `utenti` per ogni create/update con bollo. Trascurabile, ma è un'incoerenza rispetto al resto del file.
+
+**Fix applicato:** `isBolloCodiceTaken` ora riceve `userId` come primo parametro (stesso ordine di `isInvoiceNumberTaken`), invece di richiamare `requireUserId()` internamente. Entrambi i chiamanti (`createInvoice`, `updateInvoice`) hanno già `userId` in scope dalla propria chiamata a `requireUserId()` in testa alla funzione — stesso valore, una query in meno su `utenti` per ogni create/update con bollo. Nessun test dedicato: refactor puro senza cambio di comportamento osservabile, su una funzione non esportata priva di copertura unitaria propria (le Server Action di questo file sono coperte da e2e, non da mock unitari) — verificato con `tsc --noEmit` e lettura diretta di entrambi i call site.
 
 ---
 

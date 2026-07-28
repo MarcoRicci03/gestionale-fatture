@@ -52,10 +52,10 @@ async function isInvoiceNumberTaken(
 }
 
 async function isBolloCodiceTaken(
+  userId: number,
   bolloCodice: string,
   excludeId?: number
 ): Promise<boolean> {
-  const userId = await requireUserId();
   const existing = await prisma.pagamento.findFirst({
     where: {
       id_Utente: userId,
@@ -167,7 +167,7 @@ export async function createInvoice(
     return { error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
-  if (bolloCodice && (await isBolloCodiceTaken(bolloCodice))) {
+  if (bolloCodice && (await isBolloCodiceTaken(userId, bolloCodice))) {
     return { error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 
@@ -317,7 +317,7 @@ export async function updateInvoice(
     return { error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
-  if (bolloCodice && (await isBolloCodiceTaken(bolloCodice, id))) {
+  if (bolloCodice && (await isBolloCodiceTaken(userId, bolloCodice, id))) {
     return { error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 

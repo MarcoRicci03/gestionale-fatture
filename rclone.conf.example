@@ -1,0 +1,27 @@
+# Copia questo file in rclone.conf (nella root del progetto, accanto a
+# docker-compose.prod.yml) prima di avviare lo stack di produzione.
+# rclone.conf non va committato (vedi .gitignore) perché contiene i token
+# OAuth di accesso al tuo storage remoto.
+#
+# Vuoto per default: senza un remote configurato qui E senza RCLONE_REMOTE
+# impostata in .env.prod, scripts/backup-db.sh salta semplicemente la
+# sincronizzazione off-site (DEP-06) e continua a funzionare solo con la
+# copia locale in ./backups — nessuna rottura per chi non l'ha ancora
+# configurata.
+#
+# Per configurare Google Drive come destinazione:
+#
+#   1. Sull'host (non serve dentro il container): `rclone config`, scegli
+#      "n" (new remote), un nome a piacere (es. "gdrive"), tipo "drive"
+#      (Google Drive), segui il flow OAuth nel browser.
+#   2. Copia il file generato (di solito
+#      ~/.config/rclone/rclone.conf) qui, sovrascrivendo questo placeholder.
+#   3. In .env.prod, imposta RCLONE_REMOTE=gdrive:gestionale-backups (o il
+#      path/cartella che preferisci su quel remote — rclone la crea da solo
+#      se non esiste).
+#   4. `docker compose -f docker-compose.prod.yml up -d --build backup` per
+#      far ripartire il container di backup con la nuova configurazione.
+#
+# rclone supporta anche altri provider (S3, Backblaze B2, un NAS via
+# SFTP/WebDAV, ecc.): la procedura è la stessa, cambia solo il tipo scelto
+# al passo 1. Vedi https://rclone.org/docs/ per l'elenco completo.
