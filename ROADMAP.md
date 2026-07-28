@@ -53,7 +53,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | ✅ (fix tecnico; fix organizzativo resta da fare, non è codice) |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | ✅ |
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
-| [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
+| [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | ✅ |
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | ✅ |
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
 | [LOG-06](#log-06) | `nome` e `cognome` dell'utente senza limite di lunghezza | ✅ |
@@ -366,7 +366,7 @@ In entrambi i casi la scelta va scritta nel README: è una decisione di dominio,
 ---
 
 <a id="log-03"></a>
-## LOG-03 — La fattura emessa resta interamente modificabile, senza storico dei valori 🟡
+## LOG-03 — La fattura emessa resta interamente modificabile, senza storico dei valori ✅ risolta
 
 **Severità:** media
 **File:** `lib/actions/invoices.ts` (righe 222-361)
@@ -375,7 +375,7 @@ In entrambi i casi la scelta va scritta nel README: è una decisione di dominio,
 
 Il problema non è la modificabilità in sé (serve per correggere errori), ma che **non resta traccia di cosa è cambiato**: l'audit log registra `INVOICE_UPDATE` con `meta: { n_fattura, anno }`, cioè gli unici due campi che non possono cambiare. Se una fattura consegnata viene modificata, ricostruire cosa diceva l'originale è impossibile — e lo snapshot anagrafica, che è il meccanismo pensato proprio per congelare i dati, viene sovrascritto quando cambia pagante o paziente (riga 328).
 
-**Fix minimo, alto valore:** includere nel `meta` di `INVOICE_UPDATE` i campi cambiati con valore precedente e nuovo. L'oggetto `existing` è già letto alla riga 236, basta estenderne il `select`.
+**Fix applicato:** nuovo `lib/invoices/change-diff.ts` (`buildInvoiceChangeDiff`) confronta uno snapshot "prima"/"dopo" dei campi mutabili (pagante, paziente, data, modalità di pagamento, sedute, commento, città, CAP, codice bollo, mesi con relativo importo) e produce una mappa `{ campo: { da, a } }` solo per ciò che è realmente cambiato. `updateInvoice` estende il `select` di `existing` per includere questi campi e passa il risultato come `meta.modifiche` sull'evento `INVOICE_UPDATE`, accanto a `n_fattura`/`anno`. Lo snapshot anagrafica continua a essere sovrascritto solo quando cambia pagante/paziente (comportamento invariato, fuori scope per questo fix).
 
 ---
 

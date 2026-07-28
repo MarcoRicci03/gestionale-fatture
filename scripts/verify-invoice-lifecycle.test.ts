@@ -163,3 +163,28 @@ describe("refreshInvoiceAnagrafica esiste e ricattura dalle relazioni live", () 
     expect(body).toMatch(/logAudit\s*\(/);
   });
 });
+
+describe("updateInvoice registra nell'audit i campi effettivamente cambiati (LOG-03)", () => {
+  const body = extractFunctionBody(source, "updateInvoice");
+
+  it("la select di 'existing' include i campi mutabili necessari al diff", () => {
+    expect(body).toMatch(/select:\s*\{[\s\S]*n_fattura:\s*true/);
+    expect(body).toMatch(/data:\s*true/);
+    expect(body).toMatch(/mod_pag:\s*true/);
+    expect(body).toMatch(/sedute:\s*true/);
+    expect(body).toMatch(/commento:\s*true/);
+    expect(body).toMatch(/citta:\s*true/);
+    expect(body).toMatch(/cap:\s*true/);
+    expect(body).toMatch(/bolloCodice:\s*true/);
+    expect(body).toMatch(/mesi:\s*\{\s*select:\s*\{\s*mese:\s*true,\s*prezzo:\s*true/);
+  });
+
+  it("chiama buildInvoiceChangeDiff prima di logAudit", () => {
+    expect(body).toMatch(/buildInvoiceChangeDiff\s*\(/);
+  });
+
+  it("passa 'modifiche' nel meta dell'evento INVOICE_UPDATE, non solo n_fattura/anno", () => {
+    const logAuditCall = body.slice(body.indexOf("AUDIT_ACTIONS.INVOICE_UPDATE"));
+    expect(logAuditCall).toMatch(/meta:\s*\{[^}]*modifiche/);
+  });
+});

@@ -18,6 +18,7 @@ import {
   formatChronologyConflictMessage,
 } from "@/lib/invoices/chronology";
 import { buildSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { buildInvoiceChangeDiff } from "@/lib/invoices/change-diff";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
@@ -251,7 +252,20 @@ export async function updateInvoice(
   // quelli inviati, prima di applicare qualunque altra modifica.
   const existing = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
-    select: { n_fattura: true, anno: true, id_Pagante: true, id_Paziente: true },
+    select: {
+      n_fattura: true,
+      anno: true,
+      id_Pagante: true,
+      id_Paziente: true,
+      data: true,
+      mod_pag: true,
+      sedute: true,
+      commento: true,
+      citta: true,
+      cap: true,
+      bolloCodice: true,
+      mesi: { select: { mese: true, prezzo: true } },
+    },
   });
   if (!existing) {
     return { error: "Fattura non trovata" };
@@ -363,12 +377,39 @@ export async function updateInvoice(
     return { error: "Errore durante l'aggiornamento della fattura" };
   }
 
+  const modifiche = buildInvoiceChangeDiff(
+    {
+      id_Pagante: existing.id_Pagante,
+      id_Paziente: existing.id_Paziente,
+      data: existing.data,
+      mod_pag: existing.mod_pag,
+      sedute: existing.sedute,
+      commento: existing.commento,
+      citta: existing.citta,
+      cap: existing.cap,
+      bolloCodice: existing.bolloCodice,
+      mesi: existing.mesi.map((m) => ({ mese: m.mese, prezzo: m.prezzo.toNumber() })),
+    },
+    {
+      id_Pagante,
+      id_Paziente,
+      data: invoiceDate,
+      mod_pag,
+      sedute: sedute ?? null,
+      commento: commento || null,
+      citta,
+      cap,
+      bolloCodice: bolloCodice ?? null,
+      mesi: mesi.map(({ mese, prezzo }) => ({ mese, prezzo })),
+    }
+  );
+
   await logAudit({
     azione: AUDIT_ACTIONS.INVOICE_UPDATE,
     userId,
     entita: "Pagamento",
     entitaId: id,
-    meta: { n_fattura, anno: year },
+    meta: { n_fattura, anno: year, modifiche },
     ip: await getClientIp(),
   });
 
