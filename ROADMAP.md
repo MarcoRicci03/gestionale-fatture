@@ -72,7 +72,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | ✅ |
 | [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
 | [DEP-10](#dep-10) | Nessun limite di risorse sui container | ✅ |
-| [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
+| [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | ✅ |
 | [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | 🟡 |
 | [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
 | [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
@@ -712,7 +712,7 @@ Nessun `mem_limit`/`cpus`. Su una VPS piccola, un picco di generazione PDF o un 
 # Documentazione
 
 <a id="doc-01"></a>
-## DOC-01 — `README.md` è ancora il boilerplate di `create-next-app` 🔴
+## DOC-01 — `README.md` è ancora il boilerplate di `create-next-app` ✅ risolta
 
 **Severità:** alta per un progetto self-hosted
 **File:** `README.md`
@@ -727,6 +727,8 @@ Il README parla di `yarn dev`, di `next/font` e di come deployare su Vercel — 
 - comandi utili (`npm test`, `npx prisma migrate dev`).
 
 `CLAUDE.md` e `AGENTS.md` contengono già ottima documentazione architetturale, ma sono rivolti a un assistente, non a chi deve rimettere in piedi il servizio tra sei mesi.
+
+**Fix applicato:** riscritto `README.md` da zero: stack, prerequisiti, setup di sviluppo (Postgres locale, `.env`, migration, creazione primo admin, dev server), comandi utili, procedura di deploy con `docker-compose.prod.yml`/`.env.prod`, promemoria esplicito sul requisito TLS (cookie di sessione `Secure`, vedi DEP-03 tuttora aperta) e rimando a `README-BACKUP.md`. Nessuna menzione di Vercel/`yarn`/boilerplate residuo.
 
 ---
 
