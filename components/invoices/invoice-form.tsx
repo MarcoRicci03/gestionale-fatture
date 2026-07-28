@@ -119,7 +119,8 @@ export function InvoiceForm({
 
   const selectedPayerId = useWatch({ control, name: "id_Pagante" });
   const selectedDate = useWatch({ control, name: "data" });
-  const mesiValues = useWatch({ control, name: "mesi" }) ?? [];
+  const watchedMesi = useWatch({ control, name: "mesi" });
+  const mesiValues = useMemo(() => watchedMesi ?? [], [watchedMesi]);
   const bolloCodiceValue = useWatch({ control, name: "bolloCodice" });
 
   const totale = useMemo(

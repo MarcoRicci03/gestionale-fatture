@@ -75,7 +75,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | ✅ |
 | [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | ✅ |
 | [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
-| [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | 🟢 |
+| [QUA-01](#qua-01) | 2 warning ESLint su `mesiValues` | ✅ |
 | [QUA-02](#qua-02) | `any` espliciti in `user-form.tsx` | ✅ |
 | [QUA-03](#qua-03) | `pdf-editor.tsx` a 1848 righe | ✅ |
 | [QUA-04](#qua-04) | Copertura e2e limitata al login | ✅ |
@@ -768,11 +768,13 @@ Per lo stesso motivo questo file si chiama `ROADMAP.md` e non `ROADMAP_FIX.md`: 
 # Qualità / Manutenzione
 
 <a id="qua-01"></a>
-## QUA-01 — 2 warning ESLint su `mesiValues` 🟢
+## QUA-01 — 2 warning ESLint su `mesiValues` ✅ risolta
 
 **File:** `components/invoices/invoice-form.tsx` (riga 121)
 
 `react-hooks/exhaustive-deps`: `useWatch(...) ?? []` è un'espressione che produce un riferimento nuovo a ogni render, usata come dipendenza di due `useMemo` (righe 126 e 134), che quindi non memoizzano nulla. Cosmetico e a costo quasi nullo: avvolgere `mesiValues` in un proprio `useMemo`.
+
+**Fix applicato:** `mesiValues` ora è `useMemo(() => watchedMesi ?? [], [watchedMesi])`, con `watchedMesi` come valore grezzo di `useWatch`. Riferimento stabile finché il valore watchato non cambia davvero; `npm run lint` torna a 0 warning.
 
 <a id="qua-02"></a>
 ## QUA-02 — `any` espliciti in `user-form.tsx` ✅ risolta
