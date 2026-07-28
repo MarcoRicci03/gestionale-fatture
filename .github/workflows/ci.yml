@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Audit dipendenze di produzione
+        # Non bloccante: al momento esistono vulnerabilità note nelle
+        # dipendenze transitive (es. exceljs, sharp) senza fix non-breaking
+        # disponibile. Da rivalutare e stringere quando saranno risolte.
+        run: npm audit --omit=dev
+        continue-on-error: true

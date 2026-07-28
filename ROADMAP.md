@@ -68,10 +68,10 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [DEP-04](#dep-04) | Il container di backup installa `gnupg` a ogni avvio | ✅ |
 | [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | ✅ |
 | [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | ✅ (punti 1-2; il punto 3, chiave in un password manager, resta organizzativo) |
-| [DEP-07](#dep-07) | Nessuna CI | 🟡 |
+| [DEP-07](#dep-07) | Nessuna CI | ✅ |
 | [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | ✅ |
 | [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
-| [DEP-10](#dep-10) | Nessun limite di risorse sui container | 🟢 |
+| [DEP-10](#dep-10) | Nessun limite di risorse sui container | ✅ |
 | [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
 | [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | 🟡 |
 | [DOC-03](#doc-03) | `.gitignore` esclude `docs/` e i file di roadmap | 🟡 |
@@ -655,12 +655,14 @@ Il backup cifrato con GPG è ben fatto (AES256, `umask 077`, chiave obbligatoria
 ---
 
 <a id="dep-07"></a>
-## DEP-07 — Nessuna CI 🟡
+## DEP-07 — Nessuna CI ✅ risolta
 
 **Severità:** media
 **File:** nessuno (`.github/workflows/` non esiste)
 
 Il progetto ha **233 test**, di cui una trentina di regressione su sicurezza scritti apposta per non far rientrare bug già risolti (`scripts/verify-*.test.ts`), più un type-check e un lint puliti. Tutto questo gira solo se qualcuno se lo ricorda. Una pipeline che esegue `npx tsc --noEmit`, `npm run lint`, `npm test` e `npm audit --omit=dev` a ogni push è, in rapporto valore/sforzo, l'intervento migliore di tutta questa lista.
+
+**Fix applicato:** aggiunto `.github/workflows/ci.yml` (Node 20, `npm ci` con cache) che esegue `tsc --noEmit`, `npm run lint`, `npm test` a ogni push/PR come step bloccanti, più `npm audit --omit=dev` come step non bloccante (`continue-on-error`): al momento risultano 18 vulnerabilità nelle dipendenze transitive di produzione (`exceljs`→`archiver`/`uuid`, `sharp`, `valibot`) senza fix non-breaking disponibile, quindi bloccare la pipeline su queste oggi renderebbe la CI rossa in modo permanente senza un'azione concreta possibile subito. Da rivalutare (triage delle singole vulnerabilità, eventuale bump major di `exceljs`) e poi stringere il gate rimuovendo `continue-on-error`. Nessun servizio Postgres nel workflow: i test unitari (incluse le regressioni `scripts/verify-*.test.ts`) non richiedono un database reale, verificato eseguendo la suite senza variabili d'ambiente. La suite e2e (Playwright) resta fuori dalla pipeline, come da fix minimo indicato.
 
 ---
 
@@ -697,11 +699,13 @@ Valore d'ambiente specifico di una macchina in un file versionato. Innocuo (vale
 ---
 
 <a id="dep-10"></a>
-## DEP-10 — Nessun limite di risorse sui container 🟢
+## DEP-10 — Nessun limite di risorse sui container ✅ risolta
 
 **File:** `docker-compose.prod.yml`
 
 Nessun `mem_limit`/`cpus`. Su una VPS piccola, un picco di generazione PDF o un export pesante può far intervenire l'OOM killer sul processo sbagliato (tipicamente Postgres). Da considerare quando si sceglierà la macchina.
+
+**Fix applicato:** aggiunti `mem_limit`/`cpus` su tutti e 4 i servizi (`db`: 512m/1.0, `app`: 768m/1.0, `backup`: 256m/0.5, `audit-log-retention`: 128m/0.25) — totale ~1.66GB, valori conservativi pensati per una VPS da ~2GB RAM. Da ritarare quando sarà scelta la macchina reale (specie `app`, se PDF/export generano picchi di memoria maggiori del previsto).
 
 ---
 
