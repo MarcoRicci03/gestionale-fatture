@@ -56,6 +56,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# Necessaria per il servizio "audit-log-retention" (SEC-12): senza questa,
+# scripts/audit-log-retention.mjs non sarebbe raggiungibile a runtime. I
+# file .test.ts restano inerti (mai eseguiti da `node` direttamente).
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+
 # Copia la cartella Prisma e la config per eseguire le migrazioni in produzione
 # (prisma.config.ts è la fonte del datasource.url in Prisma 7: senza questo file
 # "prisma migrate deploy" fallisce con "datasource.url property is required",

@@ -1,6 +1,6 @@
 import { it, expect } from "vitest";
 import { readFileSync, readdirSync } from "fs";
-import { join, relative } from "path";
+import { join, relative, sep } from "path";
 import { hasApiRouteAuthCheck } from "./lib/api-route-auth-checks";
 
 // Equivalente di verify-actions-auth.test.ts per le route API: proxy.ts
@@ -14,8 +14,12 @@ import { hasApiRouteAuthCheck } from "./lib/api-route-auth-checks";
 const API_DIR = join(__dirname, "..", "app", "api");
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 // Chiave "percorso/relativo/route.ts:METHOD" per handler intenzionalmente
-// pubblici (nessuno al momento).
-const PUBLIC_ROUTES = new Set<string>([]);
+// pubblici.
+const PUBLIC_ROUTES = new Set<string>([
+  // Healthcheck Docker/reverse-proxy (DEP-05): nessun dato applicativo
+  // restituito, solo esito booleano — deve essere raggiungibile senza sessione.
+  "app/api/health/route.ts:GET",
+]);
 
 function extractFunctionBody(source: string, startIndex: number): string {
   // Find the closing paren of the function signature first
@@ -66,7 +70,10 @@ it("tutte le route API verificano la sessione", () => {
 
   for (const path of findRouteFiles(API_DIR)) {
     const source = readFileSync(path, "utf-8");
-    const relPath = relative(join(__dirname, ".."), path);
+    // Normalizzato a "/" perché su Windows path.relative usa "\\": senza
+    // questo la chiave qui costruita non potrebbe mai combaciare con le
+    // stringhe (sempre con "/") in PUBLIC_ROUTES.
+    const relPath = relative(join(__dirname, ".."), path).split(sep).join("/");
 
     for (const method of HTTP_METHODS) {
       const regex = new RegExp(`export\\s+async\\s+function\\s+${method}\\s*\\(`);

@@ -46,11 +46,11 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-05](#sec-05) | Nessuna protezione "ultimo admin": lockout permanente possibile | ✅ |
 | [SEC-06](#sec-06) | `proxy.ts` lascia passare anche le richieste HEAD | ✅ |
 | [SEC-07](#sec-07) | Header `X-Powered-By: Next.js` esposto | ✅ |
-| [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | 🟡 |
+| [SEC-08](#sec-08) | CSP con `script-src 'unsafe-inline'` | ✅ |
 | [SEC-09](#sec-09) | Postgres di sviluppo esposto su tutte le interfacce | ✅ |
 | [SEC-10](#sec-10) | Il setup e2e crea un utente con password nota nel DB puntato da `DATABASE_URL` | ✅ |
 | [SEC-11](#sec-11) | La password tentata può finire nell'audit log | ✅ |
-| [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | 🟡 |
+| [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | ✅ (fix tecnico; fix organizzativo resta da fare, non è codice) |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | ✅ |
 | [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | 🟡 |
@@ -63,14 +63,14 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [LOG-10](#log-10) | `export-invoices-dialog.tsx` gestisce un 413 che il server non emette mai | 🟢 |
 | [LOG-11](#log-11) | `archivePatient` non verifica lo stato di partenza | ✅ |
 | [DEP-01](#dep-01) | Nessun modo di creare il primo utente: l'app è inutilizzabile su un DB vuoto | ✅ |
-| [DEP-02](#dep-02) | `prisma` è una devDependency ma il container la invoca a runtime | 🔴 |
+| [DEP-02](#dep-02) | `prisma` è una devDependency ma il container la invoca a runtime | ✅ |
 | [DEP-03](#dep-03) | Nessun TLS: con `secure: true` il cookie di sessione non viene salvato | 🔴 |
-| [DEP-04](#dep-04) | Il container di backup installa `gnupg` a ogni avvio | 🟡 |
-| [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | 🟡 |
+| [DEP-04](#dep-04) | Il container di backup installa `gnupg` a ogni avvio | ✅ |
+| [DEP-05](#dep-05) | Nessun healthcheck sul servizio `app` | ✅ |
 | [DEP-06](#dep-06) | Backup mai verificati, chiave e copie sulla stessa macchina | 🟡 |
 | [DEP-07](#dep-07) | Nessuna CI | 🟡 |
 | [DEP-08](#dep-08) | Nessun logging strutturato né rotazione | 🟡 |
-| [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | 🟡 |
+| [DEP-09](#dep-09) | Indirizzo LAN cablato in `next.config.ts` | ✅ |
 | [DEP-10](#dep-10) | Nessun limite di risorse sui container | 🟢 |
 | [DOC-01](#doc-01) | `README.md` è ancora il boilerplate di `create-next-app` | 🔴 |
 | [DOC-02](#doc-02) | Riferimenti a documenti che non esistono | 🟡 |
@@ -228,7 +228,7 @@ Mancava `poweredByHeader: false`. L'header rivela framework e, indirettamente, l
 ---
 
 <a id="sec-08"></a>
-## SEC-08 — CSP con `script-src 'unsafe-inline'` 🟡
+## SEC-08 — CSP con `script-src 'unsafe-inline'` ✅ risolta
 
 **Severità:** bassa (limite noto e documentato)
 **File:** `next.config.ts` (riga 18)
@@ -236,6 +236,8 @@ Mancava `poweredByHeader: false`. L'header rivela framework e, indirettamente, l
 La CSP attuale è già un guadagno netto (blocca il caricamento da domini esterni), e il commento nel file spiega correttamente perché `'unsafe-inline'` serve per lo script di bootstrap dell'hydration. Resta però il fatto che, con `'unsafe-inline'` su `script-src`, la CSP **non protegge da un XSS**: uno script iniettato inline verrebbe eseguito.
 
 **Fix (quando ci sarà tempo):** CSP con nonce per-richiesta generato in `proxy.ts` e propagato ai Server Component. Non è banale in App Router; da pianificare come lavoro a sé.
+
+**Fix applicato:** CSP spostata da `next.config.ts` a `proxy.ts` (nuovo modulo puro `lib/security/csp.ts`, `buildCspHeader(nonce)`), generata per-richiesta solo in produzione. `script-src` ora usa `'nonce-...' 'strict-dynamic'` senza `'unsafe-inline'`; `style-src` resta `'unsafe-inline'` (l'editor PDF usa `style={{...}}` per il posizionamento a pixel del canvas drag-and-drop, e un nonce non copre l'attributo HTML `style`, solo i tag `<style>` — vedi il piano per il dettaglio). `proxy.ts` ora fa girare anche `/login` (seconda voce nel `matcher`, la regex di autenticazione esistente non è stata toccata) per ricevere comunque il nonce senza subire il redirect. `app/layout.tsx` propaga il nonce a `<ThemeProvider>` (il no-flash script di `next-themes` usa `dangerouslySetInnerHTML` e non rientra nell'auto-nonce di Next). Verificato con build di produzione reale + Playwright contro un browser vero: header CSP corretto e nonce diverso ad ogni richiesta su `/login` e `/dashboard`, cambio tema funzionante (prova che il nonce propagato a `next-themes` funziona), editor PDF funzionante, **zero violazioni CSP in console** durante l'intera sessione (login, toggle tema, dashboard, editor PDF).
 
 ---
 
@@ -287,7 +289,7 @@ Nuovo `lib/audit/redact-username.test.ts` (4 test, incluso un caso esplicito con
 ---
 
 <a id="sec-12"></a>
-## SEC-12 — Nessuna retention sull'audit log, e dati sanitari senza policy 🟡
+## SEC-12 — Nessuna retention sull'audit log, e dati sanitari senza policy ✅ risolta (fix tecnico)
 
 **Severità:** media (compliance, non tecnica)
 **File:** `prisma/schema.prisma` (model `AuditLog`), `lib/data/audit-log.ts`
@@ -297,7 +299,9 @@ Nuovo `lib/audit/redact-username.test.ts` (4 test, incluso un caso esplicito con
 Il contesto conta: si tratta di un gestionale per uno studio di logopedia. Il collegamento paziente ↔ prestazione sanitaria è dato particolare ai sensi dell'art. 9 GDPR. Andrebbero definiti, come minimo: un periodo di conservazione dell'audit log, un periodo per i backup (cfr. LOG-01), e la nota su chi ha accesso.
 
 **Fix tecnico:** job periodico di `deleteMany` su `createdAt` più vecchio di N mesi, con N documentato in `.env.prod.example`.
-**Fix organizzativo:** fuori dal codice, ma da mettere per iscritto prima di trattare dati reali.
+**Fix organizzativo:** fuori dal codice, ma da mettere per iscritto prima di trattare dati reali. **Resta da fare — non è un compito tecnico, va scritto a parte prima di trattare dati reali.**
+
+**Fix applicato (parte tecnica):** nuovo servizio `audit-log-retention` in `docker-compose.prod.yml`, che riusa l'immagine già buildata per `app` (nessun secondo `Dockerfile`). Un loop Node (`scripts/audit-log-retention.mjs`, ESM puro come `prisma/seed.mjs` — deve girare senza `tsx`/TypeScript dopo `npm prune --omit=dev`) calcola l'attesa fino alla prossima esecuzione con `scripts/lib/retention-schedule.mjs` (`msUntilNextRun`, modulo puro testato con Vitest, incluso un caso a cavallo del cambio ora legale) e poi esegue `prisma.auditLog.deleteMany` sulle righe più vecchie di `AUDIT_LOG_RETENTION_MONTHS` (default 12). Default schedule: domenica alle 03:00 Europe/Rome (`AUDIT_LOG_RETENTION_WEEKDAY`/`AUDIT_LOG_RETENTION_HOUR`, entrambi configurabili) — la mia interpretazione di "la notte tra sabato e domenica". Connessione al DB aperta e richiusa ad ogni esecuzione, non tenuta viva per una settimana (stesso spirito di `scripts/backup-db.sh`). Scartato `crond` dopo averlo verificato non funzionante con l'utente non privilegiato `nextjs` già in uso in questo progetto (vedi `PIANO_FIX_AUDIT_LOG_RETENTION.md` per il dettaglio). Verificato con query reale contro il Postgres di sviluppo (righe finte vecchia/recente: solo la vecchia viene eliminata) e con build Docker reale (script presente ed eseguibile nell'immagine finale, container avviato con successo su rete reale).
 
 ---
 
@@ -525,7 +529,7 @@ Ogni percorso di creazione utente passa da `requireAdmin()`. Su un database appe
 ---
 
 <a id="dep-02"></a>
-## DEP-02 — `prisma` è una devDependency ma il container la invoca a runtime 🔴
+## DEP-02 — `prisma` è una devDependency ma il container la invoca a runtime ✅ risolta
 
 **Severità:** alta
 **File:** `Dockerfile` (righe 26, 53, 71), `package.json` (`devDependencies`)
@@ -559,6 +563,8 @@ Non trovandola in locale, `npx` prova a **scaricarla dal registry npm a ogni avv
 2. Estrarre le migrazioni in un servizio one-shot del compose che gira prima di `app` (`depends_on` + `condition: service_completed_successfully`), lasciando `CMD ["node", "server.js"]`.
 3. Pin esplicito: `npx prisma@7.8.0 migrate deploy` — risolve il mismatch di versione ma non la dipendenza dalla rete.
 
+**Fix applicato:** opzione 1 — `prisma` spostata da `devDependencies` a `dependencies` in `package.json` (stessa versione `^7.8.0` già usata da `@prisma/client`/`@prisma/adapter-pg`), `package-lock.json` rigenerato di conseguenza. Sopravvive a `npm prune --omit=dev` nello stage builder del `Dockerfile`, quindi `npx prisma migrate deploy` nel `CMD` dello stage runner trova il binario già installato in locale senza scaricarlo dal registry npm ad ogni avvio.
+
 ---
 
 <a id="dep-03"></a>
@@ -585,7 +591,7 @@ Non c'è reverse proxy, non c'è terminazione TLS, non ci sono certificati. Ma i
 ---
 
 <a id="dep-04"></a>
-## DEP-04 — Il container di backup installa `gnupg` a ogni avvio 🟡
+## DEP-04 — Il container di backup installa `gnupg` a ogni avvio ✅ risolta
 
 **Severità:** media
 **File:** `docker-compose.prod.yml` (riga 62)
@@ -598,10 +604,12 @@ Stesso vizio di DEP-02: dipendenza dalla rete a ogni riavvio. Se `apk` fallisce 
 
 **Fix:** un `Dockerfile.backup` di tre righe (`FROM postgres:16-alpine` + `RUN apk add --no-cache gnupg` + `ENTRYPOINT`), buildato una volta.
 
+**Fix applicato:** creato `Dockerfile.backup` nella root (`FROM postgres:16-alpine` + `RUN apk add --no-cache gnupg` + `ENTRYPOINT ["sh", "/backup-db.sh"]`); `docker-compose.prod.yml` ora builda il servizio `backup` da questo Dockerfile (`build.dockerfile: Dockerfile.backup`) invece di usare `image: postgres:16-alpine` con l'`entrypoint` inline che eseguiva `apk add` ad ogni riavvio. Verificato con `docker run --rm --network none`: `gpg` e `pg_dump` sono già presenti nell'immagine, nessun accesso alla rete richiesto all'avvio.
+
 ---
 
 <a id="dep-05"></a>
-## DEP-05 — Nessun healthcheck sul servizio `app` 🟡
+## DEP-05 — Nessun healthcheck sul servizio `app` ✅ risolta
 
 **Severità:** media
 **File:** `docker-compose.prod.yml` (righe 31-45)
@@ -609,6 +617,8 @@ Stesso vizio di DEP-02: dipendenza dalla rete a ogni riavvio. Se `apk` fallisce 
 Il servizio `db` ha un healthcheck corretto (`pg_isready`); `app` no. Docker considera quindi il container sano finché il processo è vivo, anche se Node è bloccato o se le migrazioni sono fallite lasciandolo in uno stato inutilizzabile. `restart: unless-stopped` non può reagire a un blocco, solo a un crash. Serve anche per il reverse proxy di DEP-03, che ha bisogno di un segnale di readiness.
 
 **Fix:** una route `app/api/health/route.ts` che fa un `SELECT 1` su Prisma e restituisce 200/503 (pubblica, senza dati — va aggiunta al matcher di esclusione in `proxy.ts` o gestita con `getUserIdOrNull`), più il blocco `healthcheck` nel compose.
+
+**Fix applicato:** aggiunta `app/api/health/route.ts` (`GET`) che esegue `prisma.$queryRaw` `SELECT 1` e risponde `{status:"ok"}`/200 oppure `{status:"error"}`/503; è intenzionalmente pubblica (nessun dato applicativo restituito) ed è stata aggiunta a `PUBLIC_ROUTES` in `scripts/verify-api-routes-auth.test.ts` — che nel farlo ha rivelato un bug latente nel test stesso: `path.relative` su Windows produce `\` come separatore, quindi le chiavi `PUBLIC_ROUTES` (scritte con `/`) non avrebbero mai potuto combaciare su quella piattaforma; corretto normalizzando `relPath` a `/` con `.split(sep).join("/")`. In `docker-compose.prod.yml`, il servizio `app` ha ora un blocco `healthcheck` (`wget -q -O- http://127.0.0.1:3000/api/health`, `wget` è già presente nell'immagine `node:20-alpine` via busybox, niente da installare). Verificato con una build reale dell'immagine di produzione collegata al Postgres di sviluppo: `200 {"status":"ok"}` a DB raggiungibile, `503 {"status":"error"}` con credenziali/DB non validi, e l'esatto comando `wget` dell'healthcheck testato con `docker exec`.
 
 ---
 
@@ -651,7 +661,7 @@ Gli errori finiscono su `console.error` → stdout del container → driver di l
 ---
 
 <a id="dep-09"></a>
-## DEP-09 — Indirizzo LAN cablato in `next.config.ts` 🟡
+## DEP-09 — Indirizzo LAN cablato in `next.config.ts` ✅ risolta
 
 **Severità:** bassa
 **File:** `next.config.ts` (riga 57)
@@ -663,6 +673,8 @@ allowedDevOrigins: ['192.168.0.56'],
 Valore d'ambiente specifico di una macchina in un file versionato. Innocuo (vale solo in dev) ma è configurazione nel posto sbagliato, e smetterà di funzionare al primo cambio di rete.
 
 **Fix:** leggerlo da una env var, o rimuoverlo.
+
+**Fix applicato:** `allowedDevOrigins` ora legge da `process.env.DEV_ALLOWED_ORIGINS` (lista separata da virgole, `undefined` se non impostata — Next.js allora si comporta come senza l'opzione). Valore rimosso da `next.config.ts` e spostato in `.env` locale (non versionato) e documentato in `CLAUDE.md`.
 
 ---
 

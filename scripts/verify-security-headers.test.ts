@@ -57,23 +57,16 @@ describe.each(["development", "production"])("header sempre presenti [%s]", (nod
 });
 
 describe("header solo di produzione", () => {
-  it("in sviluppo CSP/HSTS non sono impostati (romperebbero Turbopack HMR)", async () => {
+  it("in sviluppo HSTS non è impostato (romperebbe l'uso in locale su HTTP semplice)", async () => {
     const devRules = await loadHeadersFor("development");
-    expect(findHeaderValue(devRules, "Content-Security-Policy")).toBeUndefined();
     expect(findHeaderValue(devRules, "Strict-Transport-Security")).toBeUndefined();
   });
 
-  it("in produzione la CSP include le direttive attese", async () => {
+  it("la CSP non è più responsabilità di next.config.ts (SEC-08: generata per-richiesta in proxy.ts, con nonce — vedi scripts/verify-csp-nonce.test.ts)", async () => {
+    const devRules = await loadHeadersFor("development");
     const prodRules = await loadHeadersFor("production");
-    const csp = findHeaderValue(prodRules, "Content-Security-Policy");
-    expect(csp).toBeTruthy();
-    for (const expectedDirective of [
-      "default-src 'self'",
-      "object-src 'none'",
-      "frame-ancestors 'none'",
-    ]) {
-      expect(csp).toContain(expectedDirective);
-    }
+    expect(findHeaderValue(devRules, "Content-Security-Policy")).toBeUndefined();
+    expect(findHeaderValue(prodRules, "Content-Security-Policy")).toBeUndefined();
   });
 
   it("in produzione Strict-Transport-Security è impostato con max-age", async () => {

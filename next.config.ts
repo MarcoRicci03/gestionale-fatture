@@ -2,30 +2,11 @@ import type { NextConfig } from "next";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// Nessuna fetch/XHR verso domini esterni nel codebase, nessun uso di
-// next/image con pattern remoti, i font (next/font/google) sono
-// self-hosted a build time: uno script-src/style-src/connect-src limitati a
-// 'self' non rompono nulla di reale. 'unsafe-inline' resta necessario per lo
-// script di bootstrap dell'hydration che Next.js inietta inline nell'HTML
-// (self.__next_f.push(...)): una CSP "strict" con nonce per-richiesta
-// eliminerebbe anche questo, ma richiede generare il nonce in proxy.ts e
-// propagarlo nei Server Component — fuori scope per questo fix, la
-// differenza rispetto a nessuna CSP resta comunque sostanziale (blocca il
-// caricamento di script/risorse da domini esterni in caso di un futuro
-// XSS).
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
-
+// La CSP (SEC-08) non è più qui: serve un nonce diverso per ogni richiesta
+// per poter togliere 'unsafe-inline' da script-src, e headers() qui sotto
+// viene valutato una sola volta al build/route-registration, senza accesso
+// alla request corrente. È generata in proxy.ts (buildCspHeader in
+// lib/security/csp.ts), solo in produzione — vedi PIANO_FIX_CSP_NONCE.md.
 const securityHeaders = [
   // Ridondante con "frame-ancestors 'none'" sopra: X-Frame-Options resta
   // rispettato da client più vecchi che non implementano CSP3.
@@ -36,14 +17,11 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
-  // CSP e HSTS solo in produzione: in sviluppo Turbopack inietta script
-  // eval-based e un websocket di HMR che una CSP stretta bloccherebbe, senza
-  // alcun beneficio reale su un ambiente locale non esposto. HSTS non ha
-  // effetto se la risposta non arriva già su HTTPS (i browser lo ignorano su
-  // HTTP semplice), ma non ha senso forzarlo mentre si sviluppa in locale.
+  // HSTS solo in produzione: non ha effetto se la risposta non arriva già
+  // su HTTPS (i browser lo ignorano su HTTP semplice), ma non ha senso
+  // forzarlo mentre si sviluppa in locale.
   ...(isProduction
     ? [
-        { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
         {
           key: "Strict-Transport-Security",
           value: "max-age=15552000; includeSubDomains",
@@ -52,9 +30,17 @@ const securityHeaders = [
     : []),
 ];
 
+// Origini extra (oltre a localhost) da cui il dev server accetta richieste,
+// utile per testare da un altro dispositivo sulla stessa LAN (vedi
+// allowedDevOrigins in next.config.ts). Specifico della macchina di chi
+// sviluppa: va impostato in .env, non cablato qui (DEP-09).
+const devAllowedOrigins = process.env.DEV_ALLOWED_ORIGINS
+  ? process.env.DEV_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : undefined;
+
 const nextConfig: NextConfig = {
   /* config options here */
-  allowedDevOrigins: ['192.168.0.56'],
+  allowedDevOrigins: devAllowedOrigins,
   output: "standalone",
   // Senza questo, Next.js aggiunge di default l'header X-Powered-By:
   // Next.js a ogni risposta, rivelando il framework e indirettamente la

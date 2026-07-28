@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -22,11 +23,19 @@ export const metadata: Metadata = {
   description: "Gestionale di fatturazione per logopedisti",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Il no-flash script di next-themes usa dangerouslySetInnerHTML, quindi
+  // NON rientra nell'auto-nonce che Next applica ai propri script (bootstrap
+  // dell'hydration, bundle di pagina): va propagato esplicitamente, o la CSP
+  // in produzione (SEC-08, vedi proxy.ts) lo bloccherebbe. In sviluppo
+  // l'header non è impostato (nessuna CSP) e nonce resta undefined, che
+  // ThemeProvider gestisce già correttamente.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html
       lang="it"
@@ -34,7 +43,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full bg-background text-foreground">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider nonce={nonce} attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
       </body>

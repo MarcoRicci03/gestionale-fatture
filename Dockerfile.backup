@@ -1,0 +1,7 @@
+# syntax=docker/dockerfile:1
+
+# gnupg installato una volta in build, non ad ogni avvio del container
+# (vedi DEP-04 in ROADMAP.md).
+FROM postgres:16-alpine
+RUN apk add --no-cache gnupg
+ENTRYPOINT ["sh", "/backup-db.sh"]
