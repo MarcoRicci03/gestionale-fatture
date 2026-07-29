@@ -20,6 +20,10 @@ RUN npx prisma generate
 
 # Copia sorgenti e builda Next.js in modalità standalone
 COPY . .
+ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
+ARG JWT_SECRET="RhIUTB46Yj1J0viBQyyWDhoDXWu3cPpH3hA2TQD9R/591IEDQdp3go1ao50qCwAE"
+ENV DATABASE_URL=$DATABASE_URL
+ENV JWT_SECRET=$JWT_SECRET
 RUN npm run build
 
 # Rimuove le devDependencies per alleggerire l'immagine finale
