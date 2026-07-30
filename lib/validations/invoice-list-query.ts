@@ -3,6 +3,7 @@ import {
   currentMonthInvoiceFilters,
   type InvoiceFilters,
 } from "@/components/invoices/invoice-filters";
+import { pageSchema } from "@/lib/utils/pagination";
 
 export const invoiceFiltersSchema = z.object({
   dataDa: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]),
@@ -11,16 +12,6 @@ export const invoiceFiltersSchema = z.object({
   modPag: z.union([z.literal(""), z.enum(["CONTANTI", "CARTA", "BONIFICO"])]),
   anno: z.union([z.literal(""), z.string().regex(/^\d{4}$/)]),
 });
-
-// Il limite superiore è difesa in profondità, non la fonte di verità sul
-// range valido: quella vive in getInvoices() (lib/data/invoices.ts), che
-// clampa `page` all'ultima pagina realmente disponibile una volta noto
-// `totalCount`. Senza QUESTO limite, però, un valore come
-// "100000000000000000000" supererebbe comunque .int().positive() (è un
-// intero rappresentabile in floating point) e produrrebbe uno `skip` enorme
-// prima ancora che getInvoices possa clampare nulla, rischiando un errore
-// non gestito lato Postgres sull'OFFSET.
-const pageSchema = z.coerce.number().int().positive().max(1_000_000);
 
 type RawSearchParams = Record<string, string | string[] | undefined>;
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { PlusCircle, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,9 @@ import { ArchivePayerButton } from "./archive-payer-button";
 import { RestorePayerButton } from "./restore-payer-button";
 import { HardDeletePayerButton } from "./hard-delete-payer-button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { SearchField } from "@/components/ui/search-field";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 import type { Pagante, Paziente } from "@prisma/client";
 import type { ArchivedPayerRow } from "@/lib/data/payers";
 
@@ -30,7 +34,12 @@ type ActivePayer = Pagante & { pazienti: Paziente[] };
 
 type PayersManagerProps = {
   payers: ActivePayer[];
+  totalCount: number;
+  page: number;
   archivedPayers: ArchivedPayerRow[];
+  archivedTotalCount: number;
+  archivedPage: number;
+  search: string;
 };
 
 function formatCurrency(amount: number) {
@@ -68,11 +77,55 @@ function restoreConflictLabel(row: ArchivedPayerRow): string | null {
   return `Ripristino bloccato: esiste già un pagante attivo con lo stesso ${fieldLabel}.`;
 }
 
-export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
+export function PayersManager({
+  payers,
+  totalCount,
+  page,
+  archivedPayers,
+  archivedTotalCount,
+  archivedPage,
+  search,
+}: PayersManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [editingPayer, setEditingPayer] = useState<ActivePayer | null>(null);
   const [viewingPayer, setViewingPayer] = useState<ActivePayer | null>(null);
+
+  // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
+  // dello stato più recente verso cui si è navigato, aggiornato
+  // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
+  // cambiano), per evitare che due navigazioni ravvicinate (es. il flush del
+  // debounce di ricerca seguito a ruota da un click di paginazione)
+  // leggano entrambe closure stale e la seconda perda silenziosamente la
+  // patch della prima.
+  const latestListStateRef = useRef({ search, page, archivedPage });
+  useEffect(() => {
+    latestListStateRef.current = { search, page, archivedPage };
+  }, [search, page, archivedPage]);
+
+  function navigate(next: { search: string; page: number; archivedPage: number }) {
+    latestListStateRef.current = next;
+    const params = new URLSearchParams();
+    if (next.search) params.set("q", next.search);
+    if (next.page > 1) params.set("page", String(next.page));
+    if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const handleSearchChange = (nextSearch: string) => {
+    navigate({ search: nextSearch, page: 1, archivedPage: 1 });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    navigate({ ...latestListStateRef.current, page: nextPage });
+  };
+
+  const handleArchivedPageChange = (nextArchivedPage: number) => {
+    navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
+  };
 
   const handleOpenNew = () => {
     setEditingPayer(null);
@@ -106,26 +159,38 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
         </Button>
       </div>
 
+      <SearchField
+        id="ricerca-paganti"
+        label="Cerca"
+        placeholder="Cerca per nome, cognome, CF o P.IVA..."
+        value={search}
+        onValueChange={handleSearchChange}
+      />
+
       <div className="flex items-center gap-2">
         <Button
           variant={view === "active" ? "default" : "outline"}
           size="sm"
           onClick={() => setView("active")}
         >
-          Attivi ({payers.length})
+          Attivi ({totalCount})
         </Button>
         <Button
           variant={view === "archived" ? "default" : "outline"}
           size="sm"
           onClick={() => setView("archived")}
         >
-          Archiviati ({archivedPayers.length})
+          Archiviati ({archivedTotalCount})
         </Button>
       </div>
 
       {view === "active" ? (
-        payers.length === 0 ? (
-          <p className="text-muted-foreground">Nessun pagante registrato.</p>
+        totalCount === 0 ? (
+          <p className="text-muted-foreground">
+            {search.trim()
+              ? "Nessun pagante trovato per la ricerca."
+              : "Nessun pagante registrato."}
+          </p>
         ) : (
           <>
             <div className="hidden rounded-lg border lg:block">
@@ -220,10 +285,22 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
                 </li>
               ))}
             </ul>
+
+            <ListPagination
+              page={page}
+              totalCount={totalCount}
+              pageSize={PAYERS_PAGE_SIZE}
+              itemLabel="paganti"
+              onPageChange={handlePageChange}
+            />
           </>
         )
-      ) : archivedPayers.length === 0 ? (
-        <p className="text-muted-foreground">Nessun pagante archiviato.</p>
+      ) : archivedTotalCount === 0 ? (
+        <p className="text-muted-foreground">
+          {search.trim()
+            ? "Nessun pagante archiviato trovato per la ricerca."
+            : "Nessun pagante archiviato."}
+        </p>
       ) : (
         <>
           <div className="hidden rounded-lg border lg:block">
@@ -308,6 +385,14 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
               </li>
             ))}
           </ul>
+
+          <ListPagination
+            page={archivedPage}
+            totalCount={archivedTotalCount}
+            pageSize={PAYERS_PAGE_SIZE}
+            itemLabel="paganti"
+            onPageChange={handleArchivedPageChange}
+          />
         </>
       )}
 

@@ -1,13 +1,35 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
+import { buildPatientWhere } from "@/lib/patients/list-query";
+import { lastValidPage } from "@/lib/utils/pagination";
+import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 
-export async function getPatients() {
-  const userId = await requireUserId();
+function findPatientsPage(where: Prisma.PazienteWhereInput, page: number) {
   return prisma.paziente.findMany({
-    where: { id_Utente: userId, archiviato: false },
+    where,
     include: { pagante: true },
-    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
+    // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
+    // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
+    orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
+    skip: (page - 1) * PATIENTS_PAGE_SIZE,
+    take: PATIENTS_PAGE_SIZE,
   });
+}
+
+export async function getPatients(search: string, page: number) {
+  const userId = await requireUserId();
+  const where = buildPatientWhere(userId, { search, archiviato: false });
+  const [patients, totalCount] = await Promise.all([
+    findPatientsPage(where, page),
+    prisma.paziente.count({ where }),
+  ]);
+
+  const clampedPage = Math.min(page, lastValidPage(totalCount, PATIENTS_PAGE_SIZE));
+  const effectivePatients =
+    clampedPage === page ? patients : await findPatientsPage(where, clampedPage);
+
+  return { patients: effectivePatients, totalCount, page: clampedPage };
 }
 
 export async function getPatientById(id: number) {
@@ -37,22 +59,47 @@ export async function getPayersForSelect() {
 
 export type ArchivedPatientRow = Awaited<
   ReturnType<typeof getArchivedPatients>
->[number];
+>["patients"][number];
 
-export async function getArchivedPatients() {
-  const userId = await requireUserId();
-
-  const patients = await prisma.paziente.findMany({
-    where: { id_Utente: userId, archiviato: true },
+function findArchivedPatientsPage(
+  where: Prisma.PazienteWhereInput,
+  page: number
+) {
+  return prisma.paziente.findMany({
+    where,
     include: {
       pagante: { select: { id: true, nome: true, cognome: true, archiviato: true } },
     },
-    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
+    orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
+    skip: (page - 1) * PATIENTS_PAGE_SIZE,
+    take: PATIENTS_PAGE_SIZE,
   });
+}
 
-  if (patients.length === 0) return [];
+export async function getArchivedPatients(search: string, page: number) {
+  const userId = await requireUserId();
+  const where = buildPatientWhere(userId, { search, archiviato: true });
 
-  const ids = patients.map((p) => p.id);
+  const [patients, totalCount] = await Promise.all([
+    findArchivedPatientsPage(where, page),
+    prisma.paziente.count({ where }),
+  ]);
+
+  const clampedPage = Math.min(page, lastValidPage(totalCount, PATIENTS_PAGE_SIZE));
+  const effectivePatients =
+    clampedPage === page
+      ? patients
+      : await findArchivedPatientsPage(where, clampedPage);
+
+  if (effectivePatients.length === 0) {
+    return { patients: [], totalCount, page: clampedPage };
+  }
+
+  // I conteggi fatture vanno calcolati solo sugli id della pagina corrente,
+  // non su tutto l'elenco archiviato: la lista che arriva al client è già
+  // paginata (effectivePatients), quindi basta un groupBy su quel
+  // sottoinsieme.
+  const ids = effectivePatients.map((p) => p.id);
   const fattureByPatient = await prisma.pagamento.groupBy({
     by: ["id_Paziente"],
     where: { id_Utente: userId, id_Paziente: { in: ids } },
@@ -64,7 +111,7 @@ export async function getArchivedPatients() {
 
   const fattureMap = new Map(fattureByPatient.map((f) => [f.id_Paziente, f]));
 
-  return patients.map((patient) => {
+  const patientsWithStats = effectivePatients.map((patient) => {
     const fatture = fattureMap.get(patient.id);
     return {
       ...patient,
@@ -74,4 +121,6 @@ export async function getArchivedPatients() {
       fatturaAnnoMax: fatture?._max.anno ?? null,
     };
   });
+
+  return { patients: patientsWithStats, totalCount, page: clampedPage };
 }
