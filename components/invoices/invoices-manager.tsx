@@ -41,7 +41,7 @@ import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
-import { InvoicesPagination } from "./invoices-pagination";
+import { ListPagination } from "@/components/ui/list-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
@@ -508,10 +508,11 @@ export function InvoicesManager({
             ))}
           </ul>
 
-          <InvoicesPagination
+          <ListPagination
             page={page}
             totalCount={totalCount}
             pageSize={INVOICES_PAGE_SIZE}
+            itemLabel="fatture"
             onPageChange={handlePageChange}
           />
           </>

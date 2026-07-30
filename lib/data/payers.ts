@@ -1,19 +1,41 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { findRestoreConflict } from "@/lib/archive/guards";
+import { buildPayerWhere } from "@/lib/payers/list-query";
+import { lastValidPage } from "@/lib/utils/pagination";
+import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 
-export async function getPayers() {
-  const userId = await requireUserId();
+function findPayersPage(where: Prisma.PaganteWhereInput, page: number) {
   return prisma.pagante.findMany({
-    where: { id_Utente: userId, archiviato: false },
+    where,
     include: {
       pazienti: {
         where: { archiviato: false },
         orderBy: [{ cognome: "asc" }, { nome: "asc" }],
       },
     },
-    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
+    // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
+    // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
+    orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
+    skip: (page - 1) * PAYERS_PAGE_SIZE,
+    take: PAYERS_PAGE_SIZE,
   });
+}
+
+export async function getPayers(search: string, page: number) {
+  const userId = await requireUserId();
+  const where = buildPayerWhere(userId, { search, archiviato: false });
+  const [payers, totalCount] = await Promise.all([
+    findPayersPage(where, page),
+    prisma.pagante.count({ where }),
+  ]);
+
+  const clampedPage = Math.min(page, lastValidPage(totalCount, PAYERS_PAGE_SIZE));
+  const effectivePayers =
+    clampedPage === page ? payers : await findPayersPage(where, clampedPage);
+
+  return { payers: effectivePayers, totalCount, page: clampedPage };
 }
 
 export async function getPayerById(id: number) {
@@ -25,25 +47,44 @@ export async function getPayerById(id: number) {
 
 export type ArchivedPayerRow = Awaited<
   ReturnType<typeof getArchivedPayers>
->[number];
+>["payers"][number];
 
-export async function getArchivedPayers() {
+function findArchivedPayersPage(where: Prisma.PaganteWhereInput, page: number) {
+  return prisma.pagante.findMany({
+    where,
+    orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
+    skip: (page - 1) * PAYERS_PAGE_SIZE,
+    take: PAYERS_PAGE_SIZE,
+  });
+}
+
+export async function getArchivedPayers(search: string, page: number) {
   const userId = await requireUserId();
+  const where = buildPayerWhere(userId, { search, archiviato: true });
 
-  const [payers, activePayers] = await Promise.all([
-    prisma.pagante.findMany({
-      where: { id_Utente: userId, archiviato: true },
-      orderBy: [{ cognome: "asc" }, { nome: "asc" }],
-    }),
+  const [payers, totalCount, activePayers] = await Promise.all([
+    findArchivedPayersPage(where, page),
+    prisma.pagante.count({ where }),
     prisma.pagante.findMany({
       where: { id_Utente: userId, archiviato: false },
       select: { id: true, cf: true, piva: true },
     }),
   ]);
 
-  if (payers.length === 0) return [];
+  const clampedPage = Math.min(page, lastValidPage(totalCount, PAYERS_PAGE_SIZE));
+  const effectivePayers =
+    clampedPage === page ? payers : await findArchivedPayersPage(where, clampedPage);
 
-  const ids = payers.map((p) => p.id);
+  if (effectivePayers.length === 0) {
+    return { payers: [], totalCount, page: clampedPage };
+  }
+
+  // I conteggi fatture/pazienti vanno calcolati solo sugli id della pagina
+  // corrente (effectivePayers), non su tutto l'elenco archiviato: activePayers
+  // resta invece su tutta l'anagrafica attiva, serve a findRestoreConflict
+  // sotto per rilevare conflitti CF/P.IVA indipendentemente da quali
+  // paganti archiviati sono in questa pagina.
+  const ids = effectivePayers.map((p) => p.id);
 
   const [fattureByPayer, pazientiByPayer] = await Promise.all([
     prisma.pagamento.groupBy({
@@ -63,7 +104,7 @@ export async function getArchivedPayers() {
 
   const fattureMap = new Map(fattureByPayer.map((f) => [f.id_Pagante, f]));
 
-  return payers.map((payer) => {
+  const payersWithStats = effectivePayers.map((payer) => {
     const fatture = fattureMap.get(payer.id);
     // Solo i pazienti archiviati IN CASCATA da questo pagante: sono quelli
     // che restorePayer ripristinerà davvero (LOG-09) — un paziente
@@ -90,4 +131,6 @@ export async function getArchivedPayers() {
       ),
     };
   });
+
+  return { payers: payersWithStats, totalCount, page: clampedPage };
 }
