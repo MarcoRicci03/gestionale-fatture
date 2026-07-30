@@ -148,8 +148,8 @@ export function PatientsManager({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pazienti</h1>
           <p className="text-muted-foreground">Gestione anagrafica pazienti</p>
@@ -160,15 +160,17 @@ export function PatientsManager({
         </Button>
       </div>
 
-      <SearchField
-        id="ricerca-pazienti"
-        label="Cerca"
-        placeholder="Cerca per nome o cognome..."
-        value={search}
-        onValueChange={handleSearchChange}
-      />
+      <div className="shrink-0">
+        <SearchField
+          id="ricerca-pazienti"
+          label="Cerca"
+          placeholder="Cerca per nome o cognome..."
+          value={search}
+          onValueChange={handleSearchChange}
+        />
+      </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Button
           variant={view === "active" ? "default" : "outline"}
           size="sm"
@@ -185,6 +187,7 @@ export function PatientsManager({
         </Button>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-6">
       {view === "active" ? (
         totalCount === 0 ? (
           <p className="text-muted-foreground">
@@ -194,7 +197,7 @@ export function PatientsManager({
           </p>
         ) : (
           <>
-            <div className="hidden max-h-[calc(100vh-26rem)] overflow-y-auto rounded-lg border md:block">
+            <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
@@ -245,7 +248,7 @@ export function PatientsManager({
               </Table>
             </div>
 
-            <ul className="max-h-[calc(100vh-26rem)] space-y-3 overflow-y-auto md:hidden">
+            <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
               {patients.map((patient) => (
                 <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                   <div>
@@ -286,13 +289,15 @@ export function PatientsManager({
               ))}
             </ul>
 
-            <ListPagination
-              page={page}
-              totalCount={totalCount}
-              pageSize={PATIENTS_PAGE_SIZE}
-              itemLabel="pazienti"
-              onPageChange={handlePageChange}
-            />
+            <div className="shrink-0">
+              <ListPagination
+                page={page}
+                totalCount={totalCount}
+                pageSize={PATIENTS_PAGE_SIZE}
+                itemLabel="pazienti"
+                onPageChange={handlePageChange}
+              />
+            </div>
           </>
         )
       ) : archivedTotalCount === 0 ? (
@@ -303,7 +308,7 @@ export function PatientsManager({
         </p>
       ) : (
         <>
-          <div className="hidden max-h-[calc(100vh-26rem)] overflow-y-auto rounded-lg border md:block">
+          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
@@ -343,7 +348,7 @@ export function PatientsManager({
             </Table>
           </div>
 
-          <ul className="max-h-[calc(100vh-26rem)] space-y-3 overflow-y-auto md:hidden">
+          <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
             {archivedPatients.map((patient) => (
               <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                 <div>
@@ -373,15 +378,18 @@ export function PatientsManager({
             ))}
           </ul>
 
-          <ListPagination
-            page={archivedPage}
-            totalCount={archivedTotalCount}
-            pageSize={PATIENTS_PAGE_SIZE}
-            itemLabel="pazienti"
-            onPageChange={handleArchivedPageChange}
-          />
+          <div className="shrink-0">
+            <ListPagination
+              page={archivedPage}
+              totalCount={archivedTotalCount}
+              pageSize={PATIENTS_PAGE_SIZE}
+              itemLabel="pazienti"
+              onPageChange={handleArchivedPageChange}
+            />
+          </div>
         </>
       )}
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">

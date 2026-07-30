@@ -198,8 +198,8 @@ export function InvoicesManager({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Fatture</h1>
           <p className="text-muted-foreground">Gestione fatture e pagamenti</p>
@@ -223,23 +223,25 @@ export function InvoicesManager({
       {years.length === 0 ? (
         <p className="text-muted-foreground">Nessuna fattura emessa.</p>
       ) : (
-        <>
-          <InvoicesFilterBar
-            filters={filters}
-            onChange={handleFiltersChange}
-            onReset={handleReset}
-            payers={payers}
-            patients={patients}
-            years={years}
-          />
+        <div className="flex min-h-0 flex-1 flex-col gap-6">
+          <div className="shrink-0">
+            <InvoicesFilterBar
+              filters={filters}
+              onChange={handleFiltersChange}
+              onReset={handleReset}
+              payers={payers}
+              patients={patients}
+              years={years}
+            />
+          </div>
 
           {invoices.length === 0 ? (
             <p className="text-muted-foreground">
               Nessuna fattura corrisponde ai filtri selezionati.
             </p>
           ) : (
-          <>
-          <div className="hidden max-h-[calc(100vh-34rem)] overflow-y-auto rounded-lg border lg:block">
+          <div className="flex min-h-0 flex-1 flex-col gap-6">
+          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
@@ -384,7 +386,7 @@ export function InvoicesManager({
             </Table>
           </div>
 
-          <ul className="max-h-[calc(100vh-34rem)] space-y-3 overflow-y-auto lg:hidden">
+          <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
             {invoices.map((invoice) => (
               <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -508,16 +510,18 @@ export function InvoicesManager({
             ))}
           </ul>
 
-          <ListPagination
-            page={page}
-            totalCount={totalCount}
-            pageSize={INVOICES_PAGE_SIZE}
-            itemLabel="fatture"
-            onPageChange={handlePageChange}
-          />
-          </>
+          <div className="shrink-0">
+            <ListPagination
+              page={page}
+              totalCount={totalCount}
+              pageSize={INVOICES_PAGE_SIZE}
+              itemLabel="fatture"
+              onPageChange={handlePageChange}
+            />
+          </div>
+          </div>
           )}
-        </>
+        </div>
       )}
 
       <ExportInvoicesDialog
