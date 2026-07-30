@@ -2,6 +2,8 @@ import type { Prisma, ModalitaPagamento } from "@prisma/client";
 import { parseDateInput } from "@/lib/utils/date";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 
+export { lastValidPage } from "@/lib/utils/pagination";
+
 const VALID_MOD_PAG: readonly string[] = ["CONTANTI", "CARTA", "BONIFICO"];
 
 function isModalitaPagamento(value: string): value is ModalitaPagamento {
@@ -43,15 +45,6 @@ function personaWhere(persona: string): Prisma.PagamentoWhereInput {
       ],
     })),
   };
-}
-
-// Ultima pagina effettivamente valida per un dato totale di righe: mai sotto
-// 1 (anche con 0 risultati, "pagina 1 vuota" è lo stato da mostrare, non
-// "pagina 0"). Usata per riportare a un valore sensato una `page` richiesta
-// oltre il range disponibile (utente su un'ultima pagina poi svuotata da una
-// cancellazione, o URL manomesso), invece di lasciarla come dead-end.
-export function lastValidPage(totalCount: number, pageSize: number): number {
-  return Math.max(1, Math.ceil(totalCount / pageSize));
 }
 
 export function buildInvoiceWhere(

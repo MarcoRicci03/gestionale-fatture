@@ -2,6 +2,7 @@ import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { getBolloImporto, getTotaleConBollo } from "@/lib/invoices/bollo-total";
 
 // Stessa forma prodotta da getInvoices()/getInvoiceById() (lib/data/invoices.ts):
 // Decimal già convertiti a number, relazioni incluse. pagante/paziente non
@@ -156,6 +157,18 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     label: "Bollo dovuto",
     category: "dettaglio",
     getValue: (i) => (i.prezzo_totale > SOGLIA_BOLLO ? "Sì" : "No"),
+  },
+  {
+    key: "bollo_importo",
+    label: "Importo marca da bollo",
+    category: "dettaglio",
+    getValue: (i) => getBolloImporto(i.bolloCodice),
+  },
+  {
+    key: "prezzo_totale_con_bollo",
+    label: "Totale con bollo",
+    category: "dettaglio",
+    getValue: (i) => getTotaleConBollo(i.prezzo_totale, i.bolloCodice),
   },
 ];
 

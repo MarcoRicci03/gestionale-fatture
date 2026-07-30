@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { PlusCircle, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,9 @@ import { ArchivePatientButton } from "./archive-patient-button";
 import { RestorePatientButton } from "./restore-patient-button";
 import { HardDeletePatientButton } from "./hard-delete-patient-button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { SearchField } from "@/components/ui/search-field";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 import type { Paziente, Pagante } from "@prisma/client";
 import type { ArchivedPatientRow } from "@/lib/data/patients";
 
@@ -30,8 +34,13 @@ type ActivePatient = Paziente & { pagante: Pagante | null };
 
 type PatientsManagerProps = {
   patients: ActivePatient[];
+  totalCount: number;
+  page: number;
   payers: Pagante[];
   archivedPatients: ArchivedPatientRow[];
+  archivedTotalCount: number;
+  archivedPage: number;
+  search: string;
 };
 
 function formatCurrency(amount: number) {
@@ -65,9 +74,17 @@ function payerLabel(payer: ArchivedPatientRow["pagante"]): string {
 
 export function PatientsManager({
   patients,
+  totalCount,
+  page,
   payers,
   archivedPatients,
+  archivedTotalCount,
+  archivedPage,
+  search,
 }: PatientsManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<ActivePatient | null>(
@@ -77,6 +94,39 @@ export function PatientsManager({
     null
   );
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
+
+  // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
+  // dello stato più recente verso cui si è navigato, aggiornato
+  // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
+  // cambiano), per evitare che due navigazioni ravvicinate (es. il flush del
+  // debounce di ricerca seguito a ruota da un click di paginazione)
+  // leggano entrambe closure stale e la seconda perda silenziosamente la
+  // patch della prima.
+  const latestListStateRef = useRef({ search, page, archivedPage });
+  useEffect(() => {
+    latestListStateRef.current = { search, page, archivedPage };
+  }, [search, page, archivedPage]);
+
+  function navigate(next: { search: string; page: number; archivedPage: number }) {
+    latestListStateRef.current = next;
+    const params = new URLSearchParams();
+    if (next.search) params.set("q", next.search);
+    if (next.page > 1) params.set("page", String(next.page));
+    if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const handleSearchChange = (nextSearch: string) => {
+    navigate({ search: nextSearch, page: 1, archivedPage: 1 });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    navigate({ ...latestListStateRef.current, page: nextPage });
+  };
+
+  const handleArchivedPageChange = (nextArchivedPage: number) => {
+    navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
+  };
 
   const handleOpenNew = () => {
     setEditingPatient(null);
@@ -98,8 +148,8 @@ export function PatientsManager({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pazienti</h1>
           <p className="text-muted-foreground">Gestione anagrafica pazienti</p>
@@ -110,31 +160,46 @@ export function PatientsManager({
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="shrink-0">
+        <SearchField
+          id="ricerca-pazienti"
+          label="Cerca"
+          placeholder="Cerca per nome o cognome..."
+          value={search}
+          onValueChange={handleSearchChange}
+        />
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
         <Button
           variant={view === "active" ? "default" : "outline"}
           size="sm"
           onClick={() => setView("active")}
         >
-          Attivi ({patients.length})
+          Attivi ({totalCount})
         </Button>
         <Button
           variant={view === "archived" ? "default" : "outline"}
           size="sm"
           onClick={() => setView("archived")}
         >
-          Archiviati ({archivedPatients.length})
+          Archiviati ({archivedTotalCount})
         </Button>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-6">
       {view === "active" ? (
-        patients.length === 0 ? (
-          <p className="text-muted-foreground">Nessun paziente registrato.</p>
+        totalCount === 0 ? (
+          <p className="text-muted-foreground">
+            {search.trim()
+              ? "Nessun paziente trovato per la ricerca."
+              : "Nessun paziente registrato."}
+          </p>
         ) : (
           <>
-            <div className="hidden rounded-lg border md:block">
+            <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
@@ -183,7 +248,7 @@ export function PatientsManager({
               </Table>
             </div>
 
-            <ul className="space-y-3 md:hidden">
+            <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
               {patients.map((patient) => (
                 <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                   <div>
@@ -223,15 +288,29 @@ export function PatientsManager({
                 </li>
               ))}
             </ul>
+
+            <div className="shrink-0">
+              <ListPagination
+                page={page}
+                totalCount={totalCount}
+                pageSize={PATIENTS_PAGE_SIZE}
+                itemLabel="pazienti"
+                onPageChange={handlePageChange}
+              />
+            </div>
           </>
         )
-      ) : archivedPatients.length === 0 ? (
-        <p className="text-muted-foreground">Nessun paziente archiviato.</p>
+      ) : archivedTotalCount === 0 ? (
+        <p className="text-muted-foreground">
+          {search.trim()
+            ? "Nessun paziente archiviato trovato per la ricerca."
+            : "Nessun paziente archiviato."}
+        </p>
       ) : (
         <>
-          <div className="hidden rounded-lg border md:block">
+          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
@@ -269,7 +348,7 @@ export function PatientsManager({
             </Table>
           </div>
 
-          <ul className="space-y-3 md:hidden">
+          <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
             {archivedPatients.map((patient) => (
               <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                 <div>
@@ -298,8 +377,19 @@ export function PatientsManager({
               </li>
             ))}
           </ul>
+
+          <div className="shrink-0">
+            <ListPagination
+              page={archivedPage}
+              totalCount={archivedTotalCount}
+              pageSize={PATIENTS_PAGE_SIZE}
+              itemLabel="pazienti"
+              onPageChange={handleArchivedPageChange}
+            />
+          </div>
         </>
       )}
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">

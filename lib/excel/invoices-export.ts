@@ -2,6 +2,12 @@ import ExcelJS from "exceljs";
 import { getExportColumn, type ExportableInvoice } from "./column-catalog";
 import { sanitizeCellValue } from "./sanitize";
 
+const CURRENCY_COLUMN_KEYS = new Set([
+  "prezzo_totale",
+  "bollo_importo",
+  "prezzo_totale_con_bollo",
+]);
+
 export async function buildInvoicesWorkbook(
   invoices: ExportableInvoice[],
   columnKeys: string[]
@@ -31,7 +37,7 @@ export async function buildInvoicesWorkbook(
   }
 
   for (const column of columns) {
-    if (column.key === "prezzo_totale") {
+    if (CURRENCY_COLUMN_KEYS.has(column.key)) {
       sheet.getColumn(column.key).numFmt = '#,##0.00 "€"';
     }
   }

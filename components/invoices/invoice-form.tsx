@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/actions/invoices";
 import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
+import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { roundCurrency } from "@/lib/utils/currency";
 import { withCurrentPayer, withCurrentPatient } from "@/lib/invoices/contact-options";
@@ -349,6 +350,16 @@ export function InvoiceForm({
             Il totale supera {formatCurrency(SOGLIA_BOLLO)}: è dovuta la marca
             da bollo da {formatCurrency(IMPORTO_BOLLO)}. Inserisci il codice
             quando disponibile.
+          </p>
+        )}
+        {bolloCodiceValue && !errors.bolloCodice && (
+          <p className="flex items-center gap-1.5 text-sm text-green-600">
+            <Check className="h-4 w-4 shrink-0" />
+            Codice inserito: nella tabella e nel dettaglio fattura verrà
+            mostrato un totale di{" "}
+            {formatCurrency(getTotaleConBollo(totale, bolloCodiceValue))}{" "}
+            (onorario {formatCurrency(totale)} + {formatCurrency(IMPORTO_BOLLO)}{" "}
+            di bollo).
           </p>
         )}
       </div>

@@ -3,26 +3,28 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type InvoicesPaginationProps = {
+type ListPaginationProps = {
   page: number;
   totalCount: number;
   pageSize: number;
+  itemLabel: string;
   onPageChange: (page: number) => void;
 };
 
-export function InvoicesPagination({
+export function ListPagination({
   page,
   totalCount,
   pageSize,
+  itemLabel,
   onPageChange,
-}: InvoicesPaginationProps) {
+}: ListPaginationProps) {
   const totalPages = Math.ceil(totalCount / pageSize);
   if (totalPages <= 1) return null;
 
   return (
     <div className="flex items-center justify-between gap-2 border-t pt-3 text-sm text-muted-foreground">
       <span>
-        Pagina {page} di {totalPages} ({totalCount} fatture)
+        Pagina {page} di {totalPages} ({totalCount} {itemLabel})
       </span>
       <div className="flex gap-2">
         <Button

@@ -111,3 +111,39 @@ describe("column-catalog — dati pagante/paziente dallo snapshot", () => {
     expect(getExportColumn("pagante_piva")!.getValue(invoice)).toBe("n/d");
   });
 });
+
+describe("column-catalog — bollo_importo / prezzo_totale_con_bollo", () => {
+  it("bolloCodice presente: bollo_importo è 2, prezzo_totale_con_bollo somma il bollo", () => {
+    const invoice = baseInvoice({
+      prezzo_totale: 100,
+      bolloCodice: "01234567890123",
+    });
+
+    expect(getExportColumn("bollo_importo")!.getValue(invoice)).toBe(2);
+    expect(
+      getExportColumn("prezzo_totale_con_bollo")!.getValue(invoice)
+    ).toBe(102);
+  });
+
+  it("bolloCodice assente: bollo_importo è 0, prezzo_totale_con_bollo resta invariato", () => {
+    const invoice = baseInvoice({ prezzo_totale: 100, bolloCodice: null });
+
+    expect(getExportColumn("bollo_importo")!.getValue(invoice)).toBe(0);
+    expect(
+      getExportColumn("prezzo_totale_con_bollo")!.getValue(invoice)
+    ).toBe(100);
+  });
+
+  it("bollo_importo/prezzo_totale_con_bollo non dipendono dalla soglia SOGLIA_BOLLO (a differenza di bollo_dovuto)", () => {
+    // Totale sotto soglia ma con bolloCodice comunque inserito: il bollo va
+    // comunque sommato, perché la regola è "codice presente", non "soglia
+    // superata" (vedi lib/invoices/bollo-total.ts).
+    const invoice = baseInvoice({ prezzo_totale: 10, bolloCodice: "01234567890123" });
+
+    expect(getExportColumn("bollo_dovuto")!.getValue(invoice)).toBe("No");
+    expect(getExportColumn("bollo_importo")!.getValue(invoice)).toBe(2);
+    expect(
+      getExportColumn("prezzo_totale_con_bollo")!.getValue(invoice)
+    ).toBe(12);
+  });
+});

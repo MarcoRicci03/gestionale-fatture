@@ -40,8 +40,9 @@ import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
-import { InvoicesPagination } from "./invoices-pagination";
+import { ListPagination } from "@/components/ui/list-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
@@ -198,8 +199,8 @@ export function InvoicesManager({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Fatture</h1>
           <p className="text-muted-foreground">Gestione fatture e pagamenti</p>
@@ -223,25 +224,27 @@ export function InvoicesManager({
       {years.length === 0 ? (
         <p className="text-muted-foreground">Nessuna fattura emessa.</p>
       ) : (
-        <>
-          <InvoicesFilterBar
-            filters={filters}
-            onChange={handleFiltersChange}
-            onReset={handleReset}
-            payers={payers}
-            patients={patients}
-            years={years}
-          />
+        <div className="flex min-h-0 flex-1 flex-col gap-6">
+          <div className="shrink-0">
+            <InvoicesFilterBar
+              filters={filters}
+              onChange={handleFiltersChange}
+              onReset={handleReset}
+              payers={payers}
+              patients={patients}
+              years={years}
+            />
+          </div>
 
           {invoices.length === 0 ? (
             <p className="text-muted-foreground">
               Nessuna fattura corrisponde ai filtri selezionati.
             </p>
           ) : (
-          <>
-          <div className="hidden rounded-lg border lg:block">
+          <div className="flex min-h-0 flex-1 flex-col gap-6">
+          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-8">
                     <input
@@ -297,7 +300,10 @@ export function InvoicesManager({
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center gap-1.5">
-                        {invoice.prezzo_totale.toLocaleString("it-IT", {
+                        {getTotaleConBollo(
+                          invoice.prezzo_totale,
+                          invoice.bolloCodice
+                        ).toLocaleString("it-IT", {
                           style: "currency",
                           currency: "EUR",
                         })}
@@ -384,7 +390,7 @@ export function InvoicesManager({
             </Table>
           </div>
 
-          <ul className="space-y-3 lg:hidden">
+          <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
             {invoices.map((invoice) => (
               <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -409,7 +415,10 @@ export function InvoicesManager({
                     </div>
                   </div>
                   <span className="flex items-center gap-1.5 font-medium">
-                    {invoice.prezzo_totale.toLocaleString("it-IT", {
+                    {getTotaleConBollo(
+                      invoice.prezzo_totale,
+                      invoice.bolloCodice
+                    ).toLocaleString("it-IT", {
                       style: "currency",
                       currency: "EUR",
                     })}
@@ -508,15 +517,18 @@ export function InvoicesManager({
             ))}
           </ul>
 
-          <InvoicesPagination
-            page={page}
-            totalCount={totalCount}
-            pageSize={INVOICES_PAGE_SIZE}
-            onPageChange={handlePageChange}
-          />
-          </>
+          <div className="shrink-0">
+            <ListPagination
+              page={page}
+              totalCount={totalCount}
+              pageSize={INVOICES_PAGE_SIZE}
+              itemLabel="fatture"
+              onPageChange={handlePageChange}
+            />
+          </div>
+          </div>
           )}
-        </>
+        </div>
       )}
 
       <ExportInvoicesDialog
@@ -663,7 +675,10 @@ export function InvoicesManager({
                 <div>
                   <p className="text-sm text-muted-foreground">Importo</p>
                   <p className="font-medium">
-                    {viewingInvoice.prezzo_totale.toLocaleString("it-IT", {
+                    {getTotaleConBollo(
+                      viewingInvoice.prezzo_totale,
+                      viewingInvoice.bolloCodice
+                    ).toLocaleString("it-IT", {
                       style: "currency",
                       currency: "EUR",
                     })}
