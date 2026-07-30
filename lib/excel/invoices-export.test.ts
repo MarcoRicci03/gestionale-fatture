@@ -118,3 +118,37 @@ describe("buildInvoicesWorkbook — sanitizzazione anti formula-injection", () =
     expect(value).toBe("n/d");
   });
 });
+
+describe("buildInvoicesWorkbook — colonne bollo_importo / prezzo_totale_con_bollo", () => {
+  it("con bolloCodice presente, produce celle numeriche con il bollo sommato", async () => {
+    const invoice = baseInvoice({
+      prezzo_totale: 100,
+      bolloCodice: "01234567890123",
+    });
+    const buffer = await buildInvoicesWorkbook(
+      [invoice],
+      ["bollo_importo", "prezzo_totale_con_bollo"]
+    );
+
+    expect(await readCell(buffer, 2, 1)).toBe(2);
+    expect(await readCell(buffer, 2, 2)).toBe(102);
+  });
+
+  it("applica il formato valuta anche alle nuove colonne, non solo a prezzo_totale", async () => {
+    const invoice = baseInvoice({ prezzo_totale: 100, bolloCodice: "01234567890123" });
+    const buffer = await buildInvoicesWorkbook(
+      [invoice],
+      ["prezzo_totale", "bollo_importo", "prezzo_totale_con_bollo"]
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet("Fatture")!;
+
+    expect(sheet.getColumn("prezzo_totale").numFmt).toBe('#,##0.00 "€"');
+    expect(sheet.getColumn("bollo_importo").numFmt).toBe('#,##0.00 "€"');
+    expect(sheet.getColumn("prezzo_totale_con_bollo").numFmt).toBe(
+      '#,##0.00 "€"'
+    );
+  });
+});

@@ -40,6 +40,7 @@ import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
 import { ListPagination } from "@/components/ui/list-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
@@ -299,7 +300,10 @@ export function InvoicesManager({
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center gap-1.5">
-                        {invoice.prezzo_totale.toLocaleString("it-IT", {
+                        {getTotaleConBollo(
+                          invoice.prezzo_totale,
+                          invoice.bolloCodice
+                        ).toLocaleString("it-IT", {
                           style: "currency",
                           currency: "EUR",
                         })}
@@ -411,7 +415,10 @@ export function InvoicesManager({
                     </div>
                   </div>
                   <span className="flex items-center gap-1.5 font-medium">
-                    {invoice.prezzo_totale.toLocaleString("it-IT", {
+                    {getTotaleConBollo(
+                      invoice.prezzo_totale,
+                      invoice.bolloCodice
+                    ).toLocaleString("it-IT", {
                       style: "currency",
                       currency: "EUR",
                     })}
@@ -668,7 +675,10 @@ export function InvoicesManager({
                 <div>
                   <p className="text-sm text-muted-foreground">Importo</p>
                   <p className="font-medium">
-                    {viewingInvoice.prezzo_totale.toLocaleString("it-IT", {
+                    {getTotaleConBollo(
+                      viewingInvoice.prezzo_totale,
+                      viewingInvoice.bolloCodice
+                    ).toLocaleString("it-IT", {
                       style: "currency",
                       currency: "EUR",
                     })}
