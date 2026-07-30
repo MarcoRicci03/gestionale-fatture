@@ -174,7 +174,7 @@ model ImpostazioniPdf {
 model FatturaMese {
   id           Int       @id @default(autoincrement())
   id_Pagamento Int
-  mese         String
+  mese         Mese
   prezzo       Decimal   @db.Decimal(10, 2)
 
   pagamento    Pagamento @relation(fields: [id_Pagamento], references: [id], onDelete: Cascade)
@@ -187,6 +187,21 @@ enum ModalitaPagamento {
   CONTANTI
   CARTA
   BONIFICO
+}
+
+enum Mese {
+  GENNAIO
+  FEBBRAIO
+  MARZO
+  APRILE
+  MAGGIO
+  GIUGNO
+  LUGLIO
+  AGOSTO
+  SETTEMBRE
+  OTTOBRE
+  NOVEMBRE
+  DICEMBRE
 }
 
 // SEC-15: traccia login/logout e ogni mutazione sensibile (vedi
