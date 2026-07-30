@@ -145,10 +145,12 @@ describe("buildInvoicesWorkbook — colonne bollo_importo / prezzo_totale_con_bo
     await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet("Fatture")!;
 
-    expect(sheet.getColumn("prezzo_totale").numFmt).toBe('#,##0.00 "€"');
-    expect(sheet.getColumn("bollo_importo").numFmt).toBe('#,##0.00 "€"');
-    expect(sheet.getColumn("prezzo_totale_con_bollo").numFmt).toBe(
-      '#,##0.00 "€"'
-    );
+    // Indice numerico di colonna (1-based, stesso ordine di columnKeys), non
+    // la key stringa: il round-trip su XLSX reale non conserva la mappatura
+    // per key di exceljs (esiste solo in memoria prima del salvataggio), solo
+    // header/posizione/stile sopravvivono al reload da buffer.
+    expect(sheet.getColumn(1).numFmt).toBe('#,##0.00 "€"');
+    expect(sheet.getColumn(2).numFmt).toBe('#,##0.00 "€"');
+    expect(sheet.getColumn(3).numFmt).toBe('#,##0.00 "€"');
   });
 });
