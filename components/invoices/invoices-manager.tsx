@@ -239,9 +239,9 @@ export function InvoicesManager({
             </p>
           ) : (
           <>
-          <div className="hidden rounded-lg border lg:block">
+          <div className="hidden max-h-[60vh] overflow-y-auto rounded-lg border lg:block">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-8">
                     <input
@@ -384,7 +384,7 @@ export function InvoicesManager({
             </Table>
           </div>
 
-          <ul className="space-y-3 lg:hidden">
+          <ul className="max-h-[60vh] space-y-3 overflow-y-auto lg:hidden">
             {invoices.map((invoice) => (
               <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">

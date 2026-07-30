@@ -128,9 +128,9 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
           <p className="text-muted-foreground">Nessun pagante registrato.</p>
         ) : (
           <>
-            <div className="hidden rounded-lg border lg:block">
+            <div className="hidden max-h-[60vh] overflow-y-auto rounded-lg border lg:block">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
@@ -179,7 +179,7 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
               </Table>
             </div>
 
-            <ul className="space-y-3 lg:hidden">
+            <ul className="max-h-[60vh] space-y-3 overflow-y-auto lg:hidden">
               {payers.map((payer) => (
                 <li key={payer.id} className="rounded-lg border p-4 space-y-3">
                   <div>
@@ -226,9 +226,9 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
         <p className="text-muted-foreground">Nessun pagante archiviato.</p>
       ) : (
         <>
-          <div className="hidden rounded-lg border lg:block">
+          <div className="hidden max-h-[60vh] overflow-y-auto rounded-lg border lg:block">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
@@ -270,7 +270,7 @@ export function PayersManager({ payers, archivedPayers }: PayersManagerProps) {
             </Table>
           </div>
 
-          <ul className="space-y-3 lg:hidden">
+          <ul className="max-h-[60vh] space-y-3 overflow-y-auto lg:hidden">
             {archivedPayers.map((payer) => (
               <li key={payer.id} className="rounded-lg border p-4 space-y-3">
                 <div>
