@@ -194,7 +194,7 @@ export function PatientsManager({
           </p>
         ) : (
           <>
-            <div className="hidden max-h-[60vh] overflow-y-auto rounded-lg border md:block">
+            <div className="hidden max-h-[calc(100vh-26rem)] overflow-y-auto rounded-lg border md:block">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
@@ -245,7 +245,7 @@ export function PatientsManager({
               </Table>
             </div>
 
-            <ul className="max-h-[60vh] space-y-3 overflow-y-auto md:hidden">
+            <ul className="max-h-[calc(100vh-26rem)] space-y-3 overflow-y-auto md:hidden">
               {patients.map((patient) => (
                 <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                   <div>
@@ -303,7 +303,7 @@ export function PatientsManager({
         </p>
       ) : (
         <>
-          <div className="hidden max-h-[60vh] overflow-y-auto rounded-lg border md:block">
+          <div className="hidden max-h-[calc(100vh-26rem)] overflow-y-auto rounded-lg border md:block">
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
@@ -343,7 +343,7 @@ export function PatientsManager({
             </Table>
           </div>
 
-          <ul className="max-h-[60vh] space-y-3 overflow-y-auto md:hidden">
+          <ul className="max-h-[calc(100vh-26rem)] space-y-3 overflow-y-auto md:hidden">
             {archivedPatients.map((patient) => (
               <li key={patient.id} className="rounded-lg border p-4 space-y-3">
                 <div>
