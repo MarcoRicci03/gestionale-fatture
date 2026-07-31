@@ -77,7 +77,20 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # standalone.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# node_modules/.bin/prisma nel builder è un symlink relativo verso
+# ../prisma/build/index.js: COPY, quando il percorso sorgente indica
+# ESPLICITAMENTE un symlink (a differenza di quando il symlink si trova
+# annidato dentro una directory copiata per intero, come ./node_modules
+# prima di questo fix), lo segue e ne copia il CONTENUTO come file
+# semplice — non il symlink stesso. Il risultato è un file "prisma" reale
+# ma nella cartella sbagliata: lo script calcola i percorsi dei propri file
+# accessori (incluso il motore schema in WASM) relativi alla propria
+# posizione, quindi cercava il .wasm dentro node_modules/.bin invece che
+# dentro node_modules/prisma/build, fallendo con un ENOENT
+# (prisma_schema_build_bg.wasm) al primo avvio in produzione. Si ricrea il
+# symlink direttamente nell'immagine finale invece di copiarlo.
+RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Necessaria per il servizio "audit-log-retention" (SEC-12): senza questa,
 # scripts/audit-log-retention.mjs non sarebbe raggiungibile a runtime. I
