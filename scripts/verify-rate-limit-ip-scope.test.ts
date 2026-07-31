@@ -104,6 +104,21 @@ describe("parseClientIpFromHeaders", () => {
     expect(parseClientIpFromHeaders(headersWithRealIpOnly)).toBe("198.51.100.9");
   });
 
+  it("preferisce CF-Connecting-IP anche se X-Forwarded-For è presente", () => {
+    // CF-Connecting-IP è impostato da Cloudflare sull'edge e non è
+    // falsificabile dal client, a differenza di X-Forwarded-For che
+    // Cloudflare/nginx accodano invece di sovrascrivere: un client potrebbe
+    // far comparire un valore finto come primo elemento della catena.
+    const headersWithBoth = {
+      get: (name: string) => {
+        if (name === "cf-connecting-ip") return "198.51.100.42";
+        if (name === "x-forwarded-for") return "203.0.113.1, 198.51.100.42";
+        return null;
+      },
+    };
+    expect(parseClientIpFromHeaders(headersWithBoth)).toBe("198.51.100.42");
+  });
+
   it("ricade su 'unknown' quando nessun header IP è presente", () => {
     const headersEmpty = { get: () => null };
     expect(parseClientIpFromHeaders(headersEmpty)).toBe("unknown");

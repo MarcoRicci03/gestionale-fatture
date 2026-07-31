@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";
+import {
+  PAYER_OPTION_SELECT,
+  PATIENT_OPTION_SELECT,
+} from "@/lib/data/invoice-contact-options-select";
 import { buildInvoiceWhere, lastValidPage } from "@/lib/invoices/list-query";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
@@ -63,12 +67,16 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
 // restare stabile indipendentemente da cosa mostra la pagina in quel
 // momento (stesso comportamento di oggi, quando "years" era calcolato lato
 // client sull'intero array non filtrato).
+// PERF-05: groupBy invece di findMany + distinct — a differenza di SQL,
+// `distinct` di Prisma non si traduce in un vero DISTINCT lato database:
+// esegue la query completa e deduplica lato client, quindi leggeva la
+// colonna `anno` di OGNI fattura dell'utente a ogni caricamento di
+// /invoices. `groupBy` genera invece un vero `GROUP BY` lato Postgres.
 export async function getInvoiceYears(): Promise<number[]> {
   const userId = await requireUserId();
-  const rows = await prisma.pagamento.findMany({
+  const rows = await prisma.pagamento.groupBy({
+    by: ["anno"],
     where: { id_Utente: userId },
-    select: { anno: true },
-    distinct: ["anno"],
     orderBy: { anno: "desc" },
   });
   return rows.map((r) => r.anno);
@@ -162,11 +170,18 @@ export async function getPayersAndPatients() {
   const [payers, patients] = await Promise.all([
     prisma.pagante.findMany({
       where: { id_Utente: userId, archiviato: false },
+      select: PAYER_OPTION_SELECT,
       orderBy: [{ cognome: "asc" }, { nome: "asc" }],
     }),
+    // Niente `include: { pagante: true }` (PERF-02): le tendine del form
+    // fattura non leggono il pagante annidato dei pazienti in elenco, solo
+    // id_Pagante per filtrare le opzioni. withCurrentPatient
+    // (lib/invoices/contact-options.ts) lo aggiunge da sé, con l'oggetto
+    // pagante già disponibile, solo per il paziente della fattura in
+    // modifica se archiviato.
     prisma.paziente.findMany({
       where: { id_Utente: userId, archiviato: false },
-      include: { pagante: true },
+      select: PATIENT_OPTION_SELECT,
       orderBy: [{ cognome: "asc" }, { nome: "asc" }],
     }),
   ]);

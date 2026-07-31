@@ -25,6 +25,11 @@ describe("app/api/invoices/export/route.ts", () => {
     expect(source).toMatch(/userId\s*===\s*null/);
   });
 
+  it("SEC-08: rifiuta le richieste cross-origin con isSameOriginRequest + 403", () => {
+    expect(source).toMatch(/isSameOriginRequest\s*\(\s*request\s*\)/);
+    expect(source).toMatch(/status:\s*403/);
+  });
+
   it("blocca (non tronca silenziosamente) quando i risultati superano MAX_EXPORT_INVOICES", () => {
     expect(source).toMatch(/invoices\.length\s*>\s*MAX_EXPORT_INVOICES/);
     expect(source).toMatch(/status:\s*400/);

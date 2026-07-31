@@ -20,6 +20,14 @@ RUN npx prisma generate
 
 # Copia sorgenti e builda Next.js in modalità standalone
 COPY . .
+ARG DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
+# Serve solo perché lib/auth/jwt.ts valida il segreto al caricamento del
+# modulo e farebbe fallire `npm run build`: questo valore non deve MAI finire
+# in produzione (lo stage "runner" sotto non eredita questo ENV, quindi un
+# container avviato senza JWT_SECRET reale in .env.prod non parte affatto).
+ARG JWT_SECRET="build-only-placeholder-not-a-real-secret-do-not-copy-0000000000"
+ENV DATABASE_URL=$DATABASE_URL
+ENV JWT_SECRET=$JWT_SECRET
 RUN npm run build
 
 # Rimuove le devDependencies per alleggerire l'immagine finale

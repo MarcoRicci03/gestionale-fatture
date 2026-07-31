@@ -164,6 +164,17 @@ export async function updatePayer(
 export async function archivePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  // Stesso controllo di stato di partenza di archivePatient/restorePatient/
+  // restorePayer: senza, archiviare un pagante già archiviato "riesce" in
+  // silenzio e scrive un evento PAYER_ARCHIVE che non corrisponde ad alcun
+  // cambiamento di stato (LOG-04).
+  const payer = await prisma.pagante.findFirst({
+    where: { id, id_Utente: userId, archiviato: false },
+  });
+  if (!payer) {
+    return { error: "Pagante non trovato tra gli attivi" };
+  }
+
   let pazientiArchiviati = 0;
   try {
     await prisma.$transaction(async (tx) => {
@@ -303,9 +314,8 @@ export async function hardDeletePayer(id: number): Promise<PayerActionState> {
       prisma.paziente.count({
         where: { id_Utente: userId, id_Pagante: id, archiviato: false },
       }),
-      prisma.paziente.findMany({
+      prisma.paziente.count({
         where: { id_Utente: userId, id_Pagante: id, archiviato: true },
-        select: { id: true, nome: true, cognome: true },
       }),
     ]);
 
@@ -336,10 +346,6 @@ export async function hardDeletePayer(id: number): Promise<PayerActionState> {
     entita: "Pagante",
     entitaId: id,
     meta: {
-      nome: payer.nome,
-      cognome: payer.cognome,
-      cf: payer.cf,
-      piva: payer.piva,
       pazientiEliminatiInCascata: pazientiArchiviatiCollegati,
     },
     ip: await getClientIp(),

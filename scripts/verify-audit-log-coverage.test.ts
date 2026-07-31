@@ -9,7 +9,10 @@ import { join } from "path";
 // affidata alla disciplina di chi scrive una nuova action, così una nuova
 // mutazione senza logAudit() viene segnalata invece di passare inosservata.
 const ACTIONS_DIR = join(__dirname, "..", "lib", "actions");
-const AUDIT_CALL = "logAudit(";
+// logAuditOrThrow (lib/audit/log.ts) è la variante che propaga l'errore
+// invece di inghiottirlo, usata da deleteInvoice dentro una transazione
+// (LOG-06): conta come audit tanto quanto logAudit().
+const AUDIT_CALLS = ["logAudit(", "logAuditOrThrow("];
 // Uniche funzioni esportate da lib/actions/*.ts che sono sola lettura (non
 // mutano nulla): esentate perché non hanno nulla da auditare.
 const READ_ONLY_ACTIONS = new Set(["getNextInvoiceNumberForYear"]);
@@ -44,7 +47,7 @@ it("tutte le Server Action mutanti registrano un evento di audit log", () => {
       if (READ_ONLY_ACTIONS.has(name)) continue;
 
       const body = extractFunctionBody(source, match.index);
-      if (!body.includes(AUDIT_CALL)) {
+      if (!AUDIT_CALLS.some((call) => body.includes(call))) {
         violations.push(`${file}: ${name}()`);
       }
     }
