@@ -78,7 +78,7 @@ Eseguita all'inizio dell'analisi:
 
 - [x] [DEP-01](#dep-01) 🔴 — Nessun reverse proxy né terminazione TLS nello stack di produzione
 - [x] [DEP-02](#dep-02) 🟠 — L'app viene pubblicata su tutte le interfacce della macchina
-- [x] [DEP-03](#dep-03) 🟡 — Il `Dockerfile` copia l'intero `node_modules` sopra l'output `standalone`
+- [ ] [DEP-03](#dep-03) 🟡 — Il `Dockerfile` copia l'intero `node_modules` sopra l'output `standalone` (tentato e poi ANNULLATO, vedi nota)
 - [x] [DEP-04](#dep-04) 🟡 — `rclone.conf` montato come obbligatorio ma non versionato
 - [x] [DEP-05](#dep-05) 🟡 — `audit-log-retention` riusa l'immagine di `app` senza dichiarare `build`
 - [x] [DEP-06](#dep-06) 🟡 — Nessun allarme sui fallimenti di backup e retention
@@ -990,7 +990,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_m
 
 Da verificare con un `docker run` che sia `prisma migrate deploy` sia `node prisma/seed.mjs` sia `node scripts/audit-log-retention.mjs` funzionino: `@prisma/adapter-pg` trascina `pg`, che potrebbe già essere nel bundle standalone o meno.
 
-**Fix applicato:** esattamente come suggerito. `COPY --from=builder .../app/node_modules ./node_modules` sostituito con tre `COPY` mirati (`node_modules/prisma`, `node_modules/@prisma`, `node_modules/.bin/prisma`), eseguiti **dopo** la copia di `.next/standalone` (che porta già `@prisma/client`/`@prisma/adapter-pg`/`pg`, raggiunti dal tracing di Next perché importati da `lib/prisma.ts`). Nessun Docker disponibile in questo ambiente per il `docker run` di verifica raccomandato sopra — resta da fare prima del prossimo deploy. Nuovo `scripts/verify-docker-build-config.test.ts` (analisi statica) verifica che il `COPY` dell'intero `node_modules` non sia tornato e che l'ordine (`standalone` prima, poi le aggiunte mirate) sia rispettato.
+**Fix applicato, poi ANNULLATO dopo due crash reali in produzione:** applicata prima la copia selettiva esattamente come suggerito sopra. Non essendoci Docker disponibile in questo ambiente di sviluppo per il `docker run` di verifica raccomandato, il primo test reale è stato un deploy in produzione, che ha rivelato due problemi in sequenza non riproducibili senza Docker:
+
+1. **ENOENT su `node_modules/.bin/prisma_schema_build_bg.wasm`** — `node_modules/.bin/prisma` è un symlink; `COPY` nominandolo esplicitamente come sorgente lo dereferenzia (copia il contenuto del target come file semplice invece di preservare il link), rompendo la risoluzione del percorso relativo dello script CLI verso il proprio file WASM sibling. Corretto sostituendo quel `COPY` con `RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.bin/prisma` (ricrea il symlink direttamente nell'immagine invece di copiarlo).
+
+2. **`Cannot find module 'effect'`** — con il symlink risolto, la CLI Prisma partiva ma falliva su una dipendenza transitiva di `@prisma/config` (`effect`) non inclusa dalla copia selettiva di `node_modules/prisma`+`node_modules/@prisma`. L'albero di dipendenze della CLI è quindi più profondo e meno prevedibile di quanto stimato nel fix originale.
+
+Invece di continuare a inseguire dipendenze mancanti una alla volta direttamente in produzione (rischioso, senza modo di verificare in anticipo in questo ambiente), si è deciso di **annullare interamente l'ottimizzazione**: tornato a `COPY --from=builder .../app/node_modules ./node_modules` per intero, il comportamento noto-funzionante pre-DEP-03. I 5 test in `scripts/verify-docker-build-config.test.ts` che verificavano la copia selettiva sono stati rimossi (non più applicabili). Da riprendere in futuro **solo** con un ambiente Docker reale disponibile per verificare l'elenco completo delle dipendenze della CLI Prisma prima di riprovare la selettività — per questo il checkbox sopra resta non spuntato.
 
 ---
 
