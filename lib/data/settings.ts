@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
@@ -83,15 +84,20 @@ export async function upsertPdfSettings(
   return rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
 }
 
-export async function getPdfSettingsForUser(userId: number): Promise<PdfLayout> {
-  const row = await prisma.impostazioniPdf.findUnique({
-    where: { id_Utente: userId },
-  });
+// cache() (PERF-01): chiamata sia da createInvoice sia da generateInvoicePdf
+// (lib/pdf/invoices.tsx) — se in futuro finissero nella stessa richiesta,
+// dedup automatico invece di una query ripetuta.
+export const getPdfSettingsForUser = cache(
+  async (userId: number): Promise<PdfLayout> => {
+    const row = await prisma.impostazioniPdf.findUnique({
+      where: { id_Utente: userId },
+    });
 
-  if (!row) {
-    return LAYOUT_DEFAULT;
+    if (!row) {
+      return LAYOUT_DEFAULT;
+    }
+
+    const typed = rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
+    return typed;
   }
-
-  const typed = rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
-  return typed;
-}
+);
