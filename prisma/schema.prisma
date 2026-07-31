@@ -114,6 +114,11 @@ model Paziente {
   pagamenti  Pagamento[]
 
   @@index([id_Utente, archiviato])
+  // DB-01: Postgres non crea automaticamente un indice sulle colonne di una
+  // foreign key. Senza questo, la cascata di archivePayer/restorePayer
+  // (lib/actions/payers.ts) e l'ON DELETE CASCADE da Pagante fanno seq scan
+  // su questa tabella.
+  @@index([id_Pagante])
   @@map("pazienti")
 }
 
@@ -148,6 +153,13 @@ model Pagamento {
   @@unique([id_Utente, n_fattura, anno])
   @@index([id_Utente, data])
   @@unique([id_Utente, bolloCodice])
+  // DB-01: mancavano indici sulle foreign key id_Pagante/id_Paziente.
+  // Interrogate spesso (getArchivedPayers/getArchivedPatients con
+  // groupBy, hardDeletePayer/hardDeletePatient con count) e verificate dal
+  // database stesso a ogni ON DELETE RESTRICT da Pagante/Paziente — senza
+  // indice, Postgres scansiona pagamenti a ogni cancellazione.
+  @@index([id_Pagante])
+  @@index([id_Paziente])
   @@map("pagamenti")
 }
 
@@ -225,5 +237,11 @@ model AuditLog {
 
   @@index([id_Utente, createdAt])
   @@index([azione, createdAt])
+  // DB-02: entrambi gli indici sopra hanno createdAt in SECONDA posizione,
+  // quindi nessuno dei due è utilizzabile per un predicato che filtra solo
+  // su createdAt — sia il DELETE settimanale di retention
+  // (scripts/audit-log-retention.mjs) sia un filtro data-only lato server
+  // (lib/audit/list-query.ts) fanno seq scan senza questo.
+  @@index([createdAt])
   @@map("audit_logs")
 }
