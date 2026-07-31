@@ -57,40 +57,30 @@ ENV TZ=Europe/Rome
 # Utente non privilegiato: node.js non deve girare come root nel container
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
 
-# Copia l'applicazione standalone (output: "standalone" in next.config.ts
-# include già un node_modules ridotto ai soli moduli effettivamente
-# raggiungibili dal codice server) e le dipendenze di produzione
+# Copia l'applicazione standalone e le dipendenze di produzione.
+#
+# DEP-03: si era tentato di copiare selettivamente solo node_modules/prisma
+# e node_modules/@prisma sopra il bundle standalone (che già include, via
+# tracing di Next, i soli moduli raggiungibili dal codice server), invece
+# dell'intero node_modules del builder — per evitare di duplicare
+# @react-pdf/renderer, exceljs, @tiptap/* e l'intera catena di next (sharp
+# incluso). Riportato indietro: la CLI di Prisma (necessaria al CMD sotto
+# per `npx prisma migrate deploy`) ha un albero di dipendenze proprio più
+# profondo e meno prevedibile del previsto — oltre al problema, già
+# risolto, del symlink node_modules/.bin/prisma dereferenziato da COPY,
+# @prisma/config (usato dalla CLI) richiede a sua volta il pacchetto
+# `effect`, non incluso da una copia selettiva — emerso solo su un deploy
+# reale in produzione, non riproducibile in un ambiente senza Docker. Non
+# vale il rischio di continuare a scoprire dipendenze mancanti una alla
+# volta direttamente in produzione: copiare l'intero node_modules del
+# builder resta più pesante ma è il comportamento noto-funzionante. Da
+# riprendere con un ambiente Docker reale per verificare l'elenco completo
+# delle dipendenze della CLI prima di riprovare la selettività.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-
-# DEP-03: solo i pacchetti della CLI di Prisma, non l'intero node_modules
-# del builder sopra il bundle standalone. Servono perché il CMD sotto
-# esegue `npx prisma migrate deploy`, e prisma/seed.mjs/
-# scripts/audit-log-retention.mjs girano con `node` direttamente (fuori dal
-# bundle tracciato) — ma @prisma/client/@prisma/adapter-pg/pg, importati
-# dal codice server stesso, sono già nel node_modules dello standalone
-# copiato sopra. Senza questa selettività, copiare l'intero node_modules
-# del builder duplicava @react-pdf/renderer, exceljs, @tiptap/* e l'intera
-# catena di next (sharp incluso, decine di MB) già presenti nello
-# standalone.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-
-# node_modules/.bin/prisma nel builder è un symlink relativo verso
-# ../prisma/build/index.js: COPY, quando il percorso sorgente indica
-# ESPLICITAMENTE un symlink (a differenza di quando il symlink si trova
-# annidato dentro una directory copiata per intero, come ./node_modules
-# prima di questo fix), lo segue e ne copia il CONTENUTO come file
-# semplice — non il symlink stesso. Il risultato è un file "prisma" reale
-# ma nella cartella sbagliata: lo script calcola i percorsi dei propri file
-# accessori (incluso il motore schema in WASM) relativi alla propria
-# posizione, quindi cercava il .wasm dentro node_modules/.bin invece che
-# dentro node_modules/prisma/build, fallendo con un ENOENT
-# (prisma_schema_build_bg.wasm) al primo avvio in produzione. Si ricrea il
-# symlink direttamente nell'immagine finale invece di copiarlo.
-RUN mkdir -p node_modules/.bin && ln -sf ../prisma/build/index.js node_modules/.bin/prisma
 
 # Necessaria per il servizio "audit-log-retention" (SEC-12): senza questa,
 # scripts/audit-log-retention.mjs non sarebbe raggiungibile a runtime. I
