@@ -27,10 +27,35 @@ describe("DEP-03: lo stage runner copia selettivamente solo i pacchetti della CL
     expect(standaloneIndex).toBeLessThan(prismaBinIndex);
   });
 
-  it("copia comunque prisma, @prisma e il binario prisma (servono a `npx prisma migrate deploy` nel CMD)", () => {
+  it("copia comunque prisma e @prisma (servono a `npx prisma migrate deploy` nel CMD)", () => {
     expect(dockerfile).toMatch(/node_modules\/prisma\s+\.\/node_modules\/prisma/);
     expect(dockerfile).toMatch(/node_modules\/@prisma\s+\.\/node_modules\/@prisma/);
-    expect(dockerfile).toMatch(/node_modules\/\.bin\/prisma\s+\.\/node_modules\/\.bin\/prisma/);
+  });
+
+  // Regressione reale (non solo teorica): la prima versione di questo fix
+  // copiava anche node_modules/.bin/prisma con un COPY dedicato. Nel
+  // builder quel file è un symlink relativo verso ../prisma/build/index.js;
+  // COPY, quando il percorso sorgente indica esplicitamente un symlink (a
+  // differenza di quando il symlink si trova annidato dentro una directory
+  // copiata per intero), lo segue e ne copia il CONTENUTO come file
+  // semplice invece del symlink stesso. Il file, così spostato nella
+  // cartella sbagliata, calcolava i percorsi dei propri file accessori
+  // (incluso il motore schema in WASM) relativi alla propria posizione e
+  // falliva con un ENOENT su prisma_schema_build_bg.wasm al primo avvio in
+  // produzione — non prima, perché in sviluppo la CLI Prisma non passa da
+  // questa immagine.
+  it("non copia più node_modules/.bin/prisma con COPY (dereferenzierebbe il symlink)", () => {
+    expect(dockerfile).not.toMatch(
+      /COPY --from=builder[^\n]*node_modules\/\.bin\/prisma/
+    );
+  });
+
+  it("ricrea il symlink node_modules/.bin/prisma con RUN ln, dopo aver copiato node_modules/prisma", () => {
+    const prismaCopyIndex = dockerfile.indexOf("./node_modules/prisma");
+    const lnIndex = dockerfile.search(/RUN[^\n]*ln\s+-sf[^\n]*node_modules\/\.bin\/prisma/);
+    expect(prismaCopyIndex).toBeGreaterThan(-1);
+    expect(lnIndex).toBeGreaterThan(-1);
+    expect(prismaCopyIndex).toBeLessThan(lnIndex);
   });
 });
 
