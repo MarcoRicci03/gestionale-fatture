@@ -16,6 +16,14 @@ Per configurare Google Drive (o un altro provider supportato da rclone — S3, B
 
 **Nota:** rclone copia solo il file `.gpg` già cifrato — non vede mai la passphrase né il contenuto in chiaro del dump.
 
+## Notifica di esito (opzionale)
+
+Sia il backup sia la retention dell'audit log riportano l'esito solo nei log del container (`docker compose -f docker-compose.prod.yml logs backup` / `logs audit-log-retention`) — nessuno li apre di routine, quindi un fallimento persistente (credenziali cambiate, disco pieno, passphrase errata) può passare inosservato per settimane. Impostando `BACKUP_HEALTHCHECK_PING_URL` / `AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL` in `.env.prod` con l'URL di un "check" su un servizio di monitoraggio "dead man's switch" (consigliato: [Healthchecks.io](https://healthchecks.io), che ha un piano gratuito), ogni esecuzione invia un ping GET a quell'URL — sull'URL base in caso di successo, con `/fail` in coda in caso di fallimento (convenzione Healthchecks.io, ma compatibile con qualunque webhook che ignori un suffisso extra sull'URL).
+
+Il vantaggio di questo modello rispetto a un semplice allarme sull'errore: copre anche il caso peggiore, quello in cui il container **non è più partito affatto** (quindi non c'è nessun errore da segnalare) — Healthchecks.io allarma se il ping atteso non arriva entro l'intervallo configurato sul check.
+
+Senza queste variabili impostate, il comportamento è invariato: nessun ping, nessuna dipendenza esterna.
+
 ## Procedura di ripristino
 
 1. Decifrare e decomprimere il backup:

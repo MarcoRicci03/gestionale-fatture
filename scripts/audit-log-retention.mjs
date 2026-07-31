@@ -19,6 +19,25 @@ import { msUntilNextRun } from "./lib/retention-schedule.mjs";
 const RETENTION_MONTHS = Number(process.env.AUDIT_LOG_RETENTION_MONTHS ?? 12);
 const TARGET_WEEKDAY = Number(process.env.AUDIT_LOG_RETENTION_WEEKDAY ?? 0); // 0 = domenica
 const TARGET_HOUR = Number(process.env.AUDIT_LOG_RETENTION_HOUR ?? 3);
+const HEALTHCHECK_PING_URL = process.env.AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL;
+
+// Notifica esterna di esito (DEP-06), modello "dead man's switch": senza
+// AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL configurata resta inerte. Finora
+// un fallimento persistente produceva solo una riga di log in un container
+// che nessuno apre. Un ping MANCANTE (non solo un ping di fallimento)
+// allarma anche nel caso peggiore: il container non è più partito affatto.
+// Convenzione Healthchecks.io: GET sull'URL base segnala successo, /fail
+// segnala fallimento esplicito. `fetch` è globale da Node 18+, nessuna
+// dipendenza aggiuntiva da tirare dentro l'immagine di produzione.
+async function pingHealthcheck(ok) {
+  if (!HEALTHCHECK_PING_URL) return;
+  const url = ok ? HEALTHCHECK_PING_URL : `${HEALTHCHECK_PING_URL}/fail`;
+  try {
+    await fetch(url);
+  } catch (error) {
+    console.error("[audit-log-retention] ping al servizio di monitoraggio fallito:", error);
+  }
+}
 
 // Connessione aperta e richiusa ad ogni esecuzione, non tenuta viva per una
 // settimana intera tra un'iterazione e l'altra: una connessione Postgres
@@ -65,9 +84,12 @@ async function main() {
     // Un fallimento (es. DB temporaneamente irraggiungibile al risveglio)
     // non deve terminare il loop: verrà ritentato alla prossima occorrenza
     // settimanale.
-    await purgeOnce().catch((error) => {
-      console.error("[audit-log-retention] errore durante la pulizia:", error);
-    });
+    await purgeOnce()
+      .then(() => pingHealthcheck(true))
+      .catch(async (error) => {
+        console.error("[audit-log-retention] errore durante la pulizia:", error);
+        await pingHealthcheck(false);
+      });
   }
 }
 

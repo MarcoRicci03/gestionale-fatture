@@ -1,4 +1,5 @@
 import { getUserIdOrNull } from "@/lib/auth/session";
+import { isSameOriginRequest } from "@/lib/security/same-origin";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
 import { prisma } from "@/lib/prisma";
 import { invoiceExportSchema, MAX_EXPORT_INVOICES } from "@/lib/validations/invoice-export";
@@ -16,6 +17,13 @@ const exportLimiter = createRateLimiter({
 });
 
 export async function POST(request: Request) {
+  // SEC-08: difesa in profondità oltre a sameSite=lax + Content-Type
+  // application/json — rende la garanzia locale e verificabile invece che
+  // dipendere solo da comportamenti impliciti del browser.
+  if (!isSameOriginRequest(request)) {
+    return new Response("Origin non consentita", { status: 403 });
+  }
+
   const userId = await getUserIdOrNull();
   if (userId === null) {
     // 401 esplicito, non un redirect a /login: un client API non deve

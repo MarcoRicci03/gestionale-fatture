@@ -42,3 +42,29 @@ it("il Pool di pg ha limiti espliciti (max/idleTimeoutMillis/connectionTimeoutMi
     expect(pattern.test(source), `lib/prisma.ts non imposta più ${description}`).toBe(true);
   }
 });
+
+// PERF-06: senza questo, ogni valutazione del modulo (ogni hot-reload in
+// sviluppo) creava un nuovo Pool che nessuno avrebbe mai usato — il
+// PrismaClient cachato su globalThis continua a usare il primo — e
+// sovrascriveva globalForPrisma.pool, rendendo quel riferimento inaffidabile
+// per chiudere il pool. Analisi statica (stesso approccio del test sopra):
+// verifica che `new Pool(` sia raggiunto solo dopo un fallback su
+// globalForPrisma.pool, non eseguito incondizionatamente.
+it("il Pool viene riusato da globalForPrisma, non ricreato a ogni valutazione del modulo", () => {
+  const source = readFileSync(join(__dirname, "..", "lib", "prisma.ts"), "utf-8");
+  expect(
+    /globalForPrisma\.pool\s*\?\?\s*new Pool\s*\(/.test(source),
+    "lib/prisma.ts deve riusare globalForPrisma.pool con `??` invece di eseguire `new Pool(...)` incondizionatamente"
+  ).toBe(true);
+});
+
+// PERF-06: senza un handler di shutdown, un SIGTERM (docker compose down,
+// redeploy) termina il processo lasciando connessioni a Postgres aperte da
+// chiudere per timeout lato server.
+it("registra un handler di shutdown su SIGTERM/SIGINT che chiude prisma e il pool", () => {
+  const source = readFileSync(join(__dirname, "..", "lib", "prisma.ts"), "utf-8");
+  expect(source).toMatch(/process\.once\s*\(\s*signal/);
+  expect(source).toMatch(/\[\s*"SIGTERM"\s*,\s*"SIGINT"\s*\]/);
+  expect(source).toMatch(/prisma\.\$disconnect\s*\(\s*\)/);
+  expect(source).toMatch(/pool\.end\s*\(\s*\)/);
+});

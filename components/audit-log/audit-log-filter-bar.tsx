@@ -4,6 +4,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchField } from "@/components/ui/search-field";
 import {
   Select,
   SelectContent,
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AUDIT_ACTIONS, AUDIT_ACTION_LABELS, type AuditAction } from "@/lib/audit/actions";
-import type { AuditLogFilters } from "@/lib/audit/filter-audit-log";
+import type { AuditLogFilters } from "@/lib/audit/list-query";
 
 // Stesso sentinel/mapping di InvoicesFilterBar (components/invoices/invoices-filter-bar.tsx):
 // il Select tratta "" come "nessuna selezione" e non mostrerebbe l'etichetta
@@ -103,13 +104,18 @@ export function AuditLogFilterBar({
           </Select>
         </div>
 
-        <div className="space-y-2 sm:col-span-2 lg:col-span-1">
-          <Label htmlFor="audit-filtro-ricerca">Entità o IP</Label>
-          <Input
+        {/* LOG-03: ora ogni cambio filtro innesca un vero round-trip server
+            (prima era un filtro client istantaneo su un array già caricato):
+            senza debounce, ogni carattere digitato qui farebbe una
+            richiesta. Stesso componente già usato da patients/payers
+            manager. */}
+        <div className="sm:col-span-2 lg:col-span-1">
+          <SearchField
             id="audit-filtro-ricerca"
+            label="Entità o IP"
             placeholder="Cerca per entità, id o IP..."
             value={filters.ricerca}
-            onChange={(e) => onChange({ ricerca: e.target.value })}
+            onValueChange={(value) => onChange({ ricerca: value })}
           />
         </div>
       </div>

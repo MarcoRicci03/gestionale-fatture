@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -18,7 +19,15 @@ export type Session = Pick<
   | "mustChangePassword"
 >;
 
-export async function getSession(): Promise<Session | null> {
+// cache() (React) deduplica per la durata della singola richiesta/render:
+// requireSession()/requireUserId()/requireAdmin()/getUserIdOrNull() sono
+// chiamate una volta per ciascuna funzione del data layer che serve una
+// pagina (PERF-01) — senza questo, ogni chiamata era una
+// `SELECT * FROM utenti WHERE id = $1` identica (5 per /invoices, 4 per
+// /patients, ...). Non introduce caching tra richieste diverse: i controlli
+// su `abilitato` e `tokenVersion` restano verificati una volta per
+// richiesta, esattamente come prima.
+export const getSession = cache(async (): Promise<Session | null> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) {
@@ -61,7 +70,7 @@ export async function getSession(): Promise<Session | null> {
     specializzazione: user.specializzazione,
     mustChangePassword: user.mustChangePassword,
   };
-}
+});
 
 export async function requireSession(): Promise<Session> {
   const session = await getSession();

@@ -219,8 +219,6 @@ export async function hardDeletePatient(
     entita: "Paziente",
     entitaId: id,
     meta: {
-      nome: patient.nome,
-      cognome: patient.cognome,
       id_Pagante: patient.id_Pagante,
     },
     ip: await getClientIp(),

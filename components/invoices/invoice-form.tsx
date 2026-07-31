@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,6 +26,10 @@ import { roundCurrency } from "@/lib/utils/currency";
 import { withCurrentPayer, withCurrentPatient } from "@/lib/invoices/contact-options";
 import { cn } from "@/lib/utils";
 import type { FatturaMese, Pagante, Paziente, $Enums } from "@prisma/client";
+import type {
+  PayerOption,
+  PatientOption,
+} from "@/lib/data/invoice-contact-options-select";
 
 type InvoiceWithRelations = {
   id: number;
@@ -49,8 +53,8 @@ type InvoiceWithRelations = {
 
 type InvoiceFormProps = {
   invoice?: InvoiceWithRelations;
-  payers: Pagante[];
-  patients: (Paziente & { pagante?: Pagante | null })[];
+  payers: PayerOption[];
+  patients: PatientOption[];
   nextInvoiceNumber: number;
   onSuccess?: () => void;
 };
@@ -165,7 +169,18 @@ export function InvoiceForm({
     return effectivePatients.filter((p) => p.id_Pagante === Number(selectedPayerId));
   }, [selectedPayerId, effectivePatients]);
 
+  // In modifica, selectedPayerId vale già inv.id_Pagante al mount (è il
+  // defaultValue): senza questo controllo (LOG-02), l'effect scattava subito
+  // e sovrascriveva città/CAP salvati sulla fattura con l'indirizzo ATTUALE
+  // del pagante, anche aprendo una fattura solo per correggere un commento.
+  // prevPayerIdRef distingue "il pagante è stato scelto/cambiato ora"
+  // dal semplice mount, così l'auto-compilazione scatta solo sul cambio
+  // effettivo — in creazione (dove parte da "") continua a scattare alla
+  // prima selezione, come prima.
+  const prevPayerIdRef = useRef(selectedPayerId);
   useEffect(() => {
+    if (selectedPayerId === prevPayerIdRef.current) return;
+    prevPayerIdRef.current = selectedPayerId;
     if (!selectedPayerId) return;
     const payer = effectivePayers.find((p) => p.id === Number(selectedPayerId));
     if (!payer) return;
@@ -176,11 +191,29 @@ export function InvoiceForm({
   useEffect(() => {
     if (invoice) return;
     if (!selectedDate || typeof selectedDate !== "string") return;
+    // `cancelled` protegge da due problemi (LOG-05): una richiesta fallita
+    // (rete assente, sessione scaduta) non deve restare una unhandled
+    // rejection silenziosa col campo fermo al valore precedente; e due
+    // richieste ravvicinate (l'utente cambia data due volte di seguito)
+    // possono tornare in ordine invertito — senza questo flag, la risposta
+    // della richiesta più vecchia potrebbe sovrascrivere quella più recente.
+    let cancelled = false;
     const date = parseDateInput(selectedDate);
     const year = date.getFullYear();
-    getNextInvoiceNumberForYear(year).then((nextNumber) => {
-      setValue("n_fattura", nextNumber);
-    });
+    getNextInvoiceNumberForYear(year)
+      .then((nextNumber) => {
+        if (cancelled) return;
+        setValue("n_fattura", nextNumber);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setServerError(
+          'Impossibile calcolare il prossimo numero fattura: verifica il campo "N. Fattura" prima di salvare.'
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDate, invoice, setValue]);
 
   const toggleMese = (mese: Mese, checked: boolean) => {

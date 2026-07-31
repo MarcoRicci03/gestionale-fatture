@@ -90,8 +90,19 @@ describe("deleteInvoice cancella fisicamente la fattura", () => {
   });
 
   it("registra un evento di audit con un meta strutturato", () => {
-    expect(body).toMatch(/logAudit\s*\(/);
+    expect(body).toMatch(/logAudit(OrThrow)?\s*\(/);
     expect(body).toMatch(/meta:\s*\{/);
+  });
+
+  it("scrive la cancellazione e l'audit nella stessa transazione, con logAuditOrThrow (LOG-06)", () => {
+    // Il meta dell'evento è l'unica traccia superstite della fattura
+    // cancellata: un fallimento della sola scrittura di audit deve fare
+    // rollback anche della delete, non lasciare l'una senza l'altra.
+    // logAuditOrThrow (a differenza di logAudit) propaga l'errore invece di
+    // inghiottirlo, così la transazione fallisce davvero.
+    expect(body).toMatch(/\$transaction\s*\(\s*async\s*\(tx\)\s*=>\s*\{/);
+    expect(body).toMatch(/tx\.pagamento\.delete\s*\(/);
+    expect(body).toMatch(/logAuditOrThrow\s*\(/);
   });
 });
 

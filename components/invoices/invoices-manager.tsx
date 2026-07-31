@@ -46,6 +46,10 @@ import { ListPagination } from "@/components/ui/list-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
 import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+import type {
+  PayerOption,
+  PatientOption,
+} from "@/lib/data/invoice-contact-options-select";
 
 // prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
 // (vedi serializeInvoice in lib/data/invoices.ts).
@@ -62,8 +66,8 @@ type InvoicesManagerProps = {
   page: number;
   years: number[];
   filters: InvoiceFilters;
-  payers: Pagante[];
-  patients: (Paziente & { pagante: Pagante | null })[];
+  payers: PayerOption[];
+  patients: PatientOption[];
   nextInvoiceNumber: number;
 };
 

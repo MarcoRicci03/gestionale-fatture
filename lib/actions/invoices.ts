@@ -19,7 +19,7 @@ import {
 } from "@/lib/invoices/chronology";
 import { buildSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildInvoiceChangeDiff } from "@/lib/invoices/change-diff";
-import { logAudit } from "@/lib/audit/log";
+import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
@@ -421,36 +421,50 @@ export async function updateInvoice(
 export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
-  // La riga sparisce fisicamente: i dati identificativi della fattura vengono
-  // conservati nel meta dell'evento di audit, unica traccia superstite.
+  // La riga sparisce fisicamente: i dati della fattura vengono conservati nel
+  // meta dell'evento di audit, unica traccia superstite. Niente anagrafica di
+  // pagante/paziente (SEC-04): un admin multi-studio non è titolare del
+  // trattamento sui pazienti degli altri logopedisti, id_Pagante/id_Paziente
+  // bastano a chi ha davvero accesso ai dati di quell'utente per risalire.
   const invoice = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
-    include: { pagante: true, paziente: true },
   });
   if (!invoice) return { error: "Fattura non trovata" };
 
+  const ip = await getClientIp();
+
   try {
-    await prisma.pagamento.delete({ where: { id, id_Utente: userId } });
+    // La riga sparisce fisicamente e il meta sotto è la sua unica traccia
+    // superstite (LOG-06): a differenza delle altre azioni, qui un
+    // fallimento della sola scrittura di audit deve far fallire (con
+    // rollback) anche la cancellazione, altrimenti si perderebbero sia la
+    // fattura che l'unica copia dei suoi dati. logAuditOrThrow (a differenza
+    // di logAudit) propaga l'errore invece di inghiottirlo.
+    await prisma.$transaction(async (tx) => {
+      await tx.pagamento.delete({ where: { id, id_Utente: userId } });
+      await logAuditOrThrow(
+        {
+          azione: AUDIT_ACTIONS.INVOICE_DELETE,
+          userId,
+          entita: "Pagamento",
+          entitaId: id,
+          ip,
+          meta: {
+            n_fattura: invoice.n_fattura,
+            anno: invoice.anno,
+            data: invoice.data.toISOString(),
+            prezzo_totale: invoice.prezzo_totale.toString(),
+            id_Pagante: invoice.id_Pagante,
+            id_Paziente: invoice.id_Paziente,
+          },
+        },
+        tx
+      );
+    });
   } catch (error) {
     console.error("deleteInvoice error", error);
     return { error: "Errore durante l'eliminazione della fattura" };
   }
-
-  await logAudit({
-    azione: AUDIT_ACTIONS.INVOICE_DELETE,
-    userId,
-    entita: "Pagamento",
-    entitaId: id,
-    ip: await getClientIp(),
-    meta: {
-      n_fattura: invoice.n_fattura,
-      anno: invoice.anno,
-      data: invoice.data.toISOString(),
-      prezzo_totale: invoice.prezzo_totale.toString(),
-      pagante: `${invoice.pagante.cognome} ${invoice.pagante.nome}`,
-      paziente: `${invoice.paziente.cognome} ${invoice.paziente.nome}`,
-    },
-  });
 
   revalidatePath("/invoices");
   revalidatePath("/dashboard");

@@ -32,10 +32,24 @@ it("il dump decifrato in chiaro va solo in /tmp, mai nel bind mount condiviso co
 });
 
 it("una verifica fallita non cancella il backup (resta per ispezione manuale)", () => {
-  // verify_backup viene chiamata con `|| true`: un suo fallimento non deve
-  // innescare `rm -f "$filename"` (quella riga esiste solo nel ramo
-  // "pg_dump/gpg falliti", non dopo la verifica).
-  expect(backupScript).toMatch(/verify_backup\s+"\$filename"\s+\|\|\s+true/);
+  // verify_backup è la condizione di un if/else (DEP-06: il ramo else
+  // chiama ping_healthcheck 0 invece del precedente `|| true`): un suo
+  // fallimento non deve comunque innescare `rm -f "$filename"` (quella riga
+  // esiste solo nel ramo "pg_dump/gpg falliti", non dopo la verifica).
+  const verifyBranch = backupScript.slice(
+    backupScript.indexOf('if verify_backup "$filename"'),
+    backupScript.indexOf("sync_offsite")
+  );
+  expect(verifyBranch).not.toMatch(/rm -f "\$filename"/);
+});
+
+it("DEP-06: ping_healthcheck riflette l'esito del dump E della verifica di ripristino, resta inerte senza BACKUP_HEALTHCHECK_PING_URL", () => {
+  expect(backupScript).toMatch(/if\s+\[\s+-z\s+"\$\{BACKUP_HEALTHCHECK_PING_URL:-\}"\s+\]/);
+  expect(backupScript).toMatch(/curl[^\n]*"\$url"/);
+  // Ping di successo (1) solo se verify_backup riesce, di fallimento (0) sia
+  // se verify_backup fallisce sia se il dump/gpg iniziale fallisce.
+  expect(backupScript).toMatch(/if verify_backup "\$filename"; then\s*\n\s*ping_healthcheck 1/);
+  expect(backupScript).toMatch(/ping_healthcheck 0/);
 });
 
 it("la copia off-site è saltata senza RCLONE_REMOTE, e copia solo il file cifrato", () => {
@@ -50,5 +64,11 @@ it("Dockerfile.backup installa rclone insieme a gnupg", () => {
 it("docker-compose.prod.yml espone RCLONE_REMOTE e monta rclone.conf sul servizio backup", () => {
   const backupService = compose.slice(compose.indexOf("  backup:"), compose.indexOf("  audit-log-retention:"));
   expect(backupService).toContain("RCLONE_REMOTE");
-  expect(backupService).toMatch(/rclone\.conf:\/rclone\.conf:ro/);
+  expect(backupService).toMatch(/source:\s*\.\/rclone\.conf/);
+  expect(backupService).toMatch(/target:\s*\/rclone\.conf/);
+});
+
+it("DEP-04: il mount di rclone.conf non crea una directory vuota se il file manca (create_host_path: false)", () => {
+  const backupService = compose.slice(compose.indexOf("  backup:"), compose.indexOf("  audit-log-retention:"));
+  expect(backupService).toMatch(/create_host_path:\s*false/);
 });

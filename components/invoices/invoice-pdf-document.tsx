@@ -1,5 +1,9 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { resolvePlaceholders, renderMesiRows } from "@/lib/pdf/placeholders";
+import {
+  resolvePlaceholders,
+  renderMesiRows,
+  buildReplacements,
+} from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
 import type { PdfLayout, InvoiceWithRelations } from "@/lib/pdf/types";
 
@@ -80,41 +84,50 @@ export function InvoicePDFDocument({
     },
   }).page;
 
+  // Calcolato una sola volta per documento (PERF-03), invece che una volta
+  // per blocco visibile dentro il .map() sotto: buildReplacements() costruisce
+  // un oggetto di ~45 chiavi con formattazioni di valuta non economiche, e
+  // pdfSettingsSchema ammette fino a 500 blocchi.
+  const replacements = buildReplacements(invoice);
+
   return (
     <Document>
       <Page size={[settings.pageWidth, settings.pageHeight]} style={pageStyle}>
         {settings.blocchi
           .filter((b) => b.visible)
           .map((blocco) => {
-            const textStyle = StyleSheet.create({
-              base: {
-                fontSize: blocco.fontSize,
-                fontFamily: getFontFamily(settings.fontFamily, {
-                  bold: blocco.fontWeight === "bold",
-                }),
-                color: blocco.color ?? "#000000",
-                lineHeight: 1,
-                whiteSpace: "pre-wrap",
-                wordWrap: "break-word",
-              },
-            }).base;
+            // Oggetti stile inline invece di StyleSheet.create() (PERF-03):
+            // qui il valore varia per ogni blocco (posizione, colore,
+            // dimensione), quindi StyleSheet.create() — che a runtime è
+            // un'identità tipizzata su Styles, vedi @react-pdf/renderer
+            // index.d.ts — non offre alcun riuso, solo una chiamata sprecata
+            // per blocco (fino a 500 per documento). Stesso pattern già usato
+            // sotto per gli style inline di Text/View in questo file.
+            const textStyle = {
+              fontSize: blocco.fontSize,
+              fontFamily: getFontFamily(settings.fontFamily, {
+                bold: blocco.fontWeight === "bold",
+              }),
+              color: blocco.color ?? "#000000",
+              lineHeight: 1,
+              whiteSpace: "pre-wrap" as const,
+              wordWrap: "break-word" as const,
+            };
 
-            const containerStyle = StyleSheet.create({
-              block: {
-                position: "absolute",
-                left: blocco.x,
-                top: blocco.y,
-                width: blocco.width,
-                height: blocco.height,
-                paddingTop: blocco.paddingTop ?? 0,
-                paddingRight: blocco.paddingRight ?? 0,
-                paddingBottom: blocco.paddingBottom ?? 0,
-                paddingLeft: blocco.paddingLeft ?? 0,
-              },
-            }).block;
+            const containerStyle = {
+              position: "absolute" as const,
+              left: blocco.x,
+              top: blocco.y,
+              width: blocco.width,
+              height: blocco.height,
+              paddingTop: blocco.paddingTop ?? 0,
+              paddingRight: blocco.paddingRight ?? 0,
+              paddingBottom: blocco.paddingBottom ?? 0,
+              paddingLeft: blocco.paddingLeft ?? 0,
+            };
 
             if (blocco.tipo === "mesi" && blocco.meseConfig) {
-              const rows = renderMesiRows(blocco.meseConfig, invoice);
+              const rows = renderMesiRows(blocco.meseConfig, invoice, replacements);
               return (
                 <View key={blocco.id} style={containerStyle}>
                   {blocco.meseConfig.titolo && (
@@ -163,7 +176,8 @@ export function InvoicePDFDocument({
 
             const text = resolvePlaceholders(
               (blocco.testo ?? "").replace(/\t/g, "    "),
-              invoice
+              invoice,
+              replacements
             );
 
             return (

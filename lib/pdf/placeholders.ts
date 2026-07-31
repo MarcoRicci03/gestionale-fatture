@@ -188,13 +188,21 @@ export function buildReplacements(
   return replacements;
 }
 
+// `replacements` è opzionale (PERF-03): InvoicePDFDocument chiama questa
+// funzione una volta per ogni blocco visibile (fino a 500,
+// lib/validations/pdf-settings.ts), e senza riuso buildReplacements()
+// ricostruiva da zero un oggetto di ~45 chiavi — con formattazioni di
+// valuta non economiche — a ogni chiamata. Chi non lo passa (retro-compatibile
+// con i chiamanti esistenti, es. i test) continua a ottenere lo stesso
+// risultato di prima, solo ricalcolato.
 export function resolvePlaceholders(
   template: string,
-  invoice: InvoiceWithRelations
+  invoice: InvoiceWithRelations,
+  replacements: Record<string, string> = buildReplacements(invoice)
 ): string {
   // Prima espande i blocchi `#each` (multilinea) sui mesi
   const expanded = expandEachLoops(template, invoice);
-  return applyReplacements(expanded, buildReplacements(invoice));
+  return applyReplacements(expanded, replacements);
 }
 
 /**
@@ -205,10 +213,9 @@ export function resolvePlaceholders(
  */
 export function renderMesiRows(
   config: MeseConfig,
-  invoice: InvoiceWithRelations
+  invoice: InvoiceWithRelations,
+  base: Record<string, string> = buildReplacements(invoice)
 ): { descrizione: string; valore: string }[] {
-  const base = buildReplacements(invoice);
-
   const rows = invoice.mesi.map((m) => {
     const rowReplacements: Record<string, string> = {
       ...base,
