@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -10,17 +11,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AUDIT_ACTION_LABELS, type AuditAction } from "@/lib/audit/actions";
-import {
-  EMPTY_AUDIT_LOG_FILTERS,
-  filterAuditLogEntries,
-  getDistinctUsernames,
-  type AuditLogFilters,
-} from "@/lib/audit/filter-audit-log";
+import { EMPTY_AUDIT_LOG_FILTERS, type AuditLogFilters } from "@/lib/audit/list-query";
 import { AuditLogFilterBar } from "@/components/audit-log/audit-log-filter-bar";
+import { ListPagination } from "@/components/ui/list-pagination";
+import { AUDIT_LOG_PAGE_SIZE } from "@/lib/constants/audit-log";
 import type { AuditLogEntry } from "@/lib/data/audit-log-select";
 
 type AuditLogManagerProps = {
   entries: AuditLogEntry[];
+  totalCount: number;
+  page: number;
+  filters: AuditLogFilters;
+  usernames: string[];
 };
 
 function formatAzione(azione: string): string {
@@ -45,29 +47,67 @@ function formatMeta(meta: AuditLogEntry["meta"]): string {
 }
 
 // Altezza fissa dell'area scrollabile (tabella desktop e card mobile): con
-// fino a 200 eventi la pagina non deve allungarsi indefinitamente, la lista
-// scrolla al suo interno mentre filtri e intestazione restano fissi sopra.
+// fino a AUDIT_LOG_PAGE_SIZE eventi per pagina la pagina non deve allungarsi
+// indefinitamente, la lista scrolla al suo interno mentre filtri e
+// intestazione restano fissi sopra.
 const SCROLL_AREA_CLASS = "max-h-[65vh] overflow-y-auto";
 
-export function AuditLogManager({ entries }: AuditLogManagerProps) {
-  const [filters, setFilters] = useState<AuditLogFilters>(EMPTY_AUDIT_LOG_FILTERS);
+export function AuditLogManager({
+  entries,
+  totalCount,
+  page,
+  filters,
+  usernames,
+}: AuditLogManagerProps) {
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const usernames = useMemo(() => getDistinctUsernames(entries), [entries]);
-  const filteredEntries = useMemo(
-    () => filterAuditLogEntries(entries, filters),
-    [entries, filters]
-  );
+  // LOG-03: filtri e paginazione sono ora lato server (filters/page arrivano
+  // da searchParams via parseAuditLogListQuery, non più uno useState locale
+  // che filtrava un array già troncato a 200 righe). Stesso pattern di
+  // PatientsManager: latestStateRef tiene traccia dello stato più recente
+  // verso cui si è navigato, aggiornato sincronamente a ogni chiamata di
+  // navigate() (non solo quando le prop cambiano), per evitare che due
+  // navigazioni ravvicinate leggano entrambe una closure stale.
+  const latestStateRef = useRef({ filters, page });
+  useEffect(() => {
+    latestStateRef.current = { filters, page };
+  }, [filters, page]);
 
-  const handleFilterChange = (patch: Partial<AuditLogFilters>) =>
-    setFilters((prev) => ({ ...prev, ...patch }));
-  const handleFilterReset = () => setFilters(EMPTY_AUDIT_LOG_FILTERS);
+  function navigate(next: { filters: AuditLogFilters; page: number }) {
+    latestStateRef.current = next;
+    const params = new URLSearchParams();
+    if (next.filters.dataDa) params.set("dataDa", next.filters.dataDa);
+    if (next.filters.dataA) params.set("dataA", next.filters.dataA);
+    if (next.filters.utente) params.set("utente", next.filters.utente);
+    if (next.filters.azione) params.set("azione", next.filters.azione);
+    if (next.filters.ricerca) params.set("ricerca", next.filters.ricerca);
+    if (next.page > 1) params.set("page", String(next.page));
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  const handleFilterChange = (patch: Partial<AuditLogFilters>) => {
+    navigate({
+      filters: { ...latestStateRef.current.filters, ...patch },
+      page: 1,
+    });
+  };
+  // Bypassa navigate() per evitare un "?" residuo senza parametri (stesso
+  // pattern di handleReset in InvoicesManager): qui il default è "nessun
+  // filtro", quindi tornare all'URL nudo equivale a resettare.
+  const handleFilterReset = () => {
+    latestStateRef.current = { filters: EMPTY_AUDIT_LOG_FILTERS, page: 1 };
+    router.replace(pathname, { scroll: false });
+  };
+  const handlePageChange = (nextPage: number) =>
+    navigate({ filters: latestStateRef.current.filters, page: nextPage });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
         <p className="text-muted-foreground">
-          {filteredEntries.length} di {entries.length} eventi: accessi e operazioni sensibili
+          {totalCount} event{totalCount === 1 ? "o" : "i"}: accessi e operazioni sensibili
         </p>
       </div>
 
@@ -78,7 +118,7 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
         usernames={usernames}
       />
 
-      {filteredEntries.length === 0 ? (
+      {entries.length === 0 ? (
         <p className="text-muted-foreground">Nessun evento corrisponde ai filtri selezionati.</p>
       ) : (
         <>
@@ -95,7 +135,7 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEntries.map((entry) => (
+                {entries.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell className="whitespace-nowrap">
                       {formatData(entry.createdAt)}
@@ -117,7 +157,7 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
           </div>
 
           <ul className={`space-y-3 rounded-lg md:hidden ${SCROLL_AREA_CLASS}`}>
-            {filteredEntries.map((entry) => (
+            {entries.map((entry) => (
               <li key={entry.id} className="rounded-lg border p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium">{formatAzione(entry.azione)}</p>
@@ -142,6 +182,14 @@ export function AuditLogManager({ entries }: AuditLogManagerProps) {
               </li>
             ))}
           </ul>
+
+          <ListPagination
+            page={page}
+            totalCount={totalCount}
+            pageSize={AUDIT_LOG_PAGE_SIZE}
+            itemLabel="eventi"
+            onPageChange={handlePageChange}
+          />
         </>
       )}
     </div>
