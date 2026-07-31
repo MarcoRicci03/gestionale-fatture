@@ -70,9 +70,9 @@ Eseguita all'inizio dell'analisi:
 
 ### Database
 
-- [ ] [DB-01](#db-01) 🟠 — Nessun indice sulle chiavi esterne `id_Pagante` / `id_Paziente`
-- [ ] [DB-02](#db-02) 🟡 — `audit_logs` senza indice su `createdAt` da solo: la retention fa seq scan
-- [ ] [DB-03](#db-03) 🟡 — Gli indici unique parziali non sono introspettabili: rischio di drift silenzioso
+- [x] [DB-01](#db-01) 🟠 — Nessun indice sulle chiavi esterne `id_Pagante` / `id_Paziente`
+- [x] [DB-02](#db-02) 🟡 — `audit_logs` senza indice su `createdAt` da solo: la retention fa seq scan
+- [x] [DB-03](#db-03) 🟡 — Gli indici unique parziali non sono introspettabili: rischio di drift silenzioso
 
 ### Deploy e infrastruttura
 
@@ -840,6 +840,8 @@ model Pagamento {
 
 Attenzione, per [DB-03](#db-03): `prisma migrate dev` su questo schema tenterà anche di "correggere" gli indici unique parziali di `paganti`, che non sono introspettabili. Conviene generare la migration con `--create-only` e ripulire l'SQL a mano prima di applicarla.
 
+**Fix applicato:** aggiunti `@@index([id_Pagante])` su `Paziente` e `@@index([id_Pagante])`/`@@index([id_Paziente])` su `Pagamento` in `prisma/schema.prisma`. Nessun Postgres disponibile in questo ambiente per un `prisma migrate dev` reale (stesso limite già incontrato per [PERF-04](#perf-04)), ma qui il rischio è molto più basso: sono indici B-tree semplici su colonne esistenti, senza estensioni né espressioni — non il caso più delicato di PERF-04 (GIN trigram). L'SQL della migration non è stato scritto a mano da zero: generato con `npx prisma migrate diff --from-schema <schema-prima> --to-schema prisma/schema.prisma --script`, che confronta due file di schema senza bisogno di una connessione a un database reale, poi copiato in `prisma/migrations/20260731181420_add_foreign_key_and_audit_log_indexes/migration.sql`. Verificato che il diff rieseguito sullo schema finale produca esattamente lo stesso SQL già scritto. `npx prisma validate`/`generate` (anch'essi senza bisogno di un DB reale) confermano che lo schema è valido e il client si rigenera senza errori. Resta da eseguire `prisma migrate deploy` con un Postgres reale raggiungibile prima di un deploy in produzione, per la conferma finale che l'ambiente reale non abbia altro drift.
+
 ---
 
 <a id="db-02"></a>
@@ -859,6 +861,8 @@ Gli indici su `audit_logs` sono `(id_Utente, createdAt)` e `(azione, createdAt)`
 Con retention a 12 mesi e un'installazione attiva, `audit_logs` è la tabella che cresce di più (un evento per ogni login, logout e mutazione). Il job gira di domenica alle 3 di notte e non ha vincoli di latenza, quindi il costo è tollerabile — ma il `DELETE` prende lock sulle righe man mano che scansiona, e la stessa mancanza di indice penalizzerà anche il filtro per data della UI quando verrà spostato lato server ([LOG-03](#log-03)).
 
 **Fix suggerito:** `@@index([createdAt])` sul model `AuditLog`. Serve sia alla retention sia al futuro filtro server-side.
+
+**Fix applicato:** `@@index([createdAt])` aggiunto su `AuditLog`, nella stessa migration di [DB-01](#db-01) (`prisma/migrations/20260731181420_add_foreign_key_and_audit_log_indexes`). Serve sia al `DELETE` settimanale di retention sia al filtro data-only lato server introdotto da [LOG-03](#log-03), esattamente come previsto qui.
 
 ---
 
@@ -883,6 +887,8 @@ Il rischio è procedurale e vale la pena tenerlo in evidenza:
 `findRestoreConflict` (`lib/archive/guards.ts:14-27`) implementa la stessa regola lato applicativo e la mantiene come rete, ma dipende dal fatto che `activePayers` contenga solo paganti attivi.
 
 **Fix suggerito:** aggiungere un test in `scripts/` che verifichi la presenza della clausola `WHERE "eliminato" = false` nell'SQL delle migration — nello spirito degli altri `verify-*.test.ts`, che presidiano proprio invarianti di questo tipo. È un controllo puramente testuale sul file di migration, non richiede un database.
+
+**Fix applicato:** nuovo `scripts/verify-partial-unique-indexes.test.ts`, esattamente come suggerito — analisi testuale su tutti i `migration.sql` sotto `prisma/migrations/`, senza bisogno di un database. Due casi: la clausola `WHERE "eliminato" = false` è presente su entrambi gli indici parziali; nessuna migration reintroduce lo stesso vincolo come unique PIENO (senza `WHERE`), il segnale che tradirebbe un `prisma migrate dev` futuro accettato senza controllare l'SQL generato.
 
 ---
 
