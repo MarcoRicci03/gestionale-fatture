@@ -11,8 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Pagante, Paziente } from "@prisma/client";
 import type { InvoiceFilters } from "./invoice-filters";
+import type {
+  PayerOption,
+  PatientOption,
+} from "@/lib/data/invoice-contact-options-select";
 
 // Il componente Select tratta il valore stringa vuota come "nessuna
 // selezione" (vedi hasSelectedValue in @base-ui/react/select/store.js: usa
@@ -33,8 +36,8 @@ type PersonaSuggestion = {
 };
 
 function usePersonaSuggestions(
-  payers: Pagante[],
-  patients: Paziente[]
+  payers: PayerOption[],
+  patients: PatientOption[]
 ): PersonaSuggestion[] {
   return useMemo(
     () => [
@@ -172,8 +175,8 @@ type InvoicesFilterBarProps = {
   filters: InvoiceFilters;
   onChange: (patch: Partial<InvoiceFilters>) => void;
   onReset: () => void;
-  payers: Pagante[];
-  patients: Paziente[];
+  payers: PayerOption[];
+  patients: PatientOption[];
   years: number[];
 };
 
