@@ -58,6 +58,31 @@ describe("archivePayer archivia in cascata i pazienti attivi del pagante", () =>
   });
 });
 
+describe("archivePayer verifica lo stato di partenza (LOG-04)", () => {
+  const body = extractFunctionBody(source, "archivePayer");
+
+  it("controlla che il pagante sia tra gli attivi (archiviato: false) prima di archiviarlo", () => {
+    expect(body).toMatch(
+      /pagante\.findFirst\s*\(\s*\{[\s\S]*?where:\s*\{[\s\S]*?archiviato:\s*false/
+    );
+  });
+
+  it("restituisce un errore esplicito se il pagante non era tra gli attivi", () => {
+    expect(body).toMatch(/if\s*\(\s*!payer\s*\)\s*\{[\s\S]*?return\s*\{\s*error:/);
+  });
+
+  it("non scrive l'audit se il controllo sullo stato di partenza fallisce", () => {
+    // Lo stesso ragionamento di verify-patient-archive-idempotency.test.ts:
+    // il controllo su !payer deve comparire prima di logAudit nel testo
+    // della funzione, non dopo (altrimenti l'evento verrebbe scritto anche
+    // quando l'archiviazione non è mai partita).
+    const stateCheckIndex = body.search(/if\s*\(\s*!payer\s*\)/);
+    const logAuditIndex = body.search(/logAudit\s*\(/);
+    expect(stateCheckIndex).toBeGreaterThan(-1);
+    expect(logAuditIndex).toBeGreaterThan(stateCheckIndex);
+  });
+});
+
 describe("restorePayer ripristina in cascata i pazienti archiviati del pagante", () => {
   const body = extractFunctionBody(source, "restorePayer");
 
