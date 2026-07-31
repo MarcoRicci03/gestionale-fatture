@@ -57,12 +57,27 @@ ENV TZ=Europe/Rome
 # Utente non privilegiato: node.js non deve girare come root nel container
 RUN addgroup -g 1001 -S nodejs && adduser -S -u 1001 -G nodejs nextjs
 
-# Copia l'applicazione standalone e le dipendenze di produzione
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Copia l'applicazione standalone (output: "standalone" in next.config.ts
+# include già un node_modules ridotto ai soli moduli effettivamente
+# raggiungibili dal codice server) e le dipendenze di produzione
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+
+# DEP-03: solo i pacchetti della CLI di Prisma, non l'intero node_modules
+# del builder sopra il bundle standalone. Servono perché il CMD sotto
+# esegue `npx prisma migrate deploy`, e prisma/seed.mjs/
+# scripts/audit-log-retention.mjs girano con `node` direttamente (fuori dal
+# bundle tracciato) — ma @prisma/client/@prisma/adapter-pg/pg, importati
+# dal codice server stesso, sono già nel node_modules dello standalone
+# copiato sopra. Senza questa selettività, copiare l'intero node_modules
+# del builder duplicava @react-pdf/renderer, exceljs, @tiptap/* e l'intera
+# catena di next (sharp incluso, decine di MB) già presenti nello
+# standalone.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 # Necessaria per il servizio "audit-log-retention" (SEC-12): senza questa,
 # scripts/audit-log-retention.mjs non sarebbe raggiungibile a runtime. I

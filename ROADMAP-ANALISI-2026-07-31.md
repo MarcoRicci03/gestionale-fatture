@@ -78,10 +78,10 @@ Eseguita all'inizio dell'analisi:
 
 - [x] [DEP-01](#dep-01) 🔴 — Nessun reverse proxy né terminazione TLS nello stack di produzione
 - [x] [DEP-02](#dep-02) 🟠 — L'app viene pubblicata su tutte le interfacce della macchina
-- [ ] [DEP-03](#dep-03) 🟡 — Il `Dockerfile` copia l'intero `node_modules` sopra l'output `standalone`
-- [ ] [DEP-04](#dep-04) 🟡 — `rclone.conf` montato come obbligatorio ma non versionato
-- [ ] [DEP-05](#dep-05) 🟡 — `audit-log-retention` riusa l'immagine di `app` senza dichiarare `build`
-- [ ] [DEP-06](#dep-06) 🟡 — Nessun allarme sui fallimenti di backup e retention
+- [x] [DEP-03](#dep-03) 🟡 — Il `Dockerfile` copia l'intero `node_modules` sopra l'output `standalone`
+- [x] [DEP-04](#dep-04) 🟡 — `rclone.conf` montato come obbligatorio ma non versionato
+- [x] [DEP-05](#dep-05) 🟡 — `audit-log-retention` riusa l'immagine di `app` senza dichiarare `build`
+- [x] [DEP-06](#dep-06) 🟡 — Nessun allarme sui fallimenti di backup e retention
 
 ### Qualità del codice
 
@@ -990,6 +990,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_m
 
 Da verificare con un `docker run` che sia `prisma migrate deploy` sia `node prisma/seed.mjs` sia `node scripts/audit-log-retention.mjs` funzionino: `@prisma/adapter-pg` trascina `pg`, che potrebbe già essere nel bundle standalone o meno.
 
+**Fix applicato:** esattamente come suggerito. `COPY --from=builder .../app/node_modules ./node_modules` sostituito con tre `COPY` mirati (`node_modules/prisma`, `node_modules/@prisma`, `node_modules/.bin/prisma`), eseguiti **dopo** la copia di `.next/standalone` (che porta già `@prisma/client`/`@prisma/adapter-pg`/`pg`, raggiunti dal tracing di Next perché importati da `lib/prisma.ts`). Nessun Docker disponibile in questo ambiente per il `docker run` di verifica raccomandato sopra — resta da fare prima del prossimo deploy. Nuovo `scripts/verify-docker-build-config.test.ts` (analisi statica) verifica che il `COPY` dell'intero `node_modules` non sia tornato e che l'ordine (`standalone` prima, poi le aggiunte mirate) sia rispettato.
+
 ---
 
 <a id="dep-04"></a>
@@ -1020,6 +1022,8 @@ Se il file non esiste al primo `docker compose up`, Docker non fallisce: crea un
 ```
 
 In alternativa, documentare esplicitamente in `README-BACKUP.md` che `cp rclone.conf.example rclone.conf` è un passo obbligatorio del setup anche quando non si usa la copia off-site.
+
+**Fix applicato:** sintassi lunga con `create_host_path: false` come suggerito, in `docker-compose.prod.yml`. Verificato che lo YAML resti valido (parsing con PyYAML, dato che `docker compose config` non è disponibile senza Docker in questo ambiente) e aggiornato `scripts/verify-backup-integrity.test.ts` (il test esistente cercava ancora la vecchia sintassi breve `rclone.conf:/rclone.conf:ro`) con un nuovo caso che verifica esplicitamente `create_host_path: false`.
 
 ---
 
@@ -1056,6 +1060,8 @@ Il comando documentato in cima al file (`up -d --build`) funziona perché `app` 
 
 Compose riconosce che è la stessa immagine e non la ricostruisce due volte.
 
+**Fix applicato:** stanza `build` aggiunta al servizio `audit-log-retention` in `docker-compose.prod.yml`, stesso `context`/`dockerfile` di `app`. Nuovo caso in `scripts/verify-docker-build-config.test.ts`.
+
 ---
 
 <a id="dep-06"></a>
@@ -1079,6 +1085,14 @@ Un backup che fallisce in silenzio è, in pratica, l'assenza di backup — con i
 `scripts/verify-backup-integrity.test.ts` e `verify-backup-retention.test.ts` verificano la *logica* dello script, il che è già più di quanto la maggior parte dei progetti faccia. Manca il segnale quando l'esecuzione reale va male.
 
 **Fix suggerito:** la soluzione minima e sufficiente per un'installazione singola è una notifica push su esito negativo — un `curl` a un webhook (ntfy.sh, Telegram, Healthchecks.io) nel ramo di errore di entrambi gli script. Healthchecks.io in particolare risolve anche il caso peggiore, quello che un allarme sull'errore non copre: il container **non è più partito affatto**, quindi non c'è nessun errore da segnalare. Il modello "dead man's switch" (ping a ogni esecuzione riuscita, allarme se il ping non arriva) è quello corretto qui.
+
+**Fix applicato:** modello "dead man's switch" con convenzione Healthchecks.io (ping sull'URL base per successo, `/fail` in coda per fallimento — compatibile anche con altri webhook che ignorano un suffisso extra), non solo un allarme sull'errore.
+- `scripts/backup-db.sh`: nuova `ping_healthcheck()`, opzionale via `BACKUP_HEALTHCHECK_PING_URL` (resta inerte se non impostata, stesso pattern di `RCLONE_REMOTE`). Il ping riflette l'esito del dump E della prova di ripristino automatica (`verify_backup`): un backup che non supera il ripristino non è, in pratica, un backup utilizzabile. `Dockerfile.backup` estesa con `curl`.
+- `scripts/audit-log-retention.mjs`: stessa logica via `AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL`, con `fetch` nativo di Node (nessuna dipendenza aggiuntiva nell'immagine di produzione).
+- `docker-compose.prod.yml`/`​.env.prod.example`/`README-BACKUP.md` aggiornati con le due variabili opzionali e una sezione dedicata.
+- Nuovi test statici: `scripts/verify-audit-log-retention-healthcheck.test.ts` e casi aggiunti a `scripts/verify-backup-integrity.test.ts` (nessuno esegue realmente `curl`/`fetch`, entrambi gli script girano in un loop infinito non eseguibile end-to-end in Vitest).
+
+Verificato con `npx tsc --noEmit`, `npm run lint`, `npm test` (563 test) e `sh -n scripts/backup-db.sh` (sintassi shell) tutti puliti. Non verificato con una build Docker reale in questo ambiente (nessun Docker disponibile) — da fare prima del prossimo deploy, insieme alla verifica già segnalata sotto [DEP-03](#dep-03).
 
 ---
 

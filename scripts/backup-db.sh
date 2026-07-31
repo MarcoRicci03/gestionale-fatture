@@ -69,6 +69,33 @@ verify_backup() {
   return $ok
 }
 
+# Notifica esterna di esito (DEP-06), modello "dead man's switch": senza
+# BACKUP_HEALTHCHECK_PING_URL configurata resta inerte, come RCLONE_REMOTE
+# sotto. Finora un fallimento persistente (credenziali cambiate, disco
+# pieno, passphrase errata) produceva solo una riga di log in un container
+# che nessuno apre. Un ping MANCANTE (non solo un ping di fallimento)
+# allarma anche nel caso peggiore che il log non copre: il container non è
+# più partito affatto. Convenzione Healthchecks.io: GET sull'URL base
+# segnala successo, /fail segnala fallimento esplicito — compatibile anche
+# con ntfy.sh/webhook simili che ignorano il suffisso.
+ping_healthcheck() {
+  ok="$1"
+
+  if [ -z "${BACKUP_HEALTHCHECK_PING_URL:-}" ]; then
+    return 0
+  fi
+
+  if [ "$ok" = "1" ]; then
+    url="$BACKUP_HEALTHCHECK_PING_URL"
+  else
+    url="$BACKUP_HEALTHCHECK_PING_URL/fail"
+  fi
+
+  if ! curl -fsS -m 10 --retry 3 -o /dev/null "$url"; then
+    echo "[backup] $(date -Iseconds) ping al servizio di monitoraggio fallito ($url)" >&2
+  fi
+}
+
 # Copia off-site opzionale (DEP-06): senza RCLONE_REMOTE configurata, non fa
 # nulla — chi non ha ancora scelto/configurato una destinazione remota non
 # vede rotto il resto del backup. Il file cifrato (mai quello in chiaro)
@@ -95,11 +122,19 @@ while true; do
   echo "[backup] $(date -Iseconds) avvio dump verso $filename"
   if pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip | gpg --symmetric --cipher-algo AES256 --batch --yes --passphrase "$BACKUP_ENCRYPTION_KEY" -o "$filename"; then
     echo "[backup] $(date -Iseconds) completato"
-    verify_backup "$filename" || true
+    # Un backup che non supera la prova di ripristino non è, in pratica, un
+    # backup utilizzabile: il ping di esito riflette anche questo, non solo
+    # la riuscita del dump.
+    if verify_backup "$filename"; then
+      ping_healthcheck 1
+    else
+      ping_healthcheck 0
+    fi
     sync_offsite "$filename"
   else
     echo "[backup] $(date -Iseconds) FALLITO" >&2
     rm -f "$filename"
+    ping_healthcheck 0
   fi
 
   find "$BACKUP_DIR" -type f -name "*.gpg" -mtime +"$BACKUP_RETENTION_DAYS" -exec rm {} \;

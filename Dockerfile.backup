@@ -5,5 +5,7 @@
 # opzionale dei backup (DEP-06) — resta inerte finché RCLONE_REMOTE non è
 # configurata.
 FROM postgres:16-alpine
-RUN apk add --no-cache gnupg rclone
+# curl: per il ping opzionale a un servizio di monitoraggio esterno su esito
+# del backup (DEP-06, BACKUP_HEALTHCHECK_PING_URL in backup-db.sh).
+RUN apk add --no-cache gnupg rclone curl
 ENTRYPOINT ["sh", "/backup-db.sh"]

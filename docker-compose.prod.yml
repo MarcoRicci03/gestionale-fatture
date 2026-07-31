@@ -79,13 +79,26 @@ services:
       POSTGRES_HOST: db
       BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      # DEP-06: opzionale, vedi README-BACKUP.md.
+      BACKUP_HEALTHCHECK_PING_URL: ${BACKUP_HEALTHCHECK_PING_URL:-}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./scripts/backup-db.sh:/backup-db.sh:ro
       - ./backups:/backups
-      - ./rclone.conf:/rclone.conf:ro
+      # DEP-04: sintassi lunga con create_host_path: false — rclone.conf è
+      # opzionale (RCLONE_REMOTE sopra), la sintassi breve "source:target"
+      # invece crea silenziosamente una DIRECTORY vuota sull'host se il file
+      # non esiste ancora, e da quel momento in poi rclone.conf non potrà mai
+      # più essere creato correttamente senza prima rimuovere a mano quella
+      # directory.
+      - type: bind
+        source: ./rclone.conf
+        target: /rclone.conf
+        read_only: true
+        bind:
+          create_host_path: false
     logging:
       driver: json-file
       options:
@@ -98,6 +111,15 @@ services:
 
   audit-log-retention:
     image: gestionale-fatture-app
+    # DEP-05: senza questa stanza Compose tratta l'immagine come "da
+    # registry" — `docker compose pull`/`up -d` senza `--build` su una
+    # macchina pulita fallirebbero perché gestionale-fatture-app non esiste
+    # su nessun registry, e `docker compose build` da solo non ricostruiva
+    # questo servizio. Stesso context/dockerfile di "app": Compose riconosce
+    # che è la stessa immagine e non la builda due volte.
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: gestionale-audit-log-retention
     restart: unless-stopped
     env_file:
@@ -106,6 +128,8 @@ services:
       AUDIT_LOG_RETENTION_MONTHS: ${AUDIT_LOG_RETENTION_MONTHS:-12}
       AUDIT_LOG_RETENTION_WEEKDAY: ${AUDIT_LOG_RETENTION_WEEKDAY:-0}
       AUDIT_LOG_RETENTION_HOUR: ${AUDIT_LOG_RETENTION_HOUR:-3}
+      # DEP-06: opzionale, vedi README-BACKUP.md.
+      AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL: ${AUDIT_LOG_RETENTION_HEALTHCHECK_PING_URL:-}
     depends_on:
       db:
         condition: service_healthy
