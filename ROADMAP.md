@@ -52,7 +52,7 @@ Eseguita all'inizio dell'analisi, tutto verde:
 | [SEC-11](#sec-11) | La password tentata può finire nell'audit log | ✅ |
 | [SEC-12](#sec-12) | Nessuna retention sull'audit log, e dati sanitari senza policy | ✅ (fix tecnico; fix organizzativo resta da fare, non è codice) |
 | [LOG-01](#log-01) | `BACKUP_RETENTION_DAYS` è ignorato: la retention è fissa a 14 giorni | ✅ |
-| [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | 🔴 |
+| [LOG-02](#log-02) | Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi | ✅ (nessun fix — comportamento confermato) |
 | [LOG-03](#log-03) | La fattura emessa resta interamente modificabile, senza storico dei valori | ✅ |
 | [LOG-04](#log-04) | Un nuovo `Pool` di connessioni a ogni hot-reload in sviluppo | ✅ |
 | [LOG-05](#log-05) | `getInvoices()` senza paginazione: tutto l'archivio finisce nel browser | ✅ |
@@ -340,7 +340,7 @@ Nuovo `scripts/verify-backup-retention.test.ts` (analisi statica, stesso approcc
 ---
 
 <a id="log-02"></a>
-## LOG-02 — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi 🔴
+## LOG-02 — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi ✅ nessun fix necessario
 
 **Severità:** media — integrità di un documento fiscale
 **File:** `lib/actions/invoices.ts` (righe 363-400), `lib/data/invoices.ts` (righe 41-55)
@@ -362,6 +362,8 @@ Due conseguenze concrete:
 - *(minima)* Tenere l'hard-delete ma persistere i numeri "bruciati" per `(utente, anno)` e farli saltare a `getNextInvoiceNumberForUserYear`.
 
 In entrambi i casi la scelta va scritta nel README: è una decisione di dominio, non un dettaglio implementativo.
+
+**Decisione presa:** comportamento attuale confermato, nessuna delle due strade di fix viene implementata. Hard-delete e numerazione `max+1` restano come sono; il rischio di riuso/buco numerazione è accettato per questo gestionale (uso a singolo professionista, cancellazioni previste solo su errori pre-consegna). Documentato in `CLAUDE.md` accanto alla nota su soft-delete di `Pagante`/`Paziente`, così la scelta resta visibile e non viene riaperta come rilievo in un audit futuro.
 
 ---
 

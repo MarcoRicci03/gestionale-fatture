@@ -51,7 +51,7 @@ Eseguita all'inizio dell'analisi:
 
 ### Correttezza e logica
 
-- [ ] [LOG-01](#log-01) 🔴 — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi
+- [x] [LOG-01](#log-01) ⚪ — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi — decisione presa, nessun fix
 - [x] [LOG-02](#log-02) 🟠 — Il form fattura sovrascrive città/CAP salvati con quelli attuali del pagante
 - [x] [LOG-03](#log-03) 🟠 — L'audit log carica 200 righe e filtra lato client: i filtri "non trovano" il passato
 - [x] [LOG-04](#log-04) 🟡 — `archivePayer` non verifica lo stato di partenza, a differenza delle altre azioni
@@ -358,6 +358,8 @@ L'audit log conserva i dati identificativi della fattura cancellata (`meta` in `
 - non è più modificabile né scaricabile come PDF valido.
 
 Se il requisito è invece "poter cancellare davvero una bozza mai consegnata", allora la cancellazione va permessa **solo** sull'ultima fattura dell'anno (`n_fattura === max`), il che rende impossibile sia il buco sia il riuso ambiguo. È la soluzione più piccola, se accettabile funzionalmente.
+
+**Decisione presa (2026-08-01):** comportamento attuale confermato corretto, nessuna delle correzioni proposte viene implementata. Hard-delete e numerazione `max+1` restano invariati; il rischio di riuso/buco di numerazione è accettato per questo gestionale (uso a singolo professionista, cancellazioni previste solo su errori pre-consegna). Stessa chiusura in [ROADMAP.md](./ROADMAP.md#log-02); decisione documentata in `CLAUDE.md` accanto alla nota sul soft-delete di `Pagante`/`Paziente`.
 
 ---
 
