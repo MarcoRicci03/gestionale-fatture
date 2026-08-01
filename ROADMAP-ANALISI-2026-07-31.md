@@ -85,7 +85,7 @@ Eseguita all'inizio dell'analisi:
 
 ### Qualità del codice
 
-- [ ] [QUA-01](#qua-01) 🟡 — `lib/data/settings.ts` butta via il tipo di Prisma e rimappa a mano
+- [x] [QUA-01](#qua-01) ✅ — `lib/data/settings.ts` butta via il tipo di Prisma e rimappa a mano
 - [ ] [QUA-02](#qua-02) 🟡 — `invoices-manager.tsx` a 899 righe con 11 `useState`
 - [ ] [QUA-03](#qua-03) 🟡 — `getPdfSettings()` restituisce `id: 0` come valore sentinella
 - [ ] [QUA-04](#qua-04) 🟡 — Nessun test che eserciti davvero le Server Action contro un database
@@ -1138,6 +1138,8 @@ function rowToImpostazioniPdf(row: PrismaImpostazioniPdf): ImpostazioniPdf {
 ```
 
 Una riga invece di quindici, e un campo nuovo nello schema arriva automaticamente.
+
+**Fix applicato:** `rowToImpostazioniPdf` ora prende in input il tipo generato da Prisma (`ImpostazioniPdf` da `@prisma/client`, rinominato `PrismaImpostazioniPdf` in fase di import per non collidere con l'omonimo tipo applicativo in `lib/pdf/types.ts`) e restituisce `{ ...row, blocchi: ... }`, con l'unico cast isolato sul campo `blocchi` (`Json` di Prisma → `PdfLayout["blocchi"]`). Rimossi i tre `as unknown as Record<string, unknown>` nei chiamanti (`getPdfSettings`, `upsertPdfSettings`, `getPdfSettingsForUser`). Verificato con `npx tsc --noEmit` (0 errori), `npm run lint` (0 errori/warning) e `npm test` (569 test, tutti passati).
 
 ---
 
