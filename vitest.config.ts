@@ -15,6 +15,15 @@ export default defineConfig({
     // sovrascrive i default di Vitest e non filtra i node_modules annidati
     // (es. dentro eventuali worktree in .claude/worktrees/**).
     include: ["**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["**/e2e/**", "**/node_modules/**", "**/.next/**", "**/.claude/**"],
+    // scripts/db-integration/**: test di integrazione contro un Postgres
+    // reale (QUA-04, vedi vitest.integration.config.ts / `npm run test:db`),
+    // non disponibile in CI/qui — vanno esclusi da questa suite.
+    exclude: [
+      "**/e2e/**",
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/.claude/**",
+      "**/scripts/db-integration/**",
+    ],
   },
 });
