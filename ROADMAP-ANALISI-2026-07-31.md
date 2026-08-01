@@ -51,7 +51,7 @@ Eseguita all'inizio dell'analisi:
 
 ### Correttezza e logica
 
-- [ ] [LOG-01](#log-01) 🔴 — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi
+- [x] [LOG-01](#log-01) ⚪ — Hard-delete della fattura + numerazione `max+1`: numeri riusati e buchi — decisione presa, nessun fix
 - [x] [LOG-02](#log-02) 🟠 — Il form fattura sovrascrive città/CAP salvati con quelli attuali del pagante
 - [x] [LOG-03](#log-03) 🟠 — L'audit log carica 200 righe e filtra lato client: i filtri "non trovano" il passato
 - [x] [LOG-04](#log-04) 🟡 — `archivePayer` non verifica lo stato di partenza, a differenza delle altre azioni
@@ -85,10 +85,10 @@ Eseguita all'inizio dell'analisi:
 
 ### Qualità del codice
 
-- [ ] [QUA-01](#qua-01) 🟡 — `lib/data/settings.ts` butta via il tipo di Prisma e rimappa a mano
+- [x] [QUA-01](#qua-01) ✅ — `lib/data/settings.ts` butta via il tipo di Prisma e rimappa a mano
 - [ ] [QUA-02](#qua-02) 🟡 — `invoices-manager.tsx` a 899 righe con 11 `useState`
 - [ ] [QUA-03](#qua-03) 🟡 — `getPdfSettings()` restituisce `id: 0` come valore sentinella
-- [ ] [QUA-04](#qua-04) 🟡 — Nessun test che eserciti davvero le Server Action contro un database
+- [x] [QUA-04](#qua-04) ✅ — Nessun test che eserciti davvero le Server Action contro un database
 
 ### Documentazione
 
@@ -358,6 +358,8 @@ L'audit log conserva i dati identificativi della fattura cancellata (`meta` in `
 - non è più modificabile né scaricabile come PDF valido.
 
 Se il requisito è invece "poter cancellare davvero una bozza mai consegnata", allora la cancellazione va permessa **solo** sull'ultima fattura dell'anno (`n_fattura === max`), il che rende impossibile sia il buco sia il riuso ambiguo. È la soluzione più piccola, se accettabile funzionalmente.
+
+**Decisione presa (2026-08-01):** comportamento attuale confermato corretto, nessuna delle correzioni proposte viene implementata. Hard-delete e numerazione `max+1` restano invariati; il rischio di riuso/buco di numerazione è accettato per questo gestionale (uso a singolo professionista, cancellazioni previste solo su errori pre-consegna). Stessa chiusura in [ROADMAP.md](./ROADMAP.md#log-02); decisione documentata in `CLAUDE.md` accanto alla nota sul soft-delete di `Pagante`/`Paziente`.
 
 ---
 
@@ -1139,6 +1141,8 @@ function rowToImpostazioniPdf(row: PrismaImpostazioniPdf): ImpostazioniPdf {
 
 Una riga invece di quindici, e un campo nuovo nello schema arriva automaticamente.
 
+**Fix applicato:** `rowToImpostazioniPdf` ora prende in input il tipo generato da Prisma (`ImpostazioniPdf` da `@prisma/client`, rinominato `PrismaImpostazioniPdf` in fase di import per non collidere con l'omonimo tipo applicativo in `lib/pdf/types.ts`) e restituisce `{ ...row, blocchi: ... }`, con l'unico cast isolato sul campo `blocchi` (`Json` di Prisma → `PdfLayout["blocchi"]`). Rimossi i tre `as unknown as Record<string, unknown>` nei chiamanti (`getPdfSettings`, `upsertPdfSettings`, `getPdfSettingsForUser`). Verificato con `npx tsc --noEmit` (0 errori), `npm run lint` (0 errori/warning) e `npm test` (569 test, tutti passati).
+
 ---
 
 <a id="qua-02"></a>
@@ -1199,6 +1203,20 @@ Entrambe le categorie sono utili e veloci. Ma nessuna esegue una Server Action c
 I test e2e Playwright coprono il flusso utente (login, fatture, export, archiviazione paganti) ma passano dalla UI, quindi non isolano questi casi né esercitano i rami di errore.
 
 **Fix suggerito:** una manciata di test di integrazione contro il Postgres di `docker-compose.dev.yml`, su un database separato (`gestionale_test`) creato e distrutto dal setup. `e2e/fixtures/prisma-test-fixtures.ts` e `e2e/safe-test-environment.ts` esistono già e hanno risolto la parte difficile (le protezioni contro l'esecuzione accidentale sul DB di sviluppo). Cinque o sei test mirati sulle transazioni e sui vincoli DB coprirebbero le lacune più significative, e sarebbero il complemento naturale dei controlli statici già presenti.
+
+**Fix applicato:** aggiunta una config Vitest dedicata (`vitest.integration.config.ts`, script `npm run test:db`, esclusa da `npm test`/CI dove nessun Postgres è disponibile) con `scripts/db-integration/`:
+
+- `global-setup.ts` crea/distrugge un database `gestionale_test` dedicato (drop+create a ogni run) e vi applica le migration reali con `prisma migrate deploy` — a differenza di `db push`, applica anche l'SQL a mano degli indici unique parziali su `paganti(cf/piva)`. Riusa `assertSafeTestEnvironment` (`e2e/safe-test-environment.ts`) per rifiutarsi di girare contro un host non locale.
+- `setup-env.ts` (setupFiles, dentro ogni worker) ripunta `process.env.DATABASE_URL` a `gestionale_test` prima che `@/lib/prisma` venga importato dai test.
+- Le Server Action reali (`archivePayer`, `hardDeletePayer`, `createInvoice`, `deleteInvoice`) vengono chiamate per intero contro il database di test, con solo il confine verso `next/headers`/`next/cache` mockato (`requireUserId`, `getClientIp`, `revalidatePath`) — l'unica parte non eseguibile fuori da una richiesta Next.js reale.
+
+Sei test in tre file coprono le proprietà indicate sopra:
+
+- `transaction-rollback.test.ts`: (1) un errore lanciato dopo due scritture in `prisma.$transaction` (stessa forma di `archivePayer`) annulla entrambe; (2) un `update()` con scrittura nidificata `mesi: { deleteMany, create }` (stessa forma di `updateInvoice`) resta atomico quando il vincolo unique su `bolloCodice` fallisce — verificato chiamando Prisma direttamente con lo stesso payload, dato che il pre-check applicativo (`isBolloCodiceTaken`) intercetta il caso prima che raggiunga il DB in una singola richiesta non concorrente; il vincolo DB resta comunque l'unica rete di sicurezza sotto una race tra richieste concorrenti.
+- `invoices-cascade.test.ts`: `deleteInvoice` (Server Action reale) cancella in cascata le righe `fattura_mesi` collegate (`onDelete: Cascade`).
+- `payers-constraints.test.ts`: l'indice unique parziale su `paganti(cf)` rifiuta due paganti attivi con lo stesso cf e lo permette se l'altro è archiviato (con `archivePayer`, Server Action reale, a produrre lo stato archiviato — la stessa assunzione di `findRestoreConflict`); `hardDeletePayer` (Server Action reale) cancella in cascata solo il paziente già archiviato del pagante eliminato, lasciando intatti i pazienti di altri paganti.
+
+Verificato con due run consecutivi di `npm run test:db` (6/6 test passati, creazione/distruzione del database confermata idempotente) e con `npx tsc --noEmit`/`npm run lint`/`npm test` invariati (569 test, la nuova cartella resta esclusa da `vitest.config.ts`).
 
 ---
 

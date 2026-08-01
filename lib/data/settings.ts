@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { Prisma } from "@prisma/client";
+import type { ImpostazioniPdf as PrismaImpostazioniPdf } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { LAYOUT_DEFAULT } from "@/lib/pdf/layout-default";
@@ -9,24 +10,8 @@ function now() {
   return new Date();
 }
 
-function rowToImpostazioniPdf(
-  row: Record<string, unknown>
-): ImpostazioniPdf {
-  return {
-    id: row.id as number,
-    id_Utente: row.id_Utente as number,
-    pageWidth: row.pageWidth as number,
-    pageHeight: row.pageHeight as number,
-    marginTop: row.marginTop as number,
-    marginRight: row.marginRight as number,
-    marginBottom: row.marginBottom as number,
-    marginLeft: row.marginLeft as number,
-    fontFamily: row.fontFamily as string,
-    fontSizeBase: row.fontSizeBase as number,
-    blocchi: row.blocchi as PdfLayout["blocchi"],
-    createdAt: row.createdAt as Date,
-    updatedAt: row.updatedAt as Date,
-  };
+function rowToImpostazioniPdf(row: PrismaImpostazioniPdf): ImpostazioniPdf {
+  return { ...row, blocchi: row.blocchi as unknown as PdfLayout["blocchi"] };
 }
 
 export async function getPdfSettings(): Promise<ImpostazioniPdf> {
@@ -46,7 +31,7 @@ export async function getPdfSettings(): Promise<ImpostazioniPdf> {
     };
   }
 
-  return rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
+  return rowToImpostazioniPdf(row);
 }
 
 export async function upsertPdfSettings(
@@ -81,7 +66,7 @@ export async function upsertPdfSettings(
     },
   });
 
-  return rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
+  return rowToImpostazioniPdf(row);
 }
 
 // cache() (PERF-01): chiamata sia da createInvoice sia da generateInvoicePdf
@@ -97,7 +82,7 @@ export const getPdfSettingsForUser = cache(
       return LAYOUT_DEFAULT;
     }
 
-    const typed = rowToImpostazioniPdf(row as unknown as Record<string, unknown>);
+    const typed = rowToImpostazioniPdf(row);
     return typed;
   }
 );
