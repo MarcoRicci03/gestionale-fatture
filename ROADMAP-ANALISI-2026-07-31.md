@@ -86,7 +86,7 @@ Eseguita all'inizio dell'analisi:
 ### Qualità del codice
 
 - [x] [QUA-01](#qua-01) ✅ — `lib/data/settings.ts` butta via il tipo di Prisma e rimappa a mano
-- [ ] [QUA-02](#qua-02) 🟡 — `invoices-manager.tsx` a 899 righe con 11 `useState`
+- [x] [QUA-02](#qua-02) ✅ — `invoices-manager.tsx` a 899 righe con 11 `useState`
 - [ ] [QUA-03](#qua-03) 🟡 — `getPdfSettings()` restituisce `id: 0` come valore sentinella
 - [x] [QUA-04](#qua-04) ✅ — Nessun test che eserciti davvero le Server Action contro un database
 
@@ -1158,6 +1158,17 @@ Da notare che la parte più delicata — la sincronizzazione dei filtri — è s
 Il precedente c'è già ed è positivo: `pdf-editor.tsx` è stato scomposto in `pdf-editor-toolbar`, `-block`, `-block-properties-panel`, `-add-block-panel`, `-page-settings-panel`, più gli hook `use-block-dragging`, `use-canvas-zoom-pan`, `use-pdf-layout-history`, `use-pdf-editor-keyboard-shortcuts` — ognuno con il proprio file di test. Il risultato è che oggi `pdf-editor.tsx` sta in 537 righe pur essendo la parte più complessa del prodotto.
 
 **Fix suggerito:** applicare lo stesso trattamento. I confini si vedono già bene: un hook `useInvoiceFilters` (navigazione, `latestFiltersRef`, reset della selezione), un hook `useInvoiceSelection` (`selectedIds`, `selectAllRef`, checkbox indeterminate), un componente `InvoiceDetailDialog` e un `InvoicesTable`. Nessuna urgenza — l'attuale funziona ed è testato — ma è il file su cui ogni modifica futura costerà di più.
+
+**Fix applicato:** esattamente lungo i confini indicati sopra. `invoices-manager.tsx` è passato da 903 a 292 righe, con la logica e il markup estratti in 8 nuovi file, ciascuno col proprio test:
+
+- `use-invoice-filters.ts` / `use-invoice-selection.ts`: i due hook suggeriti (navigazione/`latestFiltersRef` il primo, `selectedIds`/`selectAllRef`/indeterminate il secondo).
+- `invoice-row-actions.tsx`: i pulsanti azione di riga (visualizza, aggiorna PDF, aggiorna anagrafica, modifica, elimina, scarica PDF), condivisi da tabella e card.
+- `invoices-table.tsx` / `invoices-card-list.tsx`: la tabella desktop e le card mobile, entrambe costruite sullo stesso `.map()` di `invoices` e su `InvoiceRowActions`.
+- `invoice-detail-dialog.tsx` / `payer-detail-dialog.tsx` / `patient-detail-dialog.tsx`: i tre dialog di dettaglio (fattura, pagante, paziente), puramente presentazionali.
+
+Le due conferme di refresh (layout PDF e anagrafica), con i rispettivi stati di errore, sono rimaste inline in `invoices-manager.tsx`: decisione deliberata, non una dimenticanza — sono già `ConfirmDialog` generici parametrizzati sullo stato del genitore, senza markup proprio da estrarre, e spostarle avrebbe solo spostato lo stato altrove senza ridurre la responsabilità del componente.
+
+Verificato con `npx tsc --noEmit` (0 errori), `npm run lint` (0 errori/warning) e `npm test` (628 test, tutti passati).
 
 ---
 

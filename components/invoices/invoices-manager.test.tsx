@@ -1,9 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Pagamento, Pagante, Paziente, FatturaMese } from "@prisma/client";
 import { InvoicesManager } from "./invoices-manager";
 import { EMPTY_INVOICE_FILTERS } from "./invoice-filters";
+import { makeInvoice as makeInvoiceBase } from "./test-fixtures";
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -28,35 +28,10 @@ vi.mock("@/lib/actions/invoices", () => ({
 // (`selection: { kind: "filters", filters, count: totalCount }`), non solo
 // quelle della pagina visibile — vedi i test "export selection" più sotto.
 
-type InvoiceFixture = Omit<Pagamento, "prezzo_totale"> & {
-  prezzo_totale: number;
-  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  pagante: Pagante | null;
-  paziente: Paziente | null;
-};
-
-function makeInvoice(id: number): InvoiceFixture {
-  return {
-    id,
-    id_Utente: 1,
-    id_Pagante: 1,
-    id_Paziente: 1,
-    prezzo_totale: 100,
-    mod_pag: "BONIFICO",
-    sedute: null,
-    commento: null,
-    n_fattura: id,
-    anno: 2026,
-    data: new Date("2026-01-15"),
-    citta: "Roma",
-    cap: "00100",
-    pdfLayoutSnapshot: null,
-    bolloCodice: null,
-    snapshotAnagrafica: null,
-    pagante: null,
-    paziente: null,
-    mesi: [],
-  };
+// Wrapper posizionale (id) sulla fixture condivisa, invariato per non
+// toccare le chiamate makeInvoice(1)/makeInvoice(2) più sotto in questo file.
+function makeInvoice(id: number) {
+  return makeInvoiceBase({ id, n_fattura: id });
 }
 
 const baseProps = {
