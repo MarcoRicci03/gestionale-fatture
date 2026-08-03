@@ -3,12 +3,8 @@
 import { useState, useTransition } from "react";
 import {
   PlusCircle,
-  Pencil,
   FileText,
   FileSpreadsheet,
-  Eye,
-  RefreshCw,
-  IdCard,
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,9 +20,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { InvoiceForm } from "./invoice-form";
-import { DeleteInvoiceButton } from "./delete-invoice-button";
 import { InvoicesTable } from "./invoices-table";
-import { Tooltip } from "@/components/ui/tooltip";
+import { InvoicesCardList } from "./invoices-card-list";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
@@ -117,6 +112,16 @@ export function InvoicesManager({
     setViewingInvoice(invoice);
   };
 
+  const handleOpenRefreshPdf = (invoice: InvoiceWithRelations) => {
+    setRefreshError(null);
+    setRefreshInvoiceId(invoice.id);
+  };
+
+  const handleOpenRefreshAnagrafica = (invoice: InvoiceWithRelations) => {
+    setAnagraficaRefreshError(null);
+    setAnagraficaRefreshInvoiceId(invoice.id);
+  };
+
   const handleSuccess = () => {
     setOpen(false);
     setEditingInvoice(null);
@@ -173,143 +178,20 @@ export function InvoicesManager({
             toggleSelected={toggleSelected}
             toggleSelectAll={toggleSelectAll}
             onView={handleOpenView}
-            onOpenRefreshPdf={(invoice) => {
-              setRefreshError(null);
-              setRefreshInvoiceId(invoice.id);
-            }}
-            onOpenRefreshAnagrafica={(invoice) => {
-              setAnagraficaRefreshError(null);
-              setAnagraficaRefreshInvoiceId(invoice.id);
-            }}
+            onOpenRefreshPdf={handleOpenRefreshPdf}
+            onOpenRefreshAnagrafica={handleOpenRefreshAnagrafica}
             onEdit={handleOpenEdit}
           />
 
-          <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
-            {invoices.map((invoice) => (
-              <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      role="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-input"
-                      checked={selectedIds.has(invoice.id)}
-                      onChange={(e) =>
-                        toggleSelected(invoice.id, e.target.checked)
-                      }
-                      aria-label={`Seleziona fattura ${invoice.n_fattura}`}
-                    />
-                    <div>
-                      <p className="font-medium">
-                        N. {invoice.n_fattura}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDateDisplay(invoice.data)}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="flex items-center gap-1.5 font-medium">
-                    {getTotaleConBollo(
-                      invoice.prezzo_totale,
-                      invoice.bolloCodice
-                    ).toLocaleString("it-IT", {
-                      style: "currency",
-                      currency: "EUR",
-                    })}
-                    {invoice.prezzo_totale > SOGLIA_BOLLO &&
-                      !invoice.bolloCodice && (
-                        <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
-                          <AlertTriangle
-                            className="h-4 w-4 text-amber-600"
-                            aria-label="Marca da bollo dovuta: codice non ancora inserito"
-                          />
-                        </Tooltip>
-                      )}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-                  <p>
-                    Pagante:{" "}
-                    {invoice.pagante
-                      ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
-                      : "-"}
-                  </p>
-                  <p>
-                    Paziente:{" "}
-                    {invoice.paziente
-                      ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
-                      : "-"}
-                  </p>
-                  <p>Modalità: {invoice.mod_pag}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-1 border-t pt-3">
-                  <Tooltip content="Visualizza dettagli fattura">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenView(invoice)}
-                      aria-label="Visualizza dettagli fattura"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Aggiorna layout PDF">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setRefreshError(null);
-                        setRefreshInvoiceId(invoice.id);
-                      }}
-                      aria-label="Aggiorna layout PDF"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Aggiorna anagrafica">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setAnagraficaRefreshError(null);
-                        setAnagraficaRefreshInvoiceId(invoice.id);
-                      }}
-                      aria-label="Aggiorna anagrafica"
-                    >
-                      <IdCard className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <Tooltip content="Scarica PDF">
-                    <Link
-                      href={`/api/invoices/${invoice.id}/pdf`}
-                      target="_blank"
-                      className={cn(
-                        buttonVariants({ variant: "ghost", size: "icon" })
-                      )}
-                      aria-label="Scarica PDF"
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Link>
-                  </Tooltip>
-                  <Tooltip content="Modifica fattura">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenEdit(invoice)}
-                      aria-label="Modifica fattura"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </Tooltip>
-                  <DeleteInvoiceButton
-                    id={invoice.id}
-                    nFattura={invoice.n_fattura}
-                    anno={invoice.anno}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
+          <InvoicesCardList
+            invoices={invoices}
+            selectedIds={selectedIds}
+            toggleSelected={toggleSelected}
+            onView={handleOpenView}
+            onOpenRefreshPdf={handleOpenRefreshPdf}
+            onOpenRefreshAnagrafica={handleOpenRefreshAnagrafica}
+            onEdit={handleOpenEdit}
+          />
 
           <div className="shrink-0">
             <ListPagination
