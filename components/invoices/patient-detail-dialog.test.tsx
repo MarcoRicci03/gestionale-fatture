@@ -3,36 +3,26 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Pagante, Paziente } from "@prisma/client";
 import { PatientDetailDialog } from "./patient-detail-dialog";
+import { makePagante, makePaziente as makePazienteBase } from "./test-fixtures";
 
-function makePagante(overrides: Partial<Pagante> = {}): Pagante {
-  return {
-    id: 1,
-    id_Utente: 1,
-    nome: "Mario",
-    cognome: "Rossi",
-    via: "Via Roma 1",
-    citta: "Roma",
-    cap: "00100",
-    cf: "RSSMRA80A01H501Z",
-    piva: null,
-    archiviato: false,
-    ...overrides,
-  } as Pagante;
-}
-
+// PatientDetailDialog vuole il paziente con il pagante associato già
+// annidato (forma non coperta dalla fixture condivisa, specifica di questo
+// dialog): compone `makePaziente` di test-fixtures.ts con un campo
+// `pagante` di default null, sovrascrivibile insieme agli altri campi.
 function makePaziente(
   overrides: Partial<Paziente & { pagante: Pagante | null }> = {}
 ): Paziente & { pagante: Pagante | null } {
+  const { pagante = null, ...pazienteOverrides } = overrides;
   return {
-    id: 10,
-    id_Utente: 1,
-    nome: "Anna",
-    cognome: "Bianchi",
-    id_Pagante: null,
-    archiviato: false,
-    pagante: null,
-    ...overrides,
-  } as Paziente & { pagante: Pagante | null };
+    ...makePazienteBase({
+      id: 10,
+      nome: "Anna",
+      cognome: "Bianchi",
+      id_Pagante: null,
+      ...pazienteOverrides,
+    }),
+    pagante,
+  };
 }
 
 function renderDialog(

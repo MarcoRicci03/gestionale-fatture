@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Pagamento, Pagante, Paziente, FatturaMese } from "@prisma/client";
+import type { Pagante, Paziente } from "@prisma/client";
 import { InvoicesCardList } from "./invoices-card-list";
+import { makeInvoice } from "./test-fixtures";
 
 // DeleteInvoiceButton (via InvoiceRowActions) importa deleteInvoice da
 // lib/actions/invoices, che trascina prisma: mockato come già fa
@@ -11,41 +12,6 @@ import { InvoicesCardList } from "./invoices-card-list";
 vi.mock("@/lib/actions/invoices", () => ({
   deleteInvoice: vi.fn(async () => ({ success: true })),
 }));
-
-// Stessa forma di InvoiceWithRelations in invoices-manager.tsx, duplicata
-// come fixture (stesso pattern di invoices-table.test.tsx) per non dover
-// importare da invoices-manager.tsx nel test.
-type InvoiceFixture = Omit<Pagamento, "prezzo_totale"> & {
-  prezzo_totale: number;
-  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  pagante: Pagante | null;
-  paziente: Paziente | null;
-};
-
-function makeInvoice(overrides: Partial<InvoiceFixture> = {}): InvoiceFixture {
-  return {
-    id: 1,
-    id_Utente: 1,
-    id_Pagante: 1,
-    id_Paziente: 1,
-    prezzo_totale: 100,
-    mod_pag: "BONIFICO",
-    sedute: null,
-    commento: null,
-    n_fattura: 1,
-    anno: 2026,
-    data: new Date("2026-01-15"),
-    citta: "Roma",
-    cap: "00100",
-    pdfLayoutSnapshot: null,
-    bolloCodice: null,
-    snapshotAnagrafica: null,
-    pagante: null,
-    paziente: null,
-    mesi: [],
-    ...overrides,
-  };
-}
 
 function renderCardList(
   overrides: Partial<Parameters<typeof InvoicesCardList>[0]> = {}

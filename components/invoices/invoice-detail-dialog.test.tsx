@@ -1,72 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Pagamento, Pagante, Paziente, FatturaMese } from "@prisma/client";
 import { InvoiceDetailDialog } from "./invoice-detail-dialog";
-
-// Stessa forma di InvoiceWithRelations in invoices-manager.tsx, duplicata
-// come fixture (stesso pattern di invoices-card-list.test.tsx) per non dover
-// importare da invoices-manager.tsx nel test.
-type InvoiceFixture = Omit<Pagamento, "prezzo_totale"> & {
-  prezzo_totale: number;
-  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  pagante: Pagante | null;
-  paziente: Paziente | null;
-};
-
-function makePagante(overrides: Partial<Pagante> = {}): Pagante {
-  return {
-    id: 1,
-    id_Utente: 1,
-    nome: "Mario",
-    cognome: "Rossi",
-    via: "Via Roma 1",
-    citta: "Roma",
-    cap: "00100",
-    cf: "RSSMRA80A01H501Z",
-    piva: null,
-    archiviato: false,
-    ...overrides,
-  } as Pagante;
-}
-
-function makePaziente(overrides: Partial<Paziente> = {}): Paziente {
-  return {
-    id: 1,
-    id_Utente: 1,
-    id_Pagante: 1,
-    nome: "Luca",
-    cognome: "Verdi",
-    archiviato: false,
-    archiviatoInCascata: false,
-    ...overrides,
-  } as Paziente;
-}
-
-function makeInvoice(overrides: Partial<InvoiceFixture> = {}): InvoiceFixture {
-  return {
-    id: 1,
-    id_Utente: 1,
-    id_Pagante: 1,
-    id_Paziente: 1,
-    prezzo_totale: 100,
-    mod_pag: "BONIFICO",
-    sedute: null,
-    commento: null,
-    n_fattura: 1,
-    anno: 2026,
-    data: new Date("2026-01-15"),
-    citta: "Roma",
-    cap: "00100",
-    pdfLayoutSnapshot: null,
-    bolloCodice: null,
-    snapshotAnagrafica: null,
-    pagante: null,
-    paziente: null,
-    mesi: [],
-    ...overrides,
-  };
-}
+import { makeInvoice, makePagante, makePaziente } from "./test-fixtures";
+import type { InvoiceListItem } from "./types";
 
 function renderDialog(
   overrides: Partial<Parameters<typeof InvoiceDetailDialog>[0]> = {}
@@ -97,7 +34,7 @@ describe("InvoiceDetailDialog", () => {
       mesi: [
         { id: 1, id_Pagamento: 1, mese: "GENNAIO", prezzo: 60 },
         { id: 2, id_Pagamento: 1, mese: "FEBBRAIO", prezzo: 40 },
-      ] as InvoiceFixture["mesi"],
+      ] as InvoiceListItem["mesi"],
       prezzo_totale: 100,
     });
     renderDialog({ invoice });

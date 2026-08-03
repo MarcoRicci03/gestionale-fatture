@@ -16,10 +16,10 @@ import { formatDateDisplay } from "@/lib/utils/date";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import type { Pagante, Paziente } from "@prisma/client";
-import type { InvoiceWithRelations } from "./invoices-manager";
+import type { InvoiceListItem } from "./types";
 
 type InvoiceDetailDialogProps = {
-  invoice: InvoiceWithRelations | null;
+  invoice: InvoiceListItem | null;
   onOpenChange: (open: boolean) => void;
   onViewPayer: (pagante: Pagante) => void;
   onViewPatient: (patient: Paziente & { pagante: Pagante | null }) => void;

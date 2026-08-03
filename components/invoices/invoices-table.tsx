@@ -15,18 +15,18 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { InvoiceRowActions } from "./invoice-row-actions";
-import type { InvoiceWithRelations } from "./invoices-manager";
+import type { InvoiceListItem } from "./types";
 
 type InvoicesTableProps = {
-  invoices: InvoiceWithRelations[];
+  invoices: InvoiceListItem[];
   selectedIds: Set<number>;
   selectAllRef: RefObject<HTMLInputElement | null>;
   toggleSelected: (id: number, checked: boolean) => void;
   toggleSelectAll: (checked: boolean) => void;
-  onView: (invoice: InvoiceWithRelations) => void;
-  onOpenRefreshPdf: (invoice: InvoiceWithRelations) => void;
-  onOpenRefreshAnagrafica: (invoice: InvoiceWithRelations) => void;
-  onEdit: (invoice: InvoiceWithRelations) => void;
+  onView: (invoice: InvoiceListItem) => void;
+  onOpenRefreshPdf: (invoice: InvoiceListItem) => void;
+  onOpenRefreshAnagrafica: (invoice: InvoiceListItem) => void;
+  onEdit: (invoice: InvoiceListItem) => void;
 };
 
 export function InvoicesTable({

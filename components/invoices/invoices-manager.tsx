@@ -25,23 +25,15 @@ import type { InvoiceFilters } from "./invoice-filters";
 import { useInvoiceFilters } from "./use-invoice-filters";
 import { useInvoiceSelection } from "./use-invoice-selection";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
-import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+import type { Pagante, Paziente } from "@prisma/client";
 import type {
   PayerOption,
   PatientOption,
 } from "@/lib/data/invoice-contact-options-select";
-
-// prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
-// (vedi serializeInvoice in lib/data/invoices.ts).
-export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
-  prezzo_totale: number;
-  mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
-  pagante: Pagante | null;
-  paziente: Paziente | null;
-};
+import type { InvoiceListItem } from "./types";
 
 type InvoicesManagerProps = {
-  invoices: InvoiceWithRelations[];
+  invoices: InvoiceListItem[];
   totalCount: number;
   page: number;
   years: number[];
@@ -65,8 +57,8 @@ export function InvoicesManager({
     useInvoiceFilters({ filters });
 
   const [open, setOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
-  const [viewingInvoice, setViewingInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceListItem | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<InvoiceListItem | null>(null);
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
   const [viewingPatient, setViewingPatient] = useState<
     (Paziente & { pagante: Pagante | null }) | null
@@ -86,21 +78,21 @@ export function InvoicesManager({
     setOpen(true);
   };
 
-  const handleOpenEdit = (invoice: InvoiceWithRelations) => {
+  const handleOpenEdit = (invoice: InvoiceListItem) => {
     setEditingInvoice(invoice);
     setOpen(true);
   };
 
-  const handleOpenView = (invoice: InvoiceWithRelations) => {
+  const handleOpenView = (invoice: InvoiceListItem) => {
     setViewingInvoice(invoice);
   };
 
-  const handleOpenRefreshPdf = (invoice: InvoiceWithRelations) => {
+  const handleOpenRefreshPdf = (invoice: InvoiceListItem) => {
     setRefreshError(null);
     setRefreshInvoiceId(invoice.id);
   };
 
-  const handleOpenRefreshAnagrafica = (invoice: InvoiceWithRelations) => {
+  const handleOpenRefreshAnagrafica = (invoice: InvoiceListItem) => {
     setAnagraficaRefreshError(null);
     setAnagraficaRefreshInvoiceId(invoice.id);
   };

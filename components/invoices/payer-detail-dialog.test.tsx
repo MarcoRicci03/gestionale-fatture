@@ -1,24 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Pagante } from "@prisma/client";
 import { PayerDetailDialog } from "./payer-detail-dialog";
-
-function makePagante(overrides: Partial<Pagante> = {}): Pagante {
-  return {
-    id: 1,
-    id_Utente: 1,
-    nome: "Mario",
-    cognome: "Rossi",
-    via: "Via Roma 1",
-    citta: "Roma",
-    cap: "00100",
-    cf: "RSSMRA80A01H501Z",
-    piva: null,
-    archiviato: false,
-    ...overrides,
-  } as Pagante;
-}
+import { makePagante } from "./test-fixtures";
 
 function renderDialog(
   overrides: Partial<Parameters<typeof PayerDetailDialog>[0]> = {}

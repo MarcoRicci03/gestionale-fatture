@@ -6,14 +6,14 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
-import type { InvoiceWithRelations } from "./invoices-manager";
+import type { InvoiceListItem } from "./types";
 
 type InvoiceRowActionsProps = {
-  invoice: InvoiceWithRelations;
-  onView: (invoice: InvoiceWithRelations) => void;
-  onRefreshPdf: (invoice: InvoiceWithRelations) => void;
-  onRefreshAnagrafica: (invoice: InvoiceWithRelations) => void;
-  onEdit: (invoice: InvoiceWithRelations) => void;
+  invoice: InvoiceListItem;
+  onView: (invoice: InvoiceListItem) => void;
+  onRefreshPdf: (invoice: InvoiceListItem) => void;
+  onRefreshAnagrafica: (invoice: InvoiceListItem) => void;
+  onEdit: (invoice: InvoiceListItem) => void;
 };
 
 export function InvoiceRowActions({
