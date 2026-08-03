@@ -9,13 +9,13 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { InvoiceForm } from "./invoice-form";
 import { InvoicesTable } from "./invoices-table";
 import { InvoicesCardList } from "./invoices-card-list";
 import { InvoiceDetailDialog } from "./invoice-detail-dialog";
 import { PayerDetailDialog } from "./payer-detail-dialog";
+import { PatientDetailDialog } from "./patient-detail-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
@@ -283,72 +283,10 @@ export function InvoicesManager({
         onOpenChange={(isOpen) => !isOpen && setViewingPayer(null)}
       />
 
-      <Dialog
-        open={!!viewingPatient}
+      <PatientDetailDialog
+        patient={viewingPatient}
         onOpenChange={(isOpen) => !isOpen && setViewingPatient(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Paziente</DialogTitle>
-            <DialogDescription>
-              Visualizza le informazioni del paziente e del pagante associato.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingPatient && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Cognome</p>
-                  <p className="font-medium">{viewingPatient.cognome}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{viewingPatient.nome}</p>
-                </div>
-              </div>
-
-              {viewingPatient.pagante ? (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <p className="font-medium">Pagante associato</p>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cognome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.cognome}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.nome}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Indirizzo</p>
-                    <p>
-                      {viewingPatient.pagante.via}, {viewingPatient.pagante.citta}{" "}
-                      {viewingPatient.pagante.cap}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">CF</p>
-                      <p>{viewingPatient.pagante.cf ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">P.IVA</p>
-                      <p>{viewingPatient.pagante.piva ?? "-"}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Nessun pagante associato.</p>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }
