@@ -15,6 +15,7 @@ import { InvoiceForm } from "./invoice-form";
 import { InvoicesTable } from "./invoices-table";
 import { InvoicesCardList } from "./invoices-card-list";
 import { InvoiceDetailDialog } from "./invoice-detail-dialog";
+import { PayerDetailDialog } from "./payer-detail-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
@@ -277,49 +278,10 @@ export function InvoicesManager({
         </p>
       )}
 
-      <Dialog
-        open={!!viewingPayer}
+      <PayerDetailDialog
+        payer={viewingPayer}
         onOpenChange={(isOpen) => !isOpen && setViewingPayer(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Pagante</DialogTitle>
-            <DialogDescription>
-              Visualizza le informazioni complete del pagante.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingPayer && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Cognome</p>
-                  <p className="font-medium">{viewingPayer.cognome}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{viewingPayer.nome}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Indirizzo</p>
-                <p>
-                  {viewingPayer.via}, {viewingPayer.citta} {viewingPayer.cap}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Codice Fiscale</p>
-                  <p>{viewingPayer.cf ?? "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Partita IVA</p>
-                  <p>{viewingPayer.piva ?? "-"}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      />
 
       <Dialog
         open={!!viewingPatient}
