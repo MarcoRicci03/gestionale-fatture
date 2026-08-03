@@ -1,16 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  PlusCircle,
-  FileText,
-  FileSpreadsheet,
-  AlertTriangle,
-} from "lucide-react";
-import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
+import { PlusCircle, FileSpreadsheet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import {
   Dialog,
@@ -22,12 +14,10 @@ import {
 import { InvoiceForm } from "./invoice-form";
 import { InvoicesTable } from "./invoices-table";
 import { InvoicesCardList } from "./invoices-card-list";
+import { InvoiceDetailDialog } from "./invoice-detail-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatDateDisplay } from "@/lib/utils/date";
 import { refreshInvoicePdfLayout } from "@/lib/actions/settings";
 import { refreshInvoiceAnagrafica } from "@/lib/actions/invoices";
-import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { InvoicesFilterBar } from "./invoices-filter-bar";
 import { ListPagination } from "@/components/ui/list-pagination";
 import type { InvoiceFilters } from "./invoice-filters";
@@ -85,14 +75,6 @@ export function InvoicesManager({
   const [anagraficaRefreshInvoiceId, setAnagraficaRefreshInvoiceId] = useState<number | null>(null);
   const [anagraficaRefreshError, setAnagraficaRefreshError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const resolvedAnagrafica = viewingInvoice?.pagante && viewingInvoice?.paziente
-    ? resolveAnagrafica({
-        snapshotAnagrafica: viewingInvoice.snapshotAnagrafica,
-        pagante: viewingInvoice.pagante,
-        paziente: viewingInvoice.paziente,
-      })
-    : null;
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { selectedIds, selectAllRef, toggleSelected, toggleSelectAll } =
@@ -234,177 +216,12 @@ export function InvoicesManager({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!viewingInvoice}
+      <InvoiceDetailDialog
+        invoice={viewingInvoice}
         onOpenChange={(isOpen) => !isOpen && setViewingInvoice(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Fattura</DialogTitle>
-            <DialogDescription>
-              Visualizza i dati della fattura e delle anagrafiche collegate.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingInvoice && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">N. Fattura</p>
-                  <p className="font-medium">
-                    {viewingInvoice.n_fattura}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Data</p>
-                  <p className="font-medium">
-                    {formatDateDisplay(viewingInvoice.data)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Mesi</p>
-                  <p className="font-medium">
-                    {viewingInvoice.mesi.map((m) => m.mese).join(", ") || "—"}
-                  </p>
-                  {viewingInvoice.mesi.length > 0 && (
-                    <ul className="mt-1 space-y-0.5 text-sm">
-                      {viewingInvoice.mesi.map((m) => (
-                        <li
-                          key={m.id}
-                          className="flex justify-between gap-2"
-                        >
-                          <span className="text-muted-foreground">{m.mese}</span>
-                          <span>
-                            {m.prezzo.toLocaleString("it-IT", {
-                              style: "currency",
-                              currency: "EUR",
-                            })}
-                          </span>
-                        </li>
-                      ))}
-                      <li className="mt-1 flex justify-between gap-2 border-t border-border pt-1 font-medium">
-                        <span>Totale</span>
-                        <span>
-                          {viewingInvoice.prezzo_totale.toLocaleString("it-IT", {
-                            style: "currency",
-                            currency: "EUR",
-                          })}
-                        </span>
-                      </li>
-                    </ul>
-                  )}
-                </div>
-              </div>
-
-              {viewingInvoice.pagante && resolvedAnagrafica && (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <p className="font-medium">Pagante</p>
-                  <p>
-                    {resolvedAnagrafica.pagante.cognome} {resolvedAnagrafica.pagante.nome}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {resolvedAnagrafica.pagante.via}, {resolvedAnagrafica.pagante.citta}{" "}
-                    {resolvedAnagrafica.pagante.cap}
-                  </p>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
-                    <div>CF: {resolvedAnagrafica.pagante.cf ?? "-"}</div>
-                    <div>P.IVA: {resolvedAnagrafica.pagante.piva ?? "-"}</div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewingPayer(viewingInvoice.pagante)}
-                  >
-                    Vedi dettagli pagante
-                  </Button>
-                </div>
-              )}
-
-              {viewingInvoice.paziente && resolvedAnagrafica && (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <p className="font-medium">Paziente</p>
-                  <p>
-                    {resolvedAnagrafica.paziente.cognome} {resolvedAnagrafica.paziente.nome}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // Usa la relazione già caricata sulla fattura, non
-                      // l'elenco `patients` (filtrato sugli attivi): se il
-                      // paziente è stato archiviato dopo l'emissione, non
-                      // comparirebbe in quell'elenco e il bottone non
-                      // aprirebbe nulla. Stesso pattern già usato sopra per
-                      // "Vedi dettagli pagante" (viewingInvoice.pagante).
-                      if (!viewingInvoice.paziente) return;
-                      setViewingPatient({
-                        ...viewingInvoice.paziente,
-                        pagante: viewingInvoice.pagante,
-                      });
-                    }}
-                  >
-                    Vedi dettagli paziente
-                  </Button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Importo</p>
-                  <p className="font-medium">
-                    {getTotaleConBollo(
-                      viewingInvoice.prezzo_totale,
-                      viewingInvoice.bolloCodice
-                    ).toLocaleString("it-IT", {
-                      style: "currency",
-                      currency: "EUR",
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Modalità</p>
-                  <p className="font-medium">{viewingInvoice.mod_pag}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm text-muted-foreground">Marca da bollo</p>
-                {viewingInvoice.bolloCodice ? (
-                  <p className="font-medium">{viewingInvoice.bolloCodice}</p>
-                ) : viewingInvoice.prezzo_totale > SOGLIA_BOLLO ? (
-                  <p className="flex items-center gap-1.5 font-medium text-amber-600">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    Dovuta, codice non ancora inserito
-                  </p>
-                ) : (
-                  <p className="font-medium">Non dovuta</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Sedute</p>
-                  <p className="font-medium">{viewingInvoice.sedute ?? "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Commento</p>
-                  <p className="font-medium">{viewingInvoice.commento ?? "-"}</p>
-                </div>
-              </div>
-
-              <div>
-                <Link
-                  href={`/api/invoices/${viewingInvoice.id}/pdf`}
-                  target="_blank"
-                  className={cn(buttonVariants({ variant: "outline" }))}
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Scarica PDF
-                </Link>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        onViewPayer={setViewingPayer}
+        onViewPatient={setViewingPatient}
+      />
 
       <ConfirmDialog
         open={refreshInvoiceId !== null}
