@@ -54,7 +54,7 @@ import type {
 
 // prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
 // (vedi serializeInvoice in lib/data/invoices.ts).
-type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
+export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
   prezzo_totale: number;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante: Pagante | null;
