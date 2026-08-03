@@ -23,16 +23,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { InvoiceForm } from "./invoice-form";
 import { DeleteInvoiceButton } from "./delete-invoice-button";
+import { InvoicesTable } from "./invoices-table";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDateDisplay } from "@/lib/utils/date";
@@ -173,153 +166,23 @@ export function InvoicesManager({
             </p>
           ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-6">
-          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
-                <TableRow>
-                  <TableHead className="w-8">
-                    <input
-                      type="checkbox"
-                      role="checkbox"
-                      ref={selectAllRef}
-                      className="h-4 w-4 rounded border-input"
-                      checked={
-                        invoices.length > 0 &&
-                        invoices.every((i) => selectedIds.has(i.id))
-                      }
-                      onChange={(e) => toggleSelectAll(e.target.checked)}
-                      aria-label="Seleziona tutte le fatture visibili"
-                    />
-                  </TableHead>
-                  <TableHead>N. Fattura</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Pagante</TableHead>
-                  <TableHead>Paziente</TableHead>
-                  <TableHead>Importo</TableHead>
-                  <TableHead>Modalità</TableHead>
-                  <TableHead className="w-32 text-right">Azioni</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        role="checkbox"
-                        className="h-4 w-4 rounded border-input"
-                        checked={selectedIds.has(invoice.id)}
-                        onChange={(e) =>
-                          toggleSelected(invoice.id, e.target.checked)
-                        }
-                        aria-label={`Seleziona fattura ${invoice.n_fattura}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {invoice.n_fattura}
-                    </TableCell>
-                    <TableCell>{formatDateDisplay(invoice.data)}</TableCell>
-                    <TableCell>
-                      {invoice.pagante
-                        ? `${invoice.pagante.cognome} ${invoice.pagante.nome}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {invoice.paziente
-                        ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-1.5">
-                        {getTotaleConBollo(
-                          invoice.prezzo_totale,
-                          invoice.bolloCodice
-                        ).toLocaleString("it-IT", {
-                          style: "currency",
-                          currency: "EUR",
-                        })}
-                        {invoice.prezzo_totale > SOGLIA_BOLLO &&
-                          !invoice.bolloCodice && (
-                            <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
-                              <AlertTriangle
-                                className="h-4 w-4 text-amber-600"
-                                aria-label="Marca da bollo dovuta: codice non ancora inserito"
-                              />
-                            </Tooltip>
-                          )}
-                      </span>
-                    </TableCell>
-                    <TableCell>{invoice.mod_pag}</TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <Tooltip content="Visualizza dettagli fattura">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenView(invoice)}
-                          aria-label="Visualizza dettagli fattura"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Aggiorna layout PDF">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setRefreshError(null);
-                            setRefreshInvoiceId(invoice.id);
-                          }}
-                          aria-label="Aggiorna layout PDF"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Aggiorna anagrafica">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setAnagraficaRefreshError(null);
-                            setAnagraficaRefreshInvoiceId(invoice.id);
-                          }}
-                          aria-label="Aggiorna anagrafica"
-                        >
-                          <IdCard className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Scarica PDF">
-                        <Link
-                          href={`/api/invoices/${invoice.id}/pdf`}
-                          target="_blank"
-                          className={cn(
-                            buttonVariants({ variant: "ghost", size: "icon" })
-                          )}
-                          aria-label="Scarica PDF"
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Link>
-                      </Tooltip>
-                      <Tooltip content="Modifica fattura">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(invoice)}
-                          aria-label="Modifica fattura"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <DeleteInvoiceButton
-                        id={invoice.id}
-                        nFattura={invoice.n_fattura}
-                        anno={invoice.anno}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <InvoicesTable
+            invoices={invoices}
+            selectedIds={selectedIds}
+            selectAllRef={selectAllRef}
+            toggleSelected={toggleSelected}
+            toggleSelectAll={toggleSelectAll}
+            onView={handleOpenView}
+            onOpenRefreshPdf={(invoice) => {
+              setRefreshError(null);
+              setRefreshInvoiceId(invoice.id);
+            }}
+            onOpenRefreshAnagrafica={(invoice) => {
+              setAnagraficaRefreshError(null);
+              setAnagraficaRefreshInvoiceId(invoice.id);
+            }}
+            onEdit={handleOpenEdit}
+          />
 
           <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
             {invoices.map((invoice) => (
