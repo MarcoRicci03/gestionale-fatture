@@ -280,6 +280,7 @@ export function Block({
         className="h-full w-full overflow-hidden"
         style={{
           fontSize: blocco.fontSize,
+          lineHeight: blocco.lineHeight ?? 1,
           textAlign: blocco.align,
           fontFamily: "Helvetica, Arial, sans-serif",
           fontWeight: blocco.fontWeight === "bold" ? 700 : 400,

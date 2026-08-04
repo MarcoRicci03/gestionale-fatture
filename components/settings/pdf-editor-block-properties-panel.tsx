@@ -324,18 +324,36 @@ export function PdfEditorBlockPropertiesPanel({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="fontSize">Dimensione font</Label>
-        <Input
-          id="fontSize"
-          type="number"
-          min={6}
-          max={72}
-          value={selectedBlock.fontSize}
-          onChange={(e) =>
-            updateBlock(selectedBlock.id, { fontSize: clamp(toNumber(e.target.value), 6, 72) })
-          }
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="fontSize">Dimensione font</Label>
+          <Input
+            id="fontSize"
+            type="number"
+            min={6}
+            max={72}
+            value={selectedBlock.fontSize}
+            onChange={(e) =>
+              updateBlock(selectedBlock.id, { fontSize: clamp(toNumber(e.target.value), 6, 72) })
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lineHeight">Interlinea</Label>
+          <Input
+            id="lineHeight"
+            type="number"
+            min={0.5}
+            max={3}
+            step={0.05}
+            value={selectedBlock.lineHeight ?? 1}
+            onChange={(e) =>
+              updateBlock(selectedBlock.id, {
+                lineHeight: clamp(toNumber(e.target.value), 0.5, 3),
+              })
+            }
+          />
+        </div>
       </div>
 
       <div className="space-y-2">

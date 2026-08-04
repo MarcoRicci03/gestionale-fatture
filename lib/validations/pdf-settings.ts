@@ -56,6 +56,7 @@ export const bloccoSchema = z.object({
   width: z.number().int().min(10).max(595),
   height: z.number().int().min(10).max(842),
   fontSize: z.number().int().min(6).max(72),
+  lineHeight: z.number().min(0.5).max(3).optional(),
   align: z.enum(textAlignValues as [TextAlign, ...TextAlign[]]),
   visible: z.boolean(),
   testo: z.string().max(10_000).optional(),

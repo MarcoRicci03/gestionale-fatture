@@ -33,6 +33,8 @@ export type Blocco = {
   width: number;
   height: number;
   fontSize: number;
+  /** Moltiplicatore di interlinea (1 = spaziatura singola). Assente = 1. */
+  lineHeight?: number;
   align: TextAlign;
   visible: boolean;
   /** Solo per tipo 'testo': contenuto con placeholder {{...}} */
@@ -130,6 +132,7 @@ export function isBlocco(value: unknown): value is Blocco {
     typeof v.width === "number" &&
     typeof v.height === "number" &&
     typeof v.fontSize === "number" &&
+    (v.lineHeight === undefined || typeof v.lineHeight === "number") &&
     isTextAlign(v.align) &&
     typeof v.visible === "boolean" &&
     (v.testo === undefined || typeof v.testo === "string") &&

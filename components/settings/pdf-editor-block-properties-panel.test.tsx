@@ -65,6 +65,14 @@ describe("PdfEditorBlockPropertiesPanel", () => {
     expect(updateBlock).toHaveBeenLastCalledWith("xyz", { x: 595 });
   });
 
+  it("cambiare l'interlinea chiama updateBlock con il valore clampato, default 1 se assente", () => {
+    const updateBlock = vi.fn();
+    renderPanel({ selectedBlock: makeBlocco({ id: "xyz" }), updateBlock });
+    expect(screen.getByLabelText("Interlinea")).toHaveValue(1);
+    fireEvent.change(screen.getByLabelText("Interlinea"), { target: { value: "9" } });
+    expect(updateBlock).toHaveBeenLastCalledWith("xyz", { lineHeight: 3 });
+  });
+
   it("il pulsante elimina chiama removeBlock con l'id del blocco selezionato", async () => {
     const removeBlock = vi.fn();
     const user = userEvent.setup();

@@ -109,7 +109,7 @@ export function InvoicePDFDocument({
                 bold: blocco.fontWeight === "bold",
               }),
               color: blocco.color ?? "#000000",
-              lineHeight: 1,
+              lineHeight: blocco.lineHeight ?? 1,
               whiteSpace: "pre-wrap" as const,
               wordWrap: "break-word" as const,
             };
