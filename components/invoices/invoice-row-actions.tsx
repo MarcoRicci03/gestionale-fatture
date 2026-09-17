@@ -23,6 +23,12 @@ export function InvoiceRowActions({
   onRefreshAnagrafica,
   onEdit,
 }: InvoiceRowActionsProps) {
+  const isSentToTs =
+    invoice.stato_ts === "INVIATA" ||
+    invoice.stato_ts === "DA_CANCELLARE_SU_TS";
+  const isInTransmission = invoice.stato_ts === "IN_TRASMISSIONE";
+  const isLocked = isSentToTs || isInTransmission;
+
   return (
     <>
       <Tooltip content="Visualizza dettagli fattura">
@@ -45,15 +51,40 @@ export function InvoiceRowActions({
           <RefreshCw className="h-4 w-4" />
         </Button>
       </Tooltip>
-      <Tooltip content="Aggiorna anagrafica">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onRefreshAnagrafica(invoice)}
-          aria-label="Aggiorna anagrafica"
-        >
-          <IdCard className="h-4 w-4" />
-        </Button>
+      <Tooltip
+        content={
+          isInTransmission
+            ? "Fattura in fase di trasmissione al Sistema TS"
+            : isSentToTs
+            ? "Fattura già inviata al Sistema TS (anagrafica non modificabile)"
+            : "Aggiorna anagrafica"
+        }
+      >
+        {isLocked ? (
+          <span className="inline-flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled
+              aria-label={
+                isInTransmission
+                  ? "Fattura in fase di trasmissione al Sistema TS"
+                  : "Fattura già inviata al Sistema TS (anagrafica non modificabile)"
+              }
+            >
+              <IdCard className="h-4 w-4" />
+            </Button>
+          </span>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRefreshAnagrafica(invoice)}
+            aria-label="Aggiorna anagrafica"
+          >
+            <IdCard className="h-4 w-4" />
+          </Button>
+        )}
       </Tooltip>
       <Tooltip content="Scarica PDF">
         <Link
@@ -65,20 +96,47 @@ export function InvoiceRowActions({
           <FileText className="h-4 w-4" />
         </Link>
       </Tooltip>
-      <Tooltip content="Modifica fattura">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onEdit(invoice)}
-          aria-label="Modifica fattura"
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
+      <Tooltip
+        content={
+          isInTransmission
+            ? "Fattura in fase di trasmissione al Sistema TS (non modificabile)"
+            : isSentToTs
+            ? "Fattura già inviata al Sistema TS (non modificabile)"
+            : "Modifica fattura"
+        }
+      >
+        {isLocked ? (
+          <span className="inline-flex">
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled
+              aria-label={
+                isInTransmission
+                  ? "Fattura in fase di trasmissione al Sistema TS (non modificabile)"
+                  : "Fattura già inviata al Sistema TS (non modificabile)"
+              }
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </span>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onEdit(invoice)}
+            aria-label="Modifica fattura"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
       </Tooltip>
       <DeleteInvoiceButton
         id={invoice.id}
         nFattura={invoice.n_fattura}
         anno={invoice.anno}
+        statoTs={invoice.stato_ts}
+        protocolloTs={invoice.protocollo_ts}
       />
     </>
   );

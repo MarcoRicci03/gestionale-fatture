@@ -10,13 +10,10 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json* ./
-RUN npm ci
-
-# Prisma: schema + config per generare il client
+# Prisma: schema + config per generare il client durante il postinstall di npm ci
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-# (Il generatore di Prisma non ha bisogno di un URL reale durante la build)
-RUN npx prisma generate
+RUN npm ci
 
 # Copia sorgenti e builda Next.js in modalità standalone
 COPY . .
@@ -93,6 +90,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 # a prescindere dall'utente con cui gira il container)
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+
+# Certificati per Sistema TS (es. SanitelCF.cer)
+COPY --from=builder --chown=nextjs:nodejs /app/certs ./certs
 
 USER nextjs
 

@@ -30,7 +30,7 @@ export function InvoicesCardList({
   return (
     <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
       {invoices.map((invoice) => (
-        <li key={invoice.id} className="rounded-lg border p-4 space-y-3">
+        <li key={invoice.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-2">
               <input
@@ -80,7 +80,36 @@ export function InvoicesCardList({
                 ? `${invoice.paziente.cognome} ${invoice.paziente.nome}`
                 : "-"}
             </p>
-            <p>Modalità: {invoice.mod_pag}</p>
+            <div className="flex items-center justify-between">
+              <p>Modalità: {invoice.mod_pag}</p>
+              <div>
+                {invoice.stato_ts === "INVIATA" && (
+                  <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400">
+                    Inviata
+                  </span>
+                )}
+                {invoice.stato_ts === "IN_TRASMISSIONE" && (
+                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                    In trasmissione
+                  </span>
+                )}
+                {invoice.stato_ts === "DA_INVIARE" && (
+                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
+                    Da inviare
+                  </span>
+                )}
+                {invoice.stato_ts === "DA_CANCELLARE_SU_TS" && (
+                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                    Da cancellare
+                  </span>
+                )}
+                {invoice.stato_ts === "ANNULLATA_TS" && (
+                  <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400 line-through">
+                    Annullata
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-1 border-t pt-3">
             <InvoiceRowActions

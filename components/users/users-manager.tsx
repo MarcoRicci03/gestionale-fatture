@@ -67,9 +67,9 @@ export function UsersManager({ users }: UsersManagerProps) {
         <p className="text-muted-foreground">Nessun utente presente.</p>
       ) : (
         <>
-          <div className="hidden rounded-lg border md:block">
+          <div className="hidden rounded-lg border border-border bg-card md:block max-h-[65vh] overflow-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
                   <TableHead>Username</TableHead>
                   <TableHead>Nome</TableHead>
@@ -148,7 +148,7 @@ export function UsersManager({ users }: UsersManagerProps) {
 
           <ul className="space-y-3 md:hidden">
             {users.map((user) => (
-              <li key={user.id} className="rounded-lg border p-4 space-y-3">
+              <li key={user.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium">{user.username}</p>

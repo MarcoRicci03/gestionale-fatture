@@ -9,8 +9,9 @@ import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
 // specifico della lista fatture (`InvoicesManager` e i suoi componenti
 // figli), dove pagante/paziente possono essere `null` (fattura orfana per
 // pagante/paziente archiviato/eliminato).
-export type InvoiceListItem = Omit<Pagamento, "prezzo_totale"> & {
+export type InvoiceListItem = Omit<Pagamento, "prezzo_totale" | "bollo"> & {
   prezzo_totale: number;
+  bollo: number;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante: Pagante | null;
   paziente: Paziente | null;

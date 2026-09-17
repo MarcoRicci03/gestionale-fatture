@@ -513,7 +513,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
               removeBlock={removeBlock}
             />
           ) : (
-            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
               {previewMode
                 ? "Modalità anteprima: il layout viene mostrato con dati di esempio."
                 : selectedIds.size > 1

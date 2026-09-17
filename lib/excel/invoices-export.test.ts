@@ -50,6 +50,15 @@ function baseInvoice(
     pagante: PAGANTE,
     paziente: PAZIENTE,
     mesi: [],
+    stato_ts: "INVIATA",
+    protocollo_ts: null,
+    protocollo_cancellazione_ts: null,
+    data_invio_ts: null,
+    id_TrasmissioneTs: null,
+    flag_opposizione: false,
+    pagamento_tracciato: true,
+    natura_iva: "N2.2",
+    bollo: 0 as unknown as ExportableInvoice["bollo"],
     ...overrides,
   } as ExportableInvoice;
 }
@@ -154,3 +163,74 @@ describe("buildInvoicesWorkbook — colonne bollo_importo / prezzo_totale_con_bo
     expect(sheet.getColumn(3).numFmt).toBe('#,##0.00 "€"');
   });
 });
+
+describe("buildInvoicesWorkbook — colonna stato_ts e gestione ANNULLATA_TS", () => {
+  it("esporta correttamente le etichette per i vari stati TS", async () => {
+    const invDaInviare = baseInvoice({ id: 1, stato_ts: "DA_INVIARE" });
+    const invInviata = baseInvoice({ id: 2, stato_ts: "INVIATA" });
+    const invAnnullata = baseInvoice({ id: 3, stato_ts: "ANNULLATA_TS" });
+
+    const buffer = await buildInvoicesWorkbook(
+      [invDaInviare, invInviata, invAnnullata],
+      ["n_fattura", "stato_ts"]
+    );
+
+    expect(await readCell(buffer, 2, 2)).toBe("Da inviare");
+    expect(await readCell(buffer, 3, 2)).toBe("Inviata");
+    expect(await readCell(buffer, 4, 2)).toBe("Annullata");
+  });
+
+  it("azzera prezzo_totale, bollo_importo e prezzo_totale_con_bollo per ANNULLATA_TS", async () => {
+    const invAnnullata = baseInvoice({
+      prezzo_totale: 150,
+      bolloCodice: "01234567890123",
+      stato_ts: "ANNULLATA_TS",
+    });
+
+    const buffer = await buildInvoicesWorkbook(
+      [invAnnullata],
+      [
+        "prezzo_totale",
+        "bollo_dovuto",
+        "bollo_importo",
+        "prezzo_totale_con_bollo",
+        "stato_ts",
+      ]
+    );
+
+    // prezzo_totale deve essere 0 numerico
+    expect(await readCell(buffer, 2, 1)).toBe(0);
+    // bollo_dovuto indica che è annullata
+    expect(await readCell(buffer, 2, 2)).toBe("No (annullata)");
+    // bollo_importo deve essere 0
+    expect(await readCell(buffer, 2, 3)).toBe(0);
+    // prezzo_totale_con_bollo deve essere 0
+    expect(await readCell(buffer, 2, 4)).toBe(0);
+    // stato_ts deve essere 'Annullata'
+    expect(await readCell(buffer, 2, 5)).toBe("Annullata");
+  });
+
+  it("mantiene gli importi reali per le fatture attive (non ANNULLATA_TS)", async () => {
+    const invAttiva = baseInvoice({
+      prezzo_totale: 150,
+      bolloCodice: "01234567890123",
+      stato_ts: "INVIATA",
+    });
+
+    const buffer = await buildInvoicesWorkbook(
+      [invAttiva],
+      [
+        "prezzo_totale",
+        "bollo_dovuto",
+        "bollo_importo",
+        "prezzo_totale_con_bollo",
+      ]
+    );
+
+    expect(await readCell(buffer, 2, 1)).toBe(150);
+    expect(await readCell(buffer, 2, 2)).toBe("Sì");
+    expect(await readCell(buffer, 2, 3)).toBe(2);
+    expect(await readCell(buffer, 2, 4)).toBe(152);
+  });
+});
+

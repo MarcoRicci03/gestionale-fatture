@@ -91,4 +91,45 @@ describe("invoiceSchema", () => {
     });
     expect(r.success).toBe(true);
   });
+
+  describe("natura_iva", () => {
+    it("imposta 'N2.2' come default quando natura_iva è omessa", () => {
+      const r = invoiceSchema.safeParse({
+        ...base,
+        mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+      });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.natura_iva).toBe("N2.2");
+      }
+    });
+
+    it("accetta 'N2.2' ed 'N4'", () => {
+      const r1 = invoiceSchema.safeParse({
+        ...base,
+        mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+        natura_iva: "N2.2",
+      });
+      expect(r1.success).toBe(true);
+      if (r1.success) expect(r1.data.natura_iva).toBe("N2.2");
+
+      const r2 = invoiceSchema.safeParse({
+        ...base,
+        mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+        natura_iva: "N4",
+      });
+      expect(r2.success).toBe(true);
+      if (r2.success) expect(r2.data.natura_iva).toBe("N4");
+    });
+
+    it("rifiuta stringhe arbitrarie o non consentite per natura_iva", () => {
+      const r = invoiceSchema.safeParse({
+        ...base,
+        mesi: [{ mese: "GENNAIO", prezzo: "10" }],
+        natura_iva: "FOOBAR" as never,
+      });
+      expect(r.success).toBe(false);
+    });
+  });
 });
+

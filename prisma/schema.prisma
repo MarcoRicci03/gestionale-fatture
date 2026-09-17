@@ -40,8 +40,10 @@ model Utente {
   paganti          Pagante[]
   pazienti         Paziente[]
   pagamenti        Pagamento[]
-  impostazioniPdf  ImpostazioniPdf?
-  auditLogs        AuditLog[]
+  impostazioniPdf      ImpostazioniPdf?
+  impostazioniSistemaTs ImpostazioniSistemaTs?
+  trasmissioniTs       TrasmissioneTs[]
+  auditLogs            AuditLog[]
 
   @@map("utenti")
 }
@@ -145,13 +147,31 @@ model Pagamento {
   // gestito con fallback sulle relazioni live in quel caso.
   snapshotAnagrafica  Json?
 
+  // Sistema Tessera Sanitaria (v2.5)
+  stato_ts                    StatoTs         @default(DA_INVIARE)
+  protocollo_ts               String?
+  protocollo_cancellazione_ts String?
+  data_invio_ts               DateTime?
+  // ponytail: relazione 1-a-N con TrasmissioneTs. In caso di reinvio di una fattura scartata,
+  // id_TrasmissioneTs viene sovrascritto con il nuovo lotto e la fattura non apparirà più
+  // nello storico del lotto precedente.
+  // upgrade path: se si vuole conservare la traccia multi-lotto completa di ogni tentativo,
+  // migrare a una tabella ponte N-a-N _FattureTrasmissioni tra Pagamento e TrasmissioneTs.
+  id_TrasmissioneTs           Int?
+  flag_opposizione            Boolean         @default(false)
+  pagamento_tracciato         Boolean         @default(true)
+  natura_iva                  String          @default("N2.2")
+  bollo                       Decimal         @default(0.00) @db.Decimal(5, 2)
+
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
   paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
+  trasmissioneTs      TrasmissioneTs? @relation(fields: [id_TrasmissioneTs], references: [id])
   mesi                FatturaMese[]
 
   @@unique([id_Utente, n_fattura, anno])
   @@index([id_Utente, data])
+  @@index([id_Utente, stato_ts])
   @@unique([id_Utente, bolloCodice])
   // DB-01: mancavano indici sulle foreign key id_Pagante/id_Paziente.
   // Interrogate spesso (getArchivedPayers/getArchivedPatients con
@@ -160,6 +180,7 @@ model Pagamento {
   // indice, Postgres scansiona pagamenti a ogni cancellazione.
   @@index([id_Pagante])
   @@index([id_Paziente])
+  @@index([id_TrasmissioneTs])
   @@map("pagamenti")
 }
 
@@ -244,4 +265,54 @@ model AuditLog {
   // (lib/audit/list-query.ts) fanno seq scan senza questo.
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model ImpostazioniSistemaTs {
+  id                Int      @id @default(autoincrement())
+  id_Utente         Int      @unique
+  username          String
+  passwordEncrypted String
+  pincodeEncrypted  String
+  codiceRegione     String?  @default("000")
+  codiceAsl         String?  @default("000")
+  codiceStruttura   String?
+  naturaIvaDefault  String   @default("N2.2")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  utente            Utente   @relation(fields: [id_Utente], references: [id], onDelete: Cascade)
+
+  @@map("impostazioni_sistema_ts")
+}
+
+model TrasmissioneTs {
+  id                Int         @id @default(autoincrement())
+  id_Utente         Int
+  protocollo        String      @unique
+  nomeFile          String
+  dataInvio         DateTime    @default(now())
+  statoElaborazione String?     // '0' = In elaborazione, '2' = Accolto, '3' = Accolto con segnalazioni, '4'/'5' = Scartato
+  codiceEsito       String?
+  descrizioneEsito  String?
+  numRicevuti       Int?
+  numAccolti        Int?
+  numScartati       Int?
+  pdfRicevuta       Bytes?
+  csvErrori         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  utente            Utente      @relation(fields: [id_Utente], references: [id], onDelete: Cascade)
+  fatture           Pagamento[]
+
+  @@index([id_Utente, dataInvio])
+  @@map("trasmissioni_ts")
+}
+
+enum StatoTs {
+  DA_INVIARE
+  IN_TRASMISSIONE
+  INVIATA
+  DA_CANCELLARE_SU_TS
+  ANNULLATA_TS
 }

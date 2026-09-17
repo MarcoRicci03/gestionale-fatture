@@ -196,9 +196,9 @@ export function PayersManager({
           </p>
         ) : (
           <>
-            <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
+            <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
@@ -249,7 +249,7 @@ export function PayersManager({
 
             <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
               {payers.map((payer) => (
-                <li key={payer.id} className="rounded-lg border p-4 space-y-3">
+                <li key={payer.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
                   <div>
                     <p className="font-medium">
                       {payer.cognome} {payer.nome}
@@ -308,9 +308,9 @@ export function PayersManager({
         </p>
       ) : (
         <>
-          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
+          <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
@@ -354,7 +354,7 @@ export function PayersManager({
 
           <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
             {archivedPayers.map((payer) => (
-              <li key={payer.id} className="rounded-lg border p-4 space-y-3">
+              <li key={payer.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
                 <div>
                   <p className="font-medium">
                     {payer.cognome} {payer.nome}
@@ -455,7 +455,7 @@ export function PayersManager({
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Pazienti associati</p>
                 {viewingPayer.pazienti.length > 0 ? (
                   <ul className="divide-y">

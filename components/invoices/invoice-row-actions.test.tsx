@@ -115,4 +115,65 @@ describe("InvoiceRowActions", () => {
 
     expect(screen.getByText("Digita 9/2025 per confermare")).toBeInTheDocument();
   });
+
+  it("disabilita 'Modifica fattura' se la fattura è INVIATA a Sistema TS", async () => {
+    const onEdit = vi.fn();
+    const invoice = makeInvoice({ stato_ts: "INVIATA" });
+    const user = userEvent.setup();
+    renderActions({ invoice, onEdit });
+
+    const editBtn = screen.getByRole("button", {
+      name: "Fattura già inviata al Sistema TS (non modificabile)",
+    });
+    expect(editBtn).toBeDisabled();
+
+    await user.click(editBtn);
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("disabilita 'Modifica fattura' se la fattura è DA_CANCELLARE_SU_TS", async () => {
+    const onEdit = vi.fn();
+    const invoice = makeInvoice({ stato_ts: "DA_CANCELLARE_SU_TS" });
+    renderActions({ invoice, onEdit });
+
+    const editBtn = screen.getByRole("button", {
+      name: "Fattura già inviata al Sistema TS (non modificabile)",
+    });
+    expect(editBtn).toBeDisabled();
+  });
+
+  it("disabilita 'Aggiorna anagrafica' se la fattura è INVIATA a Sistema TS", async () => {
+    const onRefreshAnagrafica = vi.fn();
+    const invoice = makeInvoice({ stato_ts: "INVIATA" });
+    const user = userEvent.setup();
+    renderActions({ invoice, onRefreshAnagrafica });
+
+    const refreshBtn = screen.getByRole("button", {
+      name: "Fattura già inviata al Sistema TS (anagrafica non modificabile)",
+    });
+    expect(refreshBtn).toBeDisabled();
+
+    await user.click(refreshBtn);
+    expect(onRefreshAnagrafica).not.toHaveBeenCalled();
+  });
+
+  it("disabilita 'Elimina fattura' se la fattura è ANNULLATA_TS", () => {
+    const invoice = makeInvoice({ stato_ts: "ANNULLATA_TS" });
+    renderActions({ invoice });
+
+    const deleteBtn = screen.getByRole("button", {
+      name: "Fattura annullata su Sistema TS (non eliminabile)",
+    });
+    expect(deleteBtn).toBeDisabled();
+  });
+
+  it("disabilita 'Elimina fattura' se la fattura è IN_TRASMISSIONE", () => {
+    const invoice = makeInvoice({ stato_ts: "IN_TRASMISSIONE" as never });
+    renderActions({ invoice });
+
+    const deleteBtn = screen.getByRole("button", {
+      name: "Fattura in fase di trasmissione al Sistema TS (non eliminabile)",
+    });
+    expect(deleteBtn).toBeDisabled();
+  });
 });

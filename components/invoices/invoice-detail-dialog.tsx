@@ -99,7 +99,7 @@ export function InvoiceDetailDialog({
             </div>
 
             {invoice.pagante && resolvedAnagrafica && (
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Pagante</p>
                 <p>
                   {resolvedAnagrafica.pagante.cognome} {resolvedAnagrafica.pagante.nome}
@@ -123,7 +123,7 @@ export function InvoiceDetailDialog({
             )}
 
             {invoice.paziente && resolvedAnagrafica && (
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Paziente</p>
                 <p>
                   {resolvedAnagrafica.paziente.cognome} {resolvedAnagrafica.paziente.nome}

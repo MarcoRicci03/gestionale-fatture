@@ -88,6 +88,9 @@ export const invoiceSchema = z
       ])
       .transform((val) => (val === "" ? undefined : val))
       .optional(),
+    natura_iva: z.enum(["N2.2", "N4"]).default("N2.2").optional(),
+    pagamento_tracciato: z.boolean().optional(),
+    flag_opposizione: z.boolean().default(false).optional(),
   })
   .refine(
     (val) => {

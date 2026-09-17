@@ -55,6 +55,7 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
     invoices: effectiveInvoices.map((invoice) => ({
       ...invoice,
       prezzo_totale: invoice.prezzo_totale.toNumber(),
+      bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
       mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
     })),
     totalCount,
@@ -104,6 +105,7 @@ export async function getInvoiceById(id: number) {
   return {
     ...invoice,
     prezzo_totale: invoice.prezzo_totale.toNumber(),
+    bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
     mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
   };
 }
@@ -206,6 +208,7 @@ export async function getAnnualRevenue(year: number) {
     where: {
       id_Utente: userId,
       data: yearRange(year),
+      stato_ts: { not: "ANNULLATA_TS" },
     },
     _sum: { prezzo_totale: true },
   });
@@ -221,6 +224,7 @@ export async function getMonthlyRevenue(year: number, month: number) {
         gte: new Date(year, month - 1, 1),
         lt: new Date(year, month, 1),
       },
+      stato_ts: { not: "ANNULLATA_TS" },
     },
     _sum: { prezzo_totale: true },
   });
@@ -239,6 +243,7 @@ export async function getLatestInvoices(limit: number) {
   return invoices.map((invoice) => ({
     ...invoice,
     prezzo_totale: invoice.prezzo_totale.toNumber(),
+    bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
     mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
   }));
 }

@@ -41,9 +41,9 @@ export function InvoicesTable({
   onEdit,
 }: InvoicesTableProps) {
   return (
-    <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
+    <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
       <Table>
-        <TableHeader className="sticky top-0 z-10 bg-background">
+        <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
           <TableRow>
             <TableHead className="w-8">
               <input
@@ -65,6 +65,7 @@ export function InvoicesTable({
             <TableHead>Paziente</TableHead>
             <TableHead>Importo</TableHead>
             <TableHead>Modalità</TableHead>
+            <TableHead>Stato TS</TableHead>
             <TableHead className="w-32 text-right">Azioni</TableHead>
           </TableRow>
         </TableHeader>
@@ -118,6 +119,33 @@ export function InvoicesTable({
                 </span>
               </TableCell>
               <TableCell>{invoice.mod_pag}</TableCell>
+              <TableCell>
+                {invoice.stato_ts === "INVIATA" && (
+                  <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400">
+                    Inviata
+                  </span>
+                )}
+                {invoice.stato_ts === "IN_TRASMISSIONE" && (
+                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                    In trasmissione
+                  </span>
+                )}
+                {invoice.stato_ts === "DA_INVIARE" && (
+                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
+                    Da inviare
+                  </span>
+                )}
+                {invoice.stato_ts === "DA_CANCELLARE_SU_TS" && (
+                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                    Da cancellare
+                  </span>
+                )}
+                {invoice.stato_ts === "ANNULLATA_TS" && (
+                  <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400 line-through">
+                    Annullata
+                  </span>
+                )}
+              </TableCell>
               <TableCell className="flex justify-end gap-1">
                 <InvoiceRowActions
                   invoice={invoice}

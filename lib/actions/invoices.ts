@@ -19,8 +19,15 @@ import {
 } from "@/lib/invoices/chronology";
 import { buildSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildInvoiceChangeDiff } from "@/lib/invoices/change-diff";
+import {
+  FATTURA_GIA_INVIATA_TS_ERROR,
+  ANAGRAFICA_FATTURA_TS_ERROR,
+  FATTURA_ANNULLATA_TS_DELETE_ERROR,
+} from "@/lib/invoices/errors";
 import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
+import { annullaFatturaTs } from "./sistema-ts";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
@@ -143,6 +150,9 @@ export async function createInvoice(
     citta,
     cap,
     bolloCodice,
+    natura_iva,
+    pagamento_tracciato,
+    flag_opposizione,
   } = parsed.data;
 
   const relationResult = await validateInvoiceRelations(
@@ -177,6 +187,11 @@ export async function createInvoice(
     new Prisma.Decimal(0)
   );
 
+  const bollo =
+    prezzo_totale.toNumber() > SOGLIA_BOLLO || bolloCodice
+      ? new Prisma.Decimal(IMPORTO_BOLLO)
+      : new Prisma.Decimal(0);
+
   let createdInvoiceId: number;
   try {
     // Lo snapshot del layout PDF viene incluso direttamente nel create (come
@@ -200,6 +215,11 @@ export async function createInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        natura_iva: natura_iva || "N2.2",
+        pagamento_tracciato: pagamento_tracciato ?? (mod_pag !== "CONTANTI"),
+        flag_opposizione: flag_opposizione ?? false,
+        bollo,
+        stato_ts: "DA_INVIARE",
         snapshotAnagrafica: buildSnapshotAnagrafica(
           payer,
           patient
@@ -255,6 +275,7 @@ export async function updateInvoice(
     select: {
       n_fattura: true,
       anno: true,
+      stato_ts: true,
       id_Pagante: true,
       id_Paziente: true,
       data: true,
@@ -271,6 +292,14 @@ export async function updateInvoice(
     return { error: "Fattura non trovata" };
   }
 
+  if (
+    existing.stato_ts === "INVIATA" ||
+    existing.stato_ts === "DA_CANCELLARE_SU_TS" ||
+    existing.stato_ts === "IN_TRASMISSIONE"
+  ) {
+    return { error: FATTURA_GIA_INVIATA_TS_ERROR };
+  }
+
   const {
     id_Pagante,
     id_Paziente,
@@ -283,6 +312,9 @@ export async function updateInvoice(
     citta,
     cap,
     bolloCodice,
+    natura_iva,
+    pagamento_tracciato,
+    flag_opposizione,
   } = parsed.data;
 
   const year = invoiceDate.getFullYear();
@@ -340,6 +372,11 @@ export async function updateInvoice(
     new Prisma.Decimal(0)
   );
 
+  const bollo =
+    prezzo_totale.toNumber() > SOGLIA_BOLLO || bolloCodice
+      ? new Prisma.Decimal(IMPORTO_BOLLO)
+      : new Prisma.Decimal(0);
+
   try {
     await prisma.pagamento.update({
       where: { id, id_Utente: userId },
@@ -356,6 +393,10 @@ export async function updateInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        natura_iva: natura_iva || "N2.2",
+        pagamento_tracciato: pagamento_tracciato ?? (mod_pag !== "CONTANTI"),
+        flag_opposizione: flag_opposizione ?? false,
+        bollo,
         ...(anagraficaCambiata
           ? {
               snapshotAnagrafica: buildSnapshotAnagrafica(
@@ -431,6 +472,30 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   });
   if (!invoice) return { error: "Fattura non trovata" };
 
+  if (invoice.stato_ts === "IN_TRASMISSIONE") {
+    return {
+      error:
+        "La fattura è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
+    };
+  }
+
+  if (invoice.stato_ts === "ANNULLATA_TS") {
+    return {
+      error: FATTURA_ANNULLATA_TS_DELETE_ERROR,
+    };
+  }
+
+  if (invoice.stato_ts === "INVIATA" || invoice.stato_ts === "DA_CANCELLARE_SU_TS") {
+    const cancelResult = await annullaFatturaTs(id);
+    if ("error" in cancelResult) {
+      return { error: cancelResult.error };
+    }
+    revalidatePath("/invoices");
+    revalidatePath("/dashboard");
+    revalidatePath("/sistema-ts");
+    return { success: true };
+  }
+
   const ip = await getClientIp();
 
   try {
@@ -482,6 +547,14 @@ export async function refreshInvoiceAnagrafica(
   });
   if (!invoice) {
     return { error: "Fattura non trovata" };
+  }
+
+  if (
+    invoice.stato_ts === "INVIATA" ||
+    invoice.stato_ts === "DA_CANCELLARE_SU_TS" ||
+    invoice.stato_ts === "IN_TRASMISSIONE"
+  ) {
+    return { error: ANAGRAFICA_FATTURA_TS_ERROR };
   }
 
   try {

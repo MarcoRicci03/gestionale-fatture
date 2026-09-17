@@ -39,6 +39,11 @@ export const AUDIT_ACTIONS = {
   PDF_SETTINGS_REFRESH_LAYOUT: "pdf_settings.refresh_layout",
   INVOICE_EXPORT: "invoice.export",
   INVOICE_ANAGRAFICA_REFRESH: "invoice.anagrafica_refresh",
+  SISTEMA_TS_SETTINGS_UPDATE: "sistema_ts.settings_update",
+  SISTEMA_TS_SEND: "sistema_ts.send",
+  SISTEMA_TS_SYNC: "sistema_ts.sync",
+  SISTEMA_TS_CANCEL: "sistema_ts.cancel",
+  SISTEMA_TS_RESET: "sistema_ts.reset",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -72,4 +77,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.PDF_SETTINGS_REFRESH_LAYOUT]: "Riallineamento layout PDF fattura",
   [AUDIT_ACTIONS.INVOICE_EXPORT]: "Esportazione fatture in Excel",
   [AUDIT_ACTIONS.INVOICE_ANAGRAFICA_REFRESH]: "Aggiornamento anagrafica fattura",
+  [AUDIT_ACTIONS.SISTEMA_TS_SETTINGS_UPDATE]: "Aggiornamento credenziali Sistema TS",
+  [AUDIT_ACTIONS.SISTEMA_TS_SEND]: "Invio lotto spese Sistema TS",
+  [AUDIT_ACTIONS.SISTEMA_TS_SYNC]: "Sincronizzazione esito trasmissione Sistema TS",
+  [AUDIT_ACTIONS.SISTEMA_TS_CANCEL]: "Cancellazione spesa Sistema TS",
+  [AUDIT_ACTIONS.SISTEMA_TS_RESET]: "Ripristino stato fattura Sistema TS",
 };

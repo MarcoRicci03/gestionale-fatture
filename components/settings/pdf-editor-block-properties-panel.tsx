@@ -66,7 +66,7 @@ export function PdfEditorBlockPropertiesPanel({
   removeBlock,
 }: PdfEditorBlockPropertiesPanelProps) {
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="font-medium">{PRESETS[selectedBlock.tipo].label}</h3>
         <div className="flex items-center gap-1">

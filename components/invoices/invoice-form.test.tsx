@@ -124,3 +124,41 @@ describe("InvoiceForm — LOG-02: autocompilazione città/CAP dal pagante", () =
     expect(screen.getByLabelText("CAP")).toHaveValue("00100");
   });
 });
+
+describe("InvoiceForm — Blocco fatture già trasmesse a Sistema TS", () => {
+  it("mostra banner di avviso e disabilita submit per fattura in stato INVIATA", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({ stato_ts: "INVIATA" })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura è già stata trasmessa al Sistema TS/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aggiorna fattura" })
+    ).toBeDisabled();
+  });
+
+  it("mostra banner di avviso e disabilita submit per fattura in stato DA_CANCELLARE_SU_TS", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({ stato_ts: "DA_CANCELLARE_SU_TS" })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura è già stata trasmessa al Sistema TS/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aggiorna fattura" })
+    ).toBeDisabled();
+  });
+});

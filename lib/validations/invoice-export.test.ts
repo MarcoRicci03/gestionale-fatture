@@ -36,4 +36,13 @@ describe("invoiceExportSchema - ramo filters", () => {
     const result = invoiceExportSchema.safeParse({ columns: ["n_fattura"] });
     expect(result.success).toBe(false);
   });
+
+  it("accetta la nuova colonna stato_ts", () => {
+    const result = invoiceExportSchema.safeParse({
+      ids: [1],
+      columns: ["n_fattura", "stato_ts"],
+    });
+    expect(result.success).toBe(true);
+  });
 });
+
