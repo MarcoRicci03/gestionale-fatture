@@ -23,9 +23,10 @@ import { PatientForm } from "./patient-form";
 import { ArchivePatientButton } from "./archive-patient-button";
 import { RestorePatientButton } from "./restore-patient-button";
 import { HardDeletePatientButton } from "./hard-delete-patient-button";
-import { Tooltip } from "@/components/ui/tooltip";
 import { SearchField } from "@/components/ui/search-field";
 import { ListPagination } from "@/components/ui/list-pagination";
+import { SelectionFloatingBar } from "@/components/ui/selection-floating-bar";
+import { useTableSelection } from "@/lib/hooks/use-table-selection";
 import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 import type { Paziente, Pagante } from "@prisma/client";
 import type { ArchivedPatientRow } from "@/lib/data/patients";
@@ -36,12 +37,14 @@ type PatientsManagerProps = {
   patients: ActivePatient[];
   totalCount: number;
   page: number;
+  pageSize?: number;
   payers: Pagante[];
   archivedPatients: ArchivedPatientRow[];
   archivedTotalCount: number;
   archivedPage: number;
   search: string;
 };
+
 
 function formatCurrency(amount: number) {
   return amount.toLocaleString("it-IT", {
@@ -76,6 +79,7 @@ export function PatientsManager({
   patients,
   totalCount,
   page,
+  pageSize = PATIENTS_PAGE_SIZE,
   payers,
   archivedPatients,
   archivedTotalCount,
@@ -95,6 +99,21 @@ export function PatientsManager({
   );
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
 
+  const currentItems = view === "active" ? patients : archivedPatients;
+  const {
+    selectedIds,
+    selectAllRef,
+    toggleSelected,
+    toggleSelectAll,
+    clearSelection,
+  } = useTableSelection({ items: currentItems });
+
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (search !== prevSearch) {
+    setPrevSearch(search);
+    clearSelection();
+  }
+
   // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
   // dello stato più recente verso cui si è navigato, aggiornato
   // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
@@ -102,22 +121,23 @@ export function PatientsManager({
   // debounce di ricerca seguito a ruota da un click di paginazione)
   // leggano entrambe closure stale e la seconda perda silenziosamente la
   // patch della prima.
-  const latestListStateRef = useRef({ search, page, archivedPage });
+  const latestListStateRef = useRef({ search, page, archivedPage, pageSize });
   useEffect(() => {
-    latestListStateRef.current = { search, page, archivedPage };
-  }, [search, page, archivedPage]);
+    latestListStateRef.current = { search, page, archivedPage, pageSize };
+  }, [search, page, archivedPage, pageSize]);
 
-  function navigate(next: { search: string; page: number; archivedPage: number }) {
+  function navigate(next: { search: string; page: number; archivedPage: number; pageSize: number }) {
     latestListStateRef.current = next;
     const params = new URLSearchParams();
     if (next.search) params.set("q", next.search);
     if (next.page > 1) params.set("page", String(next.page));
     if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
+    if (next.pageSize !== PATIENTS_PAGE_SIZE) params.set("pageSize", String(next.pageSize));
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
   const handleSearchChange = (nextSearch: string) => {
-    navigate({ search: nextSearch, page: 1, archivedPage: 1 });
+    navigate({ ...latestListStateRef.current, search: nextSearch, page: 1, archivedPage: 1 });
   };
 
   const handlePageChange = (nextPage: number) => {
@@ -126,6 +146,10 @@ export function PatientsManager({
 
   const handleArchivedPageChange = (nextArchivedPage: number) => {
     navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
+  };
+
+  const handlePageSizeChange = (nextPageSize: number) => {
+    navigate({ ...latestListStateRef.current, page: 1, archivedPage: 1, pageSize: nextPageSize });
   };
 
   const handleOpenNew = () => {
@@ -201,6 +225,20 @@ export function PatientsManager({
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        ref={selectAllRef}
+                        className="h-4 w-4 rounded border-input"
+                        checked={
+                          patients.length > 0 &&
+                          patients.every((p) => selectedIds.has(p.id))
+                        }
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        aria-label="Seleziona tutti i pazienti visibili"
+                      />
+                    </TableHead>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>Pagante</TableHead>
@@ -210,6 +248,18 @@ export function PatientsManager({
                 <TableBody>
                   {patients.map((patient) => (
                     <TableRow key={patient.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          role="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={selectedIds.has(patient.id)}
+                          onChange={(e) =>
+                            toggleSelected(patient.id, e.target.checked)
+                          }
+                          aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         {patient.cognome}
                       </TableCell>
@@ -220,26 +270,24 @@ export function PatientsManager({
                           : "-"}
                       </TableCell>
                       <TableCell className="flex justify-end gap-1">
-                        <Tooltip content="Visualizza dettagli paziente">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenView(patient)}
-                            aria-label="Visualizza dettagli paziente"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Modifica paziente">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenEdit(patient)}
-                            aria-label="Modifica paziente"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </Tooltip>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenView(patient)}
+                          title="Visualizza dettagli paziente"
+                          aria-label="Visualizza dettagli paziente"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(patient)}
+                          title="Modifica paziente"
+                          aria-label="Modifica paziente"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <ArchivePatientButton id={patient.id} />
                       </TableCell>
                     </TableRow>
@@ -251,38 +299,48 @@ export function PatientsManager({
             <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
               {patients.map((patient) => (
                 <li key={patient.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                  <div>
-                    <p className="font-medium">
-                      {patient.cognome} {patient.nome}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Pagante:{" "}
-                      {patient.pagante
-                        ? `${patient.pagante.cognome} ${patient.pagante.nome}`
-                        : "-"}
-                    </p>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      checked={selectedIds.has(patient.id)}
+                      onChange={(e) =>
+                        toggleSelected(patient.id, e.target.checked)
+                      }
+                      aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                    />
+                    <div>
+                      <p className="font-medium">
+                        {patient.cognome} {patient.nome}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Pagante:{" "}
+                        {patient.pagante
+                          ? `${patient.pagante.cognome} ${patient.pagante.nome}`
+                          : "-"}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 border-t pt-3">
-                    <Tooltip content="Visualizza dettagli paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(patient)}
-                        aria-label="Visualizza dettagli paziente"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(patient)}
-                        aria-label="Modifica paziente"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(patient)}
+                      title="Visualizza dettagli paziente"
+                      aria-label="Visualizza dettagli paziente"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(patient)}
+                      title="Modifica paziente"
+                      aria-label="Modifica paziente"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <ArchivePatientButton id={patient.id} />
                   </div>
                 </li>
@@ -293,11 +351,13 @@ export function PatientsManager({
               <ListPagination
                 page={page}
                 totalCount={totalCount}
-                pageSize={PATIENTS_PAGE_SIZE}
+                pageSize={pageSize}
                 itemLabel="pazienti"
                 onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
               />
             </div>
+
           </>
         )
       ) : archivedTotalCount === 0 ? (
@@ -312,6 +372,20 @@ export function PatientsManager({
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      ref={selectAllRef}
+                      className="h-4 w-4 rounded border-input"
+                      checked={
+                        archivedPatients.length > 0 &&
+                        archivedPatients.every((p) => selectedIds.has(p.id))
+                      }
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      aria-label="Seleziona tutti i pazienti visibili"
+                    />
+                  </TableHead>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Pagante</TableHead>
@@ -322,6 +396,18 @@ export function PatientsManager({
               <TableBody>
                 {archivedPatients.map((patient) => (
                   <TableRow key={patient.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={selectedIds.has(patient.id)}
+                        onChange={(e) =>
+                          toggleSelected(patient.id, e.target.checked)
+                        }
+                        aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       {patient.cognome}
                     </TableCell>
@@ -351,21 +437,33 @@ export function PatientsManager({
           <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
             {archivedPatients.map((patient) => (
               <li key={patient.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div>
-                  <p className="font-medium">
-                    {patient.cognome} {patient.nome}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Pagante: {payerLabel(patient.pagante)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {invoiceImpactLabel(patient) ?? "Nessuna fattura collegata"}
-                  </p>
-                  {hardDeleteBlockReason(patient) && (
-                    <p className="text-sm text-destructive">
-                      {hardDeleteBlockReason(patient)}
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    role="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-input"
+                    checked={selectedIds.has(patient.id)}
+                    onChange={(e) =>
+                      toggleSelected(patient.id, e.target.checked)
+                    }
+                    aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                  />
+                  <div>
+                    <p className="font-medium">
+                      {patient.cognome} {patient.nome}
                     </p>
-                  )}
+                    <p className="text-sm text-muted-foreground">
+                      Pagante: {payerLabel(patient.pagante)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {invoiceImpactLabel(patient) ?? "Nessuna fattura collegata"}
+                    </p>
+                    {hardDeleteBlockReason(patient) && (
+                      <p className="text-sm text-destructive">
+                        {hardDeleteBlockReason(patient)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 border-t pt-3">
                   <RestorePatientButton id={patient.id} />
@@ -382,13 +480,20 @@ export function PatientsManager({
             <ListPagination
               page={archivedPage}
               totalCount={archivedTotalCount}
-              pageSize={PATIENTS_PAGE_SIZE}
-              itemLabel="pazienti"
+              pageSize={pageSize}
+              itemLabel="pazienti archiviati"
               onPageChange={handleArchivedPageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
+
         </>
       )}
+      <SelectionFloatingBar
+        count={selectedIds.size}
+        totalLabel={`${selectedIds.size} ${selectedIds.size === 1 ? "elemento selezionato in totale" : "elementi selezionati in totale"}`}
+        onClear={clearSelection}
+      />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

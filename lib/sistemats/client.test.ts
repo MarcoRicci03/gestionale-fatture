@@ -120,3 +120,172 @@ describe("SistemaTsClient — scaricaDettaglioErrori encoding", () => {
     }
   });
 });
+
+describe("SistemaTsClient — Retry Policy (H4)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  it("esegue retry con successo dopo un errore temporaneo di rete (es. fetch failed)", async () => {
+    let callCount = 0;
+    const okSoapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <esito>
+          <protocollo>PROT_RETRY_OK</protocollo>
+          <codice>0</codice>
+          <descrizione>Acquisito</descrizione>
+        </esito>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new TypeError("fetch failed: ECONNRESET");
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => okSoapResponse,
+      };
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(true);
+    expect(res.protocollo).toBe("PROT_RETRY_OK");
+  });
+
+  it("esegue retry con successo dopo un timeout (TimeoutError)", async () => {
+    let callCount = 0;
+    const okSoapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <esito>
+          <stato>2</stato>
+          <descrizione>Accolto</descrizione>
+        </esito>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
+        const err = new Error("The operation was aborted due to timeout");
+        err.name = "TimeoutError";
+        throw err;
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => okSoapResponse,
+      };
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
+    const res = await client.interrogaEsito("PROT_TIMEOUT_RETRY");
+
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(true);
+    expect(res.statoElaborazione).toBe("2");
+  });
+
+  it("esegue retry con successo su errore HTTP 503 Service Unavailable", async () => {
+    let callCount = 0;
+    const okSoapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <esito>
+          <pdf>${Buffer.from("fake-pdf").toString("base64")}</pdf>
+        </esito>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () => "Service Unavailable",
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => okSoapResponse,
+      };
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
+    const res = await client.scaricaRicevutaPdf("PROT_503_RETRY");
+
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(true);
+    expect(res.pdfBuffer).toBeDefined();
+  });
+
+  it("non esegue retry su SOAP Fault applicativo (HTTP 500 con faultstring)", async () => {
+    let callCount = 0;
+    const soapFaultResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <soapenv:Fault>
+          <faultcode>soapenv:Server</faultcode>
+          <faultstring>Credenziali non valide o utente bloccato</faultstring>
+        </soapenv:Fault>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      return {
+        ok: false,
+        status: 500,
+        text: async () => soapFaultResponse,
+      };
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    // CRITICO: un errore applicativo non deve essere ritentato!
+    expect(callCount).toBe(1);
+    expect(res.success).toBe(false);
+    expect(res.errorMessage).toContain("Credenziali non valide o utente bloccato");
+  });
+
+  it("si arrende e restituisce errore formattato se i tentativi massimi vengono esauriti", async () => {
+    let callCount = 0;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      throw new TypeError("fetch failed: Connection reset by peer");
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    // 1 tentativo iniziale + 2 retry = 3 chiamate totali
+    expect(callCount).toBe(3);
+    expect(res.success).toBe(false);
+    expect(res.errorMessage).toContain("Connection reset by peer");
+  });
+
+  it("rispetta maxRetries = 0 disabilitando i tentativi successivi", async () => {
+    let callCount = 0;
+
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      throw new TypeError("fetch failed: Connection reset by peer");
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({ ...mockConfig, maxRetries: 0 });
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    expect(callCount).toBe(1);
+    expect(res.success).toBe(false);
+  });
+});

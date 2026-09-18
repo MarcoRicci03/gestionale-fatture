@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { pageSchema } from "@/lib/utils/pagination";
+import { pageSchema, parsePageSize } from "@/lib/utils/pagination";
+import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 
 const searchSchema = z.string().max(200);
 
@@ -16,6 +17,7 @@ export function parsePatientListQuery(raw: RawSearchParams): {
   search: string;
   page: number;
   archivedPage: number;
+  pageSize: number;
 } {
   const parsedSearch = searchSchema.safeParse(firstValue(raw.q));
   const search = parsedSearch.success ? parsedSearch.data : "";
@@ -26,5 +28,8 @@ export function parsePatientListQuery(raw: RawSearchParams): {
   const parsedArchivedPage = pageSchema.safeParse(firstValue(raw.archivedPage));
   const archivedPage = parsedArchivedPage.success ? parsedArchivedPage.data : 1;
 
-  return { search, page, archivedPage };
+  const pageSize = parsePageSize(firstValue(raw.pageSize), PATIENTS_PAGE_SIZE);
+
+  return { search, page, archivedPage, pageSize };
 }
+

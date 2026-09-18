@@ -136,6 +136,9 @@ model Pagamento {
   n_fattura           Int
   anno                Int
   data                DateTime
+  // Data in cui il compenso è stato effettivamente percepito (principio di cassa).
+  // Se NULL, coincide con la data di emissione (`data`).
+  data_pagamento      DateTime?
   citta               String
   cap                 String
   pdfLayoutSnapshot   Json?
@@ -152,12 +155,9 @@ model Pagamento {
   protocollo_ts               String?
   protocollo_cancellazione_ts String?
   data_invio_ts               DateTime?
-  // ponytail: relazione 1-a-N con TrasmissioneTs. In caso di reinvio di una fattura scartata,
-  // id_TrasmissioneTs viene sovrascritto con il nuovo lotto e la fattura non apparirà più
-  // nello storico del lotto precedente.
-  // upgrade path: se si vuole conservare la traccia multi-lotto completa di ogni tentativo,
-  // migrare a una tabella ponte N-a-N _FattureTrasmissioni tra Pagamento e TrasmissioneTs.
-  id_TrasmissioneTs           Int?
+  // Relazione molti-a-molti con TrasmissioneTs tramite tabella ponte _FattureTrasmissioni.
+  // Conserva lo storico completo di ogni trasmissione (invio, reinvio e cancellazione).
+  trasmissioniTs              TrasmissioneTs[] @relation("FattureTrasmissioni")
   flag_opposizione            Boolean         @default(false)
   pagamento_tracciato         Boolean         @default(true)
   natura_iva                  String          @default("N2.2")
@@ -166,7 +166,6 @@ model Pagamento {
   utente              Utente         @relation(fields: [id_Utente], references: [id])
   pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
   paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
-  trasmissioneTs      TrasmissioneTs? @relation(fields: [id_TrasmissioneTs], references: [id])
   mesi                FatturaMese[]
 
   @@unique([id_Utente, n_fattura, anno])
@@ -180,7 +179,6 @@ model Pagamento {
   // indice, Postgres scansiona pagamenti a ogni cancellazione.
   @@index([id_Pagante])
   @@index([id_Paziente])
-  @@index([id_TrasmissioneTs])
   @@map("pagamenti")
 }
 
@@ -303,7 +301,7 @@ model TrasmissioneTs {
   updatedAt         DateTime    @updatedAt
 
   utente            Utente      @relation(fields: [id_Utente], references: [id], onDelete: Cascade)
-  fatture           Pagamento[]
+  fatture           Pagamento[] @relation("FattureTrasmissioni")
 
   @@index([id_Utente, dataInvio])
   @@map("trasmissioni_ts")

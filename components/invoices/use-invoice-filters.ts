@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import type { InvoiceFilters } from "./invoice-filters";
+import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 
 type UseInvoiceFiltersOptions = {
   filters: InvoiceFilters;
+  pageSize?: number;
 };
 
-export function useInvoiceFilters({ filters }: UseInvoiceFiltersOptions) {
+export function useInvoiceFilters({ filters, pageSize = INVOICES_PAGE_SIZE }: UseInvoiceFiltersOptions) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -28,8 +30,16 @@ export function useInvoiceFilters({ filters }: UseInvoiceFiltersOptions) {
     latestFiltersRef.current = filters;
   }, [filters]);
 
-  function navigate(nextFilters: InvoiceFilters, nextPage: number) {
+  const latestPageSizeRef = useRef(pageSize);
+  useEffect(() => {
+    latestPageSizeRef.current = pageSize;
+  }, [pageSize]);
+
+  function navigate(nextFilters: InvoiceFilters, nextPage: number, nextPageSize?: number) {
     latestFiltersRef.current = nextFilters;
+    const effectivePageSize = nextPageSize ?? latestPageSizeRef.current;
+    latestPageSizeRef.current = effectivePageSize;
+
     const params = new URLSearchParams();
     params.set("f", "1");
     if (nextFilters.dataDa) params.set("dataDa", nextFilters.dataDa);
@@ -38,6 +48,9 @@ export function useInvoiceFilters({ filters }: UseInvoiceFiltersOptions) {
     if (nextFilters.modPag) params.set("modPag", nextFilters.modPag);
     if (nextFilters.anno) params.set("anno", nextFilters.anno);
     if (nextPage > 1) params.set("page", String(nextPage));
+    if (effectivePageSize !== INVOICES_PAGE_SIZE) {
+      params.set("pageSize", String(effectivePageSize));
+    }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -53,5 +66,10 @@ export function useInvoiceFilters({ filters }: UseInvoiceFiltersOptions) {
     navigate(latestFiltersRef.current, nextPage);
   };
 
-  return { handleFiltersChange, handleReset, handlePageChange };
+  const handlePageSizeChange = (nextPageSize: number) => {
+    navigate(latestFiltersRef.current, 1, nextPageSize);
+  };
+
+  return { handleFiltersChange, handleReset, handlePageChange, handlePageSizeChange };
 }
+

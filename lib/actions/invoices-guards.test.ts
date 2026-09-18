@@ -33,6 +33,7 @@ import {
   FATTURA_GIA_INVIATA_TS_ERROR,
   ANAGRAFICA_FATTURA_TS_ERROR,
   FATTURA_ANNULLATA_TS_DELETE_ERROR,
+  FATTURA_ANNULLATA_TS_EDIT_ERROR,
 } from "@/lib/invoices/errors";
 
 const validFormData = {
@@ -101,6 +102,30 @@ describe("updateInvoice TS desync protection", () => {
     expect(result).toEqual({ error: FATTURA_GIA_INVIATA_TS_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
+
+  it("blocca l'aggiornamento se la fattura è in stato ANNULLATA_TS", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: 10,
+      n_fattura: 1,
+      anno: 2026,
+      stato_ts: "ANNULLATA_TS",
+      id_Pagante: 1,
+      id_Paziente: 1,
+      data: new Date("2026-01-15"),
+      mod_pag: "BONIFICO",
+      sedute: null,
+      commento: null,
+      citta: "Roma",
+      cap: "00100",
+      bolloCodice: null,
+      mesi: [{ mese: "GENNAIO", prezzo: 100 }],
+    });
+
+    const result = await updateInvoice(10, validFormData);
+
+    expect(result).toEqual({ error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("refreshInvoiceAnagrafica TS desync protection", () => {
@@ -133,6 +158,20 @@ describe("refreshInvoiceAnagrafica TS desync protection", () => {
     const result = await refreshInvoiceAnagrafica(10);
 
     expect(result).toEqual({ error: ANAGRAFICA_FATTURA_TS_ERROR });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("blocca l'aggiornamento dell'anagrafica se la fattura è in stato ANNULLATA_TS", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: 10,
+      stato_ts: "ANNULLATA_TS",
+      pagante: { nome: "Mario", cognome: "Rossi" },
+      paziente: { nome: "Luigi", cognome: "Rossi" },
+    });
+
+    const result = await refreshInvoiceAnagrafica(10);
+
+    expect(result).toEqual({ error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

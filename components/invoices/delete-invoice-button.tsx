@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { deleteInvoice } from "@/lib/actions/invoices";
@@ -40,6 +39,8 @@ export function DeleteInvoiceButton({
     ? "Fattura annullata su Sistema TS (non eliminabile)"
     : null;
 
+  const deleteTitle = isSentToTs ? "Annulla fattura su Sistema TS" : "Elimina fattura";
+
   const handleConfirm = () => {
     startTransition(async () => {
       const result = await deleteInvoice(id);
@@ -54,33 +55,31 @@ export function DeleteInvoiceButton({
   return (
     <>
       {disabledTooltip ? (
-        <Tooltip content={disabledTooltip}>
-          <span className="inline-flex">
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled
-              aria-label={disabledTooltip}
-            >
-              <Trash2 className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </span>
-        </Tooltip>
-      ) : (
-        <Tooltip content={isSentToTs ? "Annulla fattura su Sistema TS" : "Elimina fattura"}>
+        <span className="inline-flex" title={disabledTooltip}>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              setError(null);
-              setConfirmText("");
-              setOpen(true);
-            }}
-            aria-label={isSentToTs ? "Annulla fattura su Sistema TS" : "Elimina fattura"}
+            disabled
+            title={disabledTooltip}
+            aria-label={disabledTooltip}
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-4 w-4 text-muted-foreground" />
           </Button>
-        </Tooltip>
+        </span>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            setError(null);
+            setConfirmText("");
+            setOpen(true);
+          }}
+          title={deleteTitle}
+          aria-label={deleteTitle}
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
       )}
       <ConfirmDialog
         open={open}

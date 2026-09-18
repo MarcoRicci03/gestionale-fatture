@@ -82,9 +82,11 @@ vi.mock("@/lib/prisma", () => ({
       const tx = {
         trasmissioneTs: {
           create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
+          update: (...args: unknown[]) => mockTrasmissioneUpdate(...args),
         },
         pagamento: {
           update: (...args: unknown[]) => mockPagamentoUpdate(...args),
+          updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
         },
       };
       return cb(tx);
@@ -92,12 +94,18 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { annullaFatturaTs, sincronizzaEsitoTrasmissione } from "./sistema-ts";
+import {
+  annullaFatturaTs,
+  sincronizzaEsitoTrasmissione,
+} from "./sistema-ts";
+import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
 import { Prisma } from "@prisma/client";
 
 describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
+    mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   it("crea un record TrasmissioneTs con stato '0' e imposta la fattura su DA_CANCELLARE_SU_TS", async () => {
@@ -108,6 +116,7 @@ describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => 
       anno: 2026,
       data: new Date("2026-02-01"),
       prezzo_totale: new Prisma.Decimal(100),
+      stato_ts: "INVIATA",
       pagamento_tracciato: true,
       natura_iva: "N2.2",
       flag_opposizione: false,
@@ -154,6 +163,74 @@ describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => 
           stato_ts: "DA_CANCELLARE_SU_TS",
           protocollo_cancellazione_ts: "PROT_ANN_12345",
         }),
+      })
+    );
+  });
+
+  it("rifiuta l'annullamento se la fattura è in stato DA_INVIARE", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 43,
+      id_Utente: 1,
+      n_fattura: 8,
+      anno: 2026,
+      stato_ts: "DA_INVIARE",
+    });
+
+    const result = await annullaFatturaTs(43);
+
+    expect(result).toEqual({
+      error:
+        "Non è possibile annullare sul Sistema TS una fattura che non è mai stata trasmessa (stato 'Da Inviare').",
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("rifiuta l'annullamento se la fattura è in stato ANNULLATA_TS", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 44,
+      id_Utente: 1,
+      n_fattura: 9,
+      anno: 2026,
+      stato_ts: "ANNULLATA_TS",
+    });
+
+    const result = await annullaFatturaTs(44);
+
+    expect(result).toEqual({
+      error: "La fattura risulta già annullata sul Sistema TS.",
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("consente l'annullamento se la fattura è in stato DA_CANCELLARE_SU_TS (retry)", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 45,
+      id_Utente: 1,
+      n_fattura: 10,
+      anno: 2026,
+      data: new Date("2026-02-01"),
+      prezzo_totale: new Prisma.Decimal(100),
+      pagamento_tracciato: true,
+      natura_iva: "N2.2",
+      flag_opposizione: false,
+      stato_ts: "DA_CANCELLARE_SU_TS",
+      pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    });
+
+    mockInviaFile.mockResolvedValueOnce({
+      success: true,
+      protocollo: "PROT_ANN_RETRY",
+      codiceEsito: "000",
+      descrizioneEsito: "File inviato con successo",
+    });
+
+    const result = await annullaFatturaTs(45);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: true,
+        protocollo: "PROT_ANN_RETRY",
       })
     );
   });
@@ -278,6 +355,7 @@ describe("sincronizzaEsitoTrasmissione — Scarto intera trasmissione senza CSV"
       id_Utente: 1,
       protocollo: "PROT_SCARTO_4",
       nomeFile: "lotto_dati_spesa_1.zip",
+      fatture: [{ id: 50, n_fattura: 5 }],
     });
 
     mockInterrogaEsito.mockResolvedValueOnce({
@@ -303,11 +381,14 @@ describe("sincronizzaEsitoTrasmissione — Scarto intera trasmissione senza CSV"
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          id: { in: [50] },
           id_Utente: 1,
-          id_TrasmissioneTs: 200,
+          protocollo_ts: "PROT_SCARTO_4",
         }),
         data: {
           stato_ts: "DA_INVIARE",
+          protocollo_ts: null,
+          data_invio_ts: null,
         },
       })
     );
@@ -319,6 +400,7 @@ describe("sincronizzaEsitoTrasmissione — Scarto intera trasmissione senza CSV"
       id_Utente: 1,
       protocollo: "PROT_SCARTO_5",
       nomeFile: "lotto_dati_spesa_2.zip",
+      fatture: [{ id: 51, n_fattura: 6 }],
     });
 
     mockInterrogaEsito.mockResolvedValueOnce({
@@ -343,11 +425,14 @@ describe("sincronizzaEsitoTrasmissione — Scarto intera trasmissione senza CSV"
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
+          id: { in: [51] },
           id_Utente: 1,
-          id_TrasmissioneTs: 201,
+          protocollo_ts: "PROT_SCARTO_5",
         }),
         data: {
           stato_ts: "DA_INVIARE",
+          protocollo_ts: null,
+          data_invio_ts: null,
         },
       })
     );

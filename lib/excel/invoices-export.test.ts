@@ -54,7 +54,6 @@ function baseInvoice(
     protocollo_ts: null,
     protocollo_cancellazione_ts: null,
     data_invio_ts: null,
-    id_TrasmissioneTs: null,
     flag_opposizione: false,
     pagamento_tracciato: true,
     natura_iva: "N2.2",

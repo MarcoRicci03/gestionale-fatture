@@ -10,7 +10,11 @@ import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 import type { Prisma } from "@prisma/client";
 
-function findInvoicesPage(where: Prisma.PagamentoWhereInput, page: number) {
+function findInvoicesPage(
+  where: Prisma.PagamentoWhereInput,
+  page: number,
+  pageSize: number = INVOICES_PAGE_SIZE
+) {
   return prisma.pagamento.findMany({
     where,
     include: { pagante: true, paziente: true, mesi: true },
@@ -21,12 +25,16 @@ function findInvoicesPage(where: Prisma.PagamentoWhereInput, page: number) {
     // criterio univoco, una riga può comparire su due pagine consecutive o
     // sparire del tutto mentre si pagina.
     orderBy: [{ data: "desc" }, { id: "desc" }],
-    skip: (page - 1) * INVOICES_PAGE_SIZE,
-    take: INVOICES_PAGE_SIZE,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 }
 
-export async function getInvoices(filters: InvoiceFilters, page: number) {
+export async function getInvoices(
+  filters: InvoiceFilters,
+  page: number,
+  pageSize: number = INVOICES_PAGE_SIZE
+) {
   const userId = await requireUserId();
   // Nessun filtro su pagante/paziente.archiviato: una fattura è un documento
   // fiscale e resta visibile anche se il pagante o il paziente collegato
@@ -34,7 +42,7 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
   // lib/actions/patients.ts).
   const where = buildInvoiceWhere(userId, filters);
   const [invoices, totalCount] = await Promise.all([
-    findInvoicesPage(where, page),
+    findInvoicesPage(where, page, pageSize),
     prisma.pagamento.count({ where }),
   ]);
 
@@ -47,9 +55,10 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
   // clampa alla pagina valida più vicina e si rifà la query solo in questo
   // caso raro (il percorso comune, `page` già in range, resta una singola
   // query in Promise.all sopra).
-  const clampedPage = Math.min(page, lastValidPage(totalCount, INVOICES_PAGE_SIZE));
+  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
   const effectiveInvoices =
-    clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage);
+    clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage, pageSize);
+
 
   return {
     invoices: effectiveInvoices.map((invoice) => ({

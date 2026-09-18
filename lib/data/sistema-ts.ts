@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
+import { validateImportoSpesa } from "@/lib/sistemats/payload-builder";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { parseDateInput } from "@/lib/utils/date";
+import { parseDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
 import { Prisma, type $Enums } from "@prisma/client";
 
 export interface FatturaTsListItem {
@@ -10,6 +11,11 @@ export interface FatturaTsListItem {
   n_fattura: number;
   anno: number;
   data: Date;
+  data_pagamento?: Date | null;
+  dataEffettiva: Date;
+  isDataFutura: boolean;
+  haAnomalie: boolean;
+  isProntaPerInvio: boolean;
   prezzo_totale: number;
   mod_pag: $Enums.ModalitaPagamento;
   pagamento_tracciato: boolean;
@@ -26,8 +32,11 @@ export interface FatturaTsListItem {
   pazienteNomeCompleto: string;
   cfValido: boolean;
   cfErrore?: string;
+  importoValido: boolean;
+  importoErrore?: string;
   richiedeBollo: boolean;
   bolloMancante: boolean;
+  id_Pagante?: number;
 }
 
 export async function getSistemaTsSettings(userId: number) {
@@ -77,7 +86,10 @@ export async function getFatturePerInvioTs(
       to.setHours(23, 59, 59, 999);
       dataFilter.lte = to;
     }
-    where.data = dataFilter;
+    where.OR = [
+      { data_pagamento: dataFilter },
+      { data_pagamento: null, data: dataFilter },
+    ];
   }
 
   const invoices = await prisma.pagamento.findMany({
@@ -94,14 +106,30 @@ export async function getFatturePerInvioTs(
     const cf = anagrafica.pagante.cf?.trim() ?? null;
     const cfCheck = cf ? validateCodiceFiscale(cf) : { valid: false, error: "Codice Fiscale mancante" };
     const prezzoTotale = inv.prezzo_totale.toNumber();
+    const importoCheck = validateImportoSpesa(prezzoTotale);
     const richiedeBollo = prezzoTotale > SOGLIA_BOLLO;
     const bolloMancante = richiedeBollo && !inv.bolloCodice;
+
+    const cfValido = inv.flag_opposizione ? true : cfCheck.valid;
+    const cfErrore = inv.flag_opposizione ? undefined : cfCheck.error;
+    const importoValido = importoCheck.valid;
+    const importoErrore = importoCheck.error;
+    const haAnomalie = !cfValido || !importoValido;
+
+    const dataEffettiva = inv.data_pagamento ?? inv.data;
+    const isDataFutura = isDataPagamentoFutura(inv.data_pagamento, inv.data);
+    const isProntaPerInvio = inv.stato_ts === "DA_INVIARE" && !isDataFutura && !haAnomalie;
 
     return {
       id: inv.id,
       n_fattura: inv.n_fattura,
       anno: inv.anno,
       data: inv.data,
+      data_pagamento: inv.data_pagamento,
+      dataEffettiva,
+      isDataFutura,
+      haAnomalie,
+      isProntaPerInvio,
       prezzo_totale: prezzoTotale,
       mod_pag: inv.mod_pag,
       pagamento_tracciato: inv.pagamento_tracciato,
@@ -116,20 +144,24 @@ export async function getFatturePerInvioTs(
       paganteNomeCompleto: `${anagrafica.pagante.cognome} ${anagrafica.pagante.nome}`,
       paganteCf: cf,
       pazienteNomeCompleto: `${anagrafica.paziente.cognome} ${anagrafica.paziente.nome}`,
-      cfValido: inv.flag_opposizione ? true : cfCheck.valid,
-      cfErrore: inv.flag_opposizione ? undefined : cfCheck.error,
+      cfValido,
+      cfErrore,
+      importoValido,
+      importoErrore,
       richiedeBollo,
       bolloMancante,
+      id_Pagante: inv.id_Pagante,
     };
   });
 }
 
 import {
   parseCsvErroriTs,
+  getErrorsForInvoice,
   type ErroreDocumentoTs,
 } from "@/lib/sistemats/csv-parser";
 
-export { parseCsvErroriTs, type ErroreDocumentoTs };
+export { parseCsvErroriTs, getErrorsForInvoice, type ErroreDocumentoTs };
 
 export interface FatturaInTrasmissioneItem {
   id: number;
@@ -218,13 +250,13 @@ export async function getStoricoTrasmissioniTs(userId: number) {
   return trasmissioni.map((t) => {
     const isCancellazione = t.nomeFile.startsWith("annulla_");
     const rawFatture = isCancellazione
-      ? cancelledInvoicesByProtocol.get(t.protocollo) || t.fatture
+      ? (t.fatture && t.fatture.length > 0 ? t.fatture : (cancelledInvoicesByProtocol.get(t.protocollo) || []))
       : t.fatture;
 
     const errorsMap = parseCsvErroriTs(t.csvErrori);
 
     const fatture: FatturaInTrasmissioneItem[] = rawFatture.map((f) => {
-      const docErrors = errorsMap.get(String(f.n_fattura)) || [];
+      const docErrors = getErrorsForInvoice(errorsMap, f);
       const hasDuplicateS017 = docErrors.some((e) => e.codiceErrore === "S017");
       const hasScarto = docErrors.some((e) => e.tipo === "ERRORE" && e.codiceErrore !== "S017");
       const hasWarning = docErrors.some((e) => e.tipo === "WARNING");

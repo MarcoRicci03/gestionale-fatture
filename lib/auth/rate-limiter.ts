@@ -11,6 +11,7 @@ export type RateLimitResult = {
 
 export type RateLimiter = {
   consume(key: string): RateLimitResult;
+  reset(key?: string): void;
 };
 
 type WindowRecord = {
@@ -63,6 +64,14 @@ export function createRateLimiter(options: {
 
       record.count += 1;
       return { allowed: true };
+    },
+
+    reset(key?: string): void {
+      if (key !== undefined) {
+        records.delete(key);
+      } else {
+        records.clear();
+      }
     },
   };
 }

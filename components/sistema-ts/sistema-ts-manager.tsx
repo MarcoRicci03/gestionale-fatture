@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -20,7 +20,9 @@ import {
   ChevronUp,
   Ban,
   Search,
+  X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +57,10 @@ import {
   annullaFatturaTs,
   ripristinaFatturaPerReinvio,
 } from "@/lib/actions/sistema-ts";
-import { maskDateInput } from "@/lib/utils/date";
+import { maskDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
+import { SogeiErrorItem } from "./sogei-error-item";
+import { FixInvoiceTsDialog } from "./fix-invoice-ts-dialog";
+import { parseCsvErroriTs, type ErroreDocumentoTs } from "@/lib/sistemats/csv-parser";
 import type { FatturaTsListItem, FatturaInTrasmissioneItem } from "@/lib/data/sistema-ts";
 
 type TrasmissioneItem = {
@@ -149,12 +154,55 @@ export function SistemaTsManager({
   const [dateTo, setDateTo] = useState(filters.dateTo ?? "");
   const [statoFilter, setStatoFilter] = useState(filters.stato ?? "DA_INVIARE");
 
+  useEffect(() => {
+    setDateFrom(filters.dateFrom ?? "");
+    setDateTo(filters.dateTo ?? "");
+    setStatoFilter(filters.stato ?? "DA_INVIARE");
+    setSelectedIds(new Set());
+  }, [filters.dateFrom, filters.dateTo, filters.stato]);
+
   const [isPending, startTransition] = useTransition();
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actionSuccess) return;
+    const timer = setTimeout(() => setActionSuccess(null), 4000);
+    return () => clearTimeout(timer);
+  }, [actionSuccess]);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [actionError]);
+
+  const [fixingInvoice, setFixingInvoice] = useState<FatturaTsListItem | null>(null);
+
+  const otherDraftsCount = useMemo(() => {
+    if (!fixingInvoice || !fixingInvoice.id_Pagante) return 0;
+    return fatture.filter(
+      (f) =>
+        f.id !== fixingInvoice.id &&
+        f.id_Pagante === fixingInvoice.id_Pagante &&
+        f.stato_ts === "DA_INVIARE"
+    ).length;
+  }, [fixingInvoice, fatture]);
+
   const [selectedReportCsv, setSelectedReportCsv] = useState<string | null>(null);
+  const [csvViewMode, setCsvViewMode] = useState<"guide" | "raw">("guide");
+
+  const parsedCsvErrors = useMemo(() => {
+    if (!selectedReportCsv) return [];
+    const map = parseCsvErroriTs(selectedReportCsv);
+    const result: Array<{ numDoc: string; errors: ErroreDocumentoTs[] }> = [];
+    map.forEach((errors, numDoc) => {
+      result.push({ numDoc, errors });
+    });
+    return result;
+  }, [selectedReportCsv]);
   const [cancellingInvoice, setCancellingInvoice] = useState<{
     id: number;
     n_fattura: number;
@@ -287,10 +335,69 @@ export function SistemaTsManager({
     });
   };
 
-  // Filtra selezionabili per lotto invio: solo DA_INVIARE
-  const selectableFatture = useMemo(
+  type ReadinessFilter = "pronte" | "da_correggere" | "future" | "tutte";
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("pronte");
+
+  const isInvoiceFuture = (f: FatturaTsListItem) =>
+    typeof f.isDataFutura === "boolean"
+      ? f.isDataFutura
+      : isDataPagamentoFutura(f.data_pagamento, f.data);
+
+  const isInvoiceWithAnomalies = (f: FatturaTsListItem) =>
+    typeof f.haAnomalie === "boolean"
+      ? f.haAnomalie
+      : !f.cfValido || !f.importoValido;
+
+  const isInvoiceReady = (f: FatturaTsListItem) =>
+    typeof f.isProntaPerInvio === "boolean"
+      ? f.isProntaPerInvio
+      : f.stato_ts === "DA_INVIARE" && !isInvoiceFuture(f) && !isInvoiceWithAnomalies(f);
+
+  // Conteggi e partizionamento per le pillole quando lo stato è DA_INVIARE
+  const daInviareFatture = useMemo(
     () => fatture.filter((f) => f.stato_ts === "DA_INVIARE"),
     [fatture]
+  );
+
+  const pronteFatture = useMemo(
+    () => daInviareFatture.filter(isInvoiceReady),
+    [daInviareFatture]
+  );
+
+  // Precedenza: anomalie bloccanti (CF errato o importo non valido) hanno priorità assoluta su date future
+  const daCorreggereFatture = useMemo(
+    () => daInviareFatture.filter(isInvoiceWithAnomalies),
+    [daInviareFatture]
+  );
+
+  const futureFatture = useMemo(
+    () => daInviareFatture.filter((f) => !isInvoiceWithAnomalies(f) && isInvoiceFuture(f)),
+    [daInviareFatture]
+  );
+
+  // Fatture visualizzate nella tabella/cards
+  const displayedFatture = useMemo(() => {
+    if (statoFilter !== "DA_INVIARE") {
+      return fatture;
+    }
+    switch (readinessFilter) {
+      case "pronte":
+        return pronteFatture;
+      case "da_correggere":
+        return daCorreggereFatture;
+      case "future":
+        return futureFatture;
+      case "tutte":
+        return daInviareFatture;
+      default:
+        return pronteFatture;
+    }
+  }, [statoFilter, readinessFilter, fatture, pronteFatture, daCorreggereFatture, futureFatture, daInviareFatture]);
+
+  // Selezionabili per lotto invio: solo ed esclusivamente fatture pronte
+  const selectableFatture = useMemo(
+    () => displayedFatture.filter(isInvoiceReady),
+    [displayedFatture]
   );
 
   const allSelectableChecked =
@@ -330,6 +437,16 @@ export function SistemaTsManager({
     [selectedFatture]
   );
 
+  const invalidImportoCount = useMemo(
+    () => selectedFatture.filter((f) => !f.importoValido).length,
+    [selectedFatture]
+  );
+
+  const futureDateCount = useMemo(
+    () => selectedFatture.filter((f) => f.isDataFutura).length,
+    [selectedFatture]
+  );
+
   const handleApplyFilters = () => {
     const params = new URLSearchParams();
     if (dateFrom) params.set("dateFrom", dateFrom);
@@ -342,16 +459,19 @@ export function SistemaTsManager({
     setDateFrom("");
     setDateTo("");
     setStatoFilter("DA_INVIARE");
+    setReadinessFilter("pronte");
+    setSelectedIds(new Set());
     router.push("/sistema-ts?stato=DA_INVIARE");
   };
 
   const handleSendBatch = () => {
-    if (selectedIds.size === 0) return;
+    const idsToSend = selectedFatture.map((f) => f.id);
+    if (idsToSend.length === 0) return;
     setActionError(null);
     setActionSuccess(null);
 
     startTransition(async () => {
-      const result = await inviaLottoFatture(Array.from(selectedIds));
+      const result = await inviaLottoFatture(idsToSend);
       setConfirmModalOpen(false);
       if ("error" in result) {
         setActionError(result.error);
@@ -551,17 +671,46 @@ export function SistemaTsManager({
         </div>
       )}
 
+      {/* Toast notifica in alto a destra (pattern unificato con pdf-editor) */}
       {actionError && (
-        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive" role="alert">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>{actionError}</span>
+        <div
+          role="alert"
+          className={cn(
+            "fixed right-4 top-4 z-50 flex max-w-md items-center gap-2.5 rounded-lg px-4 py-3 text-sm shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-2",
+            "border border-destructive/30 bg-destructive text-destructive-foreground"
+          )}
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1 font-medium">{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="ml-2 -mr-1 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 hover:bg-white/10"
+            aria-label="Chiudi notifica"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
       {actionSuccess && (
-        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-600 dark:text-emerald-400" role="status">
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
-          <span>{actionSuccess}</span>
+        <div
+          role="status"
+          className={cn(
+            "fixed right-4 top-4 z-50 flex max-w-md items-center gap-2.5 rounded-lg px-4 py-3 text-sm shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-2",
+            "bg-emerald-600 text-white dark:bg-emerald-700"
+          )}
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-white" />
+          <span className="flex-1 font-medium">{actionSuccess}</span>
+          <button
+            type="button"
+            onClick={() => setActionSuccess(null)}
+            className="ml-2 -mr-1 rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 hover:bg-white/10"
+            aria-label="Chiudi notifica"
+          >
+            <X className="h-3.5 w-3.5 text-white" />
+          </button>
         </div>
       )}
 
@@ -653,46 +802,128 @@ export function SistemaTsManager({
                   <Filter className="mr-2 h-4 w-4" />
                   Filtra
                 </Button>
-                <Button variant="outline" onClick={handleResetFilters}>
+                <Button variant="outline" onClick={handleResetFilters} aria-label="Azzera filtri" title="Azzera filtri">
                   <RotateCcw className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Action Bar selezione batch */}
-          {selectedIds.size > 0 && (
-            <div className="flex shrink-0 flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold">
-                  {selectedIds.size} {selectedIds.size === 1 ? "fattura selezionata" : "fatture selezionate"} per l&apos;invio
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Totale importo onorari: {formatCurrency(selectedTotalImporto)}
-                  {invalidCfCount > 0 && (
-                    <span className="text-destructive font-medium ml-2">
-                      ({invalidCfCount} con Codice Fiscale errato)
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              <Button
-                onClick={() => setConfirmModalOpen(true)}
-                disabled={isPending || !hasSettings || invalidCfCount > 0}
+          {/* Pillole Rapide di Navigazione quando lo stato è DA_INVIARE */}
+          {statoFilter === "DA_INVIARE" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setReadinessFilter("pronte")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  readinessFilter === "pronte"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                }`}
               >
-                <SendHorizontal className="mr-2 h-4 w-4" />
-                Invia a Sistema TS ({selectedIds.size})
-              </Button>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Pronte all&apos;invio</span>
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.2 text-[11px] ${
+                    readinessFilter === "pronte"
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-background text-foreground"
+                  }`}
+                >
+                  {pronteFatture.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReadinessFilter("da_correggere")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  readinessFilter === "da_correggere"
+                    ? "bg-destructive text-destructive-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                }`}
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Da correggere</span>
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.2 text-[11px] ${
+                    readinessFilter === "da_correggere"
+                      ? "bg-destructive-foreground/20 text-destructive-foreground"
+                      : daCorreggereFatture.length > 0
+                      ? "bg-destructive/15 text-destructive font-semibold"
+                      : "bg-background text-foreground"
+                  }`}
+                >
+                  {daCorreggereFatture.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReadinessFilter("future")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  readinessFilter === "future"
+                    ? "bg-amber-600 text-white shadow-sm dark:bg-amber-700"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                }`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                <span>Incassi futuri</span>
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.2 text-[11px] ${
+                    readinessFilter === "future"
+                      ? "bg-white/20 text-white"
+                      : futureFatture.length > 0
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 font-semibold"
+                      : "bg-background text-foreground"
+                  }`}
+                >
+                  {futureFatture.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReadinessFilter("tutte")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  readinessFilter === "tutte"
+                    ? "bg-secondary text-secondary-foreground shadow-sm ring-1 ring-border"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                }`}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Tutte</span>
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.2 text-[11px] ${
+                    readinessFilter === "tutte"
+                      ? "bg-background text-foreground font-semibold"
+                      : "bg-background text-foreground"
+                  }`}
+                >
+                  {daInviareFatture.length}
+                </span>
+              </button>
             </div>
           )}
 
-          {fatture.length === 0 ? (
+          {displayedFatture.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
               <FileText className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="font-medium text-foreground">Nessuna fattura trovata</p>
+              <p className="font-medium text-foreground">
+                {statoFilter === "DA_INVIARE"
+                  ? readinessFilter === "pronte"
+                    ? "Nessuna fattura pronta per l'invio"
+                    : readinessFilter === "da_correggere"
+                    ? "Nessuna fattura con anomalie da correggere"
+                    : readinessFilter === "future"
+                    ? "Nessuna fattura con data di incasso futura"
+                    : "Nessuna fattura da inviare trovata"
+                  : "Nessuna fattura trovata"}
+              </p>
               <p className="text-sm text-muted-foreground">
-                Non ci sono fatture corrispondenti ai filtri impostati.
+                {statoFilter === "DA_INVIARE" && readinessFilter === "pronte" && (futureFatture.length > 0 || daCorreggereFatture.length > 0)
+                  ? `Ci sono ${futureFatture.length} fatture con incasso futuro e ${daCorreggereFatture.length} con anomalie da correggere.`
+                  : "Non ci sono fatture corrispondenti ai filtri impostati."}
               </p>
             </div>
           ) : (
@@ -708,7 +939,7 @@ export function SistemaTsManager({
                           checked={allSelectableChecked}
                           onChange={toggleSelectAll}
                           disabled={selectableFatture.length === 0}
-                          className="h-4 w-4 rounded border-gray-300"
+                          className="h-4 w-4 rounded border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Seleziona tutte le fatture"
                         />
                       </TableHead>
@@ -724,26 +955,60 @@ export function SistemaTsManager({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fatture.map((f) => {
-                      const isSelectable = f.stato_ts === "DA_INVIARE";
+                    {displayedFatture.map((f) => {
+                      const isFuture = isInvoiceFuture(f);
+                      const hasAnomalies = isInvoiceWithAnomalies(f);
+                      const isReady = isInvoiceReady(f);
+                      const isSelectable = isReady;
+                      const effectiveDate = f.dataEffettiva ?? (f.data_pagamento || f.data);
                       const isSelected = selectedIds.has(f.id);
+                      const checkboxTooltip = !isSelectable
+                        ? hasAnomalies
+                          ? `Non selezionabile: ${f.cfErrore || f.importoErrore || "presenta anomalie da correggere"}`
+                          : isFuture
+                          ? `Non inviabile oggi: la data di incasso (${formatDate(effectiveDate)}) è successiva ad oggi (scarto ministeriale S036)`
+                          : "Non selezionabile per l'invio"
+                        : `Seleziona fattura ${f.n_fattura}`;
 
                       return (
                         <TableRow key={f.id} className={isSelected ? "bg-primary/5" : undefined}>
                           <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={!isSelectable}
-                              onChange={() => toggleSelect(f.id)}
-                              className="h-4 w-4 rounded border-gray-300"
-                              aria-label={`Seleziona fattura ${f.n_fattura}`}
-                            />
+                            <Tooltip content={checkboxTooltip}>
+                              <span className="inline-block">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  disabled={!isSelectable}
+                                  title={!isSelectable ? checkboxTooltip : undefined}
+                                  onChange={() => toggleSelect(f.id)}
+                                  className="h-4 w-4 rounded border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  aria-label={`Seleziona fattura ${f.n_fattura}`}
+                                />
+                              </span>
+                            </Tooltip>
                           </TableCell>
                           <TableCell className="font-medium">
                             {f.n_fattura}/{f.anno}
                           </TableCell>
-                          <TableCell>{formatDate(f.data)}</TableCell>
+                          <TableCell>
+                            <div>{formatDate(f.data)}</div>
+                            {f.data_pagamento && (
+                              <Tooltip content="Data di effettivo incasso (principio di cassa per il 730 precompilato)">
+                                <div className="text-xs text-muted-foreground inline-flex items-center gap-1 cursor-help">
+                                  <span>Incasso:</span>
+                                  <span className="font-medium text-foreground">{formatDate(f.data_pagamento)}</span>
+                                </div>
+                              </Tooltip>
+                            )}
+                            {isFuture && (
+                              <Tooltip content={`Incasso previsto il ${formatDate(effectiveDate)}: successiva ad oggi (scarto ministeriale S036)`}>
+                                <div className="mt-1 inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 cursor-help">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  <span>Data futura</span>
+                                </div>
+                              </Tooltip>
+                            )}
+                          </TableCell>
                           <TableCell>{f.paganteNomeCompleto}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">
@@ -760,7 +1025,14 @@ export function SistemaTsManager({
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(f.prezzo_totale)}
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!f.importoValido && (
+                                <Tooltip content={f.importoErrore || "Importo non conforme per Sistema TS (min 0,01 €, max 99.999,99 €)"}>
+                                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                                </Tooltip>
+                              )}
+                              <span>{formatCurrency(f.prezzo_totale)}</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             {f.richiedeBollo ? (
@@ -782,9 +1054,23 @@ export function SistemaTsManager({
                                 <RefreshCw className="h-3 w-3 animate-spin" /> In trasmissione
                               </span>
                             )}
-                            {f.stato_ts === "DA_INVIARE" && (
-                              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
-                                Da inviare
+                            {f.stato_ts === "DA_INVIARE" && hasAnomalies && (
+                              <Tooltip content={f.cfErrore || f.importoErrore || "Anomalia da correggere prima dell'invio"}>
+                                <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive cursor-help">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" /> Da correggere
+                                </span>
+                              </Tooltip>
+                            )}
+                            {f.stato_ts === "DA_INVIARE" && !hasAnomalies && isFuture && (
+                              <Tooltip content={`Sarà inviabile a partire dal ${formatDate(effectiveDate)}`}>
+                                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400 cursor-help">
+                                  <Clock className="h-3 w-3 shrink-0" /> Incasso futuro
+                                </span>
+                              </Tooltip>
+                            )}
+                            {f.stato_ts === "DA_INVIARE" && isReady && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
+                                <CheckCircle2 className="h-3 w-3 text-blue-600" /> Pronta
                               </span>
                             )}
                             {f.stato_ts === "INVIATA" && (
@@ -846,6 +1132,21 @@ export function SistemaTsManager({
                                 <RotateCcw className="mr-1 h-3 w-3" />
                                 Ripristina
                               </Button>
+                            ) : f.stato_ts === "DA_INVIARE" && (hasAnomalies || isFuture) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                  "h-7 text-xs",
+                                  hasAnomalies
+                                    ? "text-destructive hover:bg-destructive/10"
+                                    : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 border-amber-300 dark:border-amber-800"
+                                )}
+                                onClick={() => setFixingInvoice(f)}
+                                title="Correggi i dati della fattura per Sistema TS"
+                              >
+                                Correggi
+                              </Button>
                             ) : (
                               <span className="text-xs text-muted-foreground">-</span>
                             )}
@@ -859,8 +1160,12 @@ export function SistemaTsManager({
 
               {/* Vista Mobile Cards (lg:hidden) per AGENTS.md */}
               <div className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
-                {fatture.map((f) => {
-                  const isSelectable = f.stato_ts === "DA_INVIARE";
+                {displayedFatture.map((f) => {
+                  const isFuture = isInvoiceFuture(f);
+                  const hasAnomalies = isInvoiceWithAnomalies(f);
+                  const isReady = isInvoiceReady(f);
+                  const isSelectable = isReady;
+                  const effectiveDate = f.dataEffettiva ?? (f.data_pagamento || f.data);
                   const isSelected = selectedIds.has(f.id);
 
                   return (
@@ -872,21 +1177,51 @@ export function SistemaTsManager({
                               type="checkbox"
                               checked={isSelected}
                               disabled={!isSelectable}
+                              title={!isSelectable ? (
+                                hasAnomalies
+                                  ? `Non selezionabile: ${f.cfErrore || f.importoErrore || "presenta anomalie da correggere"}`
+                                  : isFuture
+                                  ? `Non inviabile oggi: la data di incasso (${formatDate(effectiveDate)}) è successiva ad oggi (scarto ministeriale S036)`
+                                  : "Non selezionabile per l'invio"
+                              ) : undefined}
                               onChange={() => toggleSelect(f.id)}
-                              className="h-4 w-4 rounded border-gray-300"
+                              className="h-4 w-4 rounded border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
                             />
                             <span className="font-bold">
                               Fattura #{f.n_fattura}/{f.anno}
                             </span>
                           </div>
-                          <span className="text-sm font-semibold">
-                            {formatCurrency(f.prezzo_totale)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {!f.importoValido && (
+                              <Tooltip content={f.importoErrore || "Importo non conforme per Sistema TS"}>
+                                <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                              </Tooltip>
+                            )}
+                            <span className="text-sm font-semibold">
+                              {formatCurrency(f.prezzo_totale)}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="text-sm">
-                          <p className="text-muted-foreground text-xs">Intestatario</p>
-                          <p className="font-medium">{f.paganteNomeCompleto}</p>
+                        <div className="text-sm flex justify-between items-start">
+                          <div>
+                            <p className="text-muted-foreground text-xs">Intestatario</p>
+                            <p className="font-medium">{f.paganteNomeCompleto}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-muted-foreground text-xs">Data</p>
+                            <p className="font-medium">{formatDate(f.data)}</p>
+                            {f.data_pagamento && (
+                              <p className="text-xs text-muted-foreground">
+                                Incasso: <span className="font-medium text-foreground">{formatDate(f.data_pagamento)}</span>
+                              </p>
+                            )}
+                            {isFuture && (
+                              <p className="text-xs text-amber-700 dark:text-amber-400 font-medium inline-flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Incasso futuro ({formatDate(effectiveDate)})
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between text-xs pt-1 border-t border-border">
@@ -904,8 +1239,18 @@ export function SistemaTsManager({
                                 <RefreshCw className="h-3 w-3 animate-spin" /> In trasmissione
                               </span>
                             )}
-                            {f.stato_ts === "DA_INVIARE" && (
-                              <span className="text-blue-600 font-medium">Da inviare</span>
+                            {f.stato_ts === "DA_INVIARE" && hasAnomalies && (
+                              <span className="text-destructive font-medium inline-flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" /> Da correggere
+                              </span>
+                            )}
+                            {f.stato_ts === "DA_INVIARE" && !hasAnomalies && isFuture && (
+                              <span className="text-amber-600 font-medium inline-flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> Incasso futuro
+                              </span>
+                            )}
+                            {f.stato_ts === "DA_INVIARE" && isReady && (
+                              <span className="text-blue-600 font-medium">Pronta</span>
                             )}
                             {f.stato_ts === "INVIATA" && (
                               <span className="text-emerald-600 font-medium">Inviata</span>
@@ -921,6 +1266,23 @@ export function SistemaTsManager({
                           </div>
                         </div>
 
+                        {f.stato_ts === "DA_INVIARE" && (hasAnomalies || isFuture) && (
+                          <div className="pt-2 flex justify-end border-t border-border">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                "h-7 text-xs w-full",
+                                hasAnomalies
+                                  ? "text-destructive hover:bg-destructive/10"
+                                  : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 border-amber-300 dark:border-amber-800"
+                              )}
+                              onClick={() => setFixingInvoice(f)}
+                            >
+                              Correggi per Sistema TS
+                            </Button>
+                          </div>
+                        )}
                         {(f.stato_ts === "INVIATA" || f.stato_ts === "DA_CANCELLARE_SU_TS") && (
                           <div className="pt-2 flex justify-end border-t border-border">
                             <Button
@@ -975,6 +1337,61 @@ export function SistemaTsManager({
                     </Card>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Action Bar selezione batch flottante in basso */}
+          {selectedFatture.length > 0 && (
+            <div className="pointer-events-none sticky bottom-4 z-30 flex justify-center px-4 w-full">
+              <div className="pointer-events-auto flex w-full max-w-3xl shrink-0 flex-col gap-3 rounded-xl border border-primary/30 bg-card/95 p-4 shadow-2xl backdrop-blur-md sm:flex-row sm:items-center sm:justify-between animate-in fade-in slide-in-from-bottom-2">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {selectedFatture.length} {selectedFatture.length === 1 ? "fattura selezionata" : "fatture selezionate"} per l&apos;invio
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Totale importo onorari: {formatCurrency(selectedTotalImporto)}
+                    {invalidCfCount > 0 && (
+                      <span className="text-destructive font-medium ml-2">
+                        ({invalidCfCount} con Codice Fiscale errato)
+                      </span>
+                    )}
+                    {invalidImportoCount > 0 && (
+                      <span className="text-destructive font-medium ml-2">
+                        ({invalidImportoCount} con importo non valido per TS)
+                      </span>
+                    )}
+                    {futureDateCount > 0 && (
+                      <span className="text-amber-600 font-medium ml-2">
+                        ({futureDateCount} con incasso futuro)
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="h-9 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Deseleziona tutte
+                  </Button>
+                  <Button
+                    onClick={() => setConfirmModalOpen(true)}
+                    disabled={
+                      isPending ||
+                      !hasSettings ||
+                      invalidCfCount > 0 ||
+                      invalidImportoCount > 0 ||
+                      futureDateCount > 0
+                    }
+                  >
+                    <SendHorizontal className="mr-2 h-4 w-4" />
+                    Invia a Sistema TS ({selectedFatture.length})
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -1250,27 +1667,27 @@ export function SistemaTsManager({
                         ) : (
                           <>
                             {/* Desktop Table (hidden md:block) */}
-                            <div className="hidden md:block rounded-md border border-border bg-muted/20">
-                              <Table>
+                            <div className="hidden md:block overflow-x-auto rounded-md border border-border bg-muted/20">
+                              <Table className="w-full">
                                 <TableHeader>
                                   <TableRow className="text-xs">
-                                    <TableHead className="w-24">N. Fattura</TableHead>
-                                    <TableHead className="w-28">Data</TableHead>
-                                    <TableHead>Intestatario</TableHead>
-                                    <TableHead className="text-right w-24">Importo</TableHead>
-                                    <TableHead className="w-48">Esito Sogei</TableHead>
-                                    <TableHead>Segnalazioni / Note</TableHead>
-                                    <TableHead className="text-right w-36">Azioni</TableHead>
+                                    <TableHead className="w-24 shrink-0">N. Fattura</TableHead>
+                                    <TableHead className="w-24 shrink-0">Data</TableHead>
+                                    <TableHead className="min-w-[130px]">Intestatario</TableHead>
+                                    <TableHead className="text-right w-20 shrink-0">Importo</TableHead>
+                                    <TableHead className="w-36 shrink-0">Esito Sogei</TableHead>
+                                    <TableHead className="min-w-[300px]">Segnalazioni / Note</TableHead>
+                                    <TableHead className="text-right w-32 shrink-0">Azioni</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {t.fatture.map((f) => (
                                     <TableRow key={f.id} className="text-xs">
-                                      <TableCell className="font-semibold">
+                                      <TableCell className="font-semibold align-top py-3 shrink-0">
                                         #{f.n_fattura}/{f.anno}
                                       </TableCell>
-                                      <TableCell>{formatDate(f.data)}</TableCell>
-                                      <TableCell>
+                                      <TableCell className="align-top py-3 shrink-0">{formatDate(f.data)}</TableCell>
+                                      <TableCell className="align-top py-3">
                                         <div className="flex flex-col">
                                           <span className="font-medium">{f.paganteNome}</span>
                                           {f.paganteCf && (
@@ -1280,10 +1697,10 @@ export function SistemaTsManager({
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell className="text-right font-medium">
+                                      <TableCell className="text-right font-medium align-top py-3 shrink-0">
                                         {formatCurrency(f.prezzo_totale)}
                                       </TableCell>
-                                      <TableCell>
+                                      <TableCell className="align-top py-3 shrink-0">
                                         <div className="flex flex-col gap-1 items-start">
                                           {renderFatturaEsitoBadge(f.esitoFattura)}
                                           {f.stato_ts === "DA_INVIARE" && (
@@ -1298,37 +1715,12 @@ export function SistemaTsManager({
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell>
+                                      <TableCell className="whitespace-normal align-top py-3 min-w-[300px] max-w-xl">
                                         {f.errori.length > 0 ? (
-                                          <div className="space-y-1">
-                                            {f.errori.map((err, idx) =>
-                                              err.codiceErrore === "S017" ? (
-                                                <div
-                                                  key={idx}
-                                                  className="rounded bg-amber-500/10 p-2 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-300 leading-tight space-y-0.5"
-                                                >
-                                                  <div className="font-bold flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                                                    [S017] Già presente nel Sistema TS
-                                                  </div>
-                                                  <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
-                                                    Questa fattura risultava già acquisita nei server ministeriali del MEF (non inviata da questa sessione). Non occorre reinviarla.
-                                                  </p>
-                                                </div>
-                                              ) : (
-                                                <div
-                                                  key={idx}
-                                                  className={`text-[11px] leading-tight flex items-start gap-1 ${
-                                                    err.tipo === "ERRORE"
-                                                      ? "text-destructive font-medium"
-                                                      : "text-amber-700 dark:text-amber-400"
-                                                  }`}
-                                                >
-                                                  <span className="font-mono font-bold shrink-0">[{err.codiceErrore}]</span>
-                                                  <span>{err.descrizione}</span>
-                                                </div>
-                                              )
-                                            )}
+                                          <div className="space-y-1.5">
+                                            {f.errori.map((err, idx) => (
+                                              <SogeiErrorItem key={idx} error={err} />
+                                            ))}
                                           </div>
                                         ) : f.esitoFattura === "ACCOLTA" ? (
                                           <span className="text-muted-foreground text-[11px]">Nessuna anomalia</span>
@@ -1336,7 +1728,7 @@ export function SistemaTsManager({
                                           <span className="text-muted-foreground text-[11px]">-</span>
                                         )}
                                       </TableCell>
-                                      <TableCell className="text-right">
+                                      <TableCell className="text-right whitespace-nowrap align-top py-3 w-32 shrink-0">
                                         {f.stato_ts === "DA_INVIARE" ? (
                                           <span className="text-[11px] text-muted-foreground">In &ldquo;Da Inviare&rdquo;</span>
                                         ) : f.esitoFattura === "GIA_PRESENTE_TS" ? (
@@ -1432,35 +1824,10 @@ export function SistemaTsManager({
                                     </div>
                                   </div>
                                   {f.errori.length > 0 && (
-                                    <div className="space-y-1 pt-1 border-t border-border">
-                                      {f.errori.map((err, idx) =>
-                                        err.codiceErrore === "S017" ? (
-                                          <div
-                                            key={idx}
-                                            className="rounded bg-amber-500/10 p-2 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-300 leading-tight space-y-0.5"
-                                          >
-                                            <div className="font-bold flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                                              [S017] Già presente nel Sistema TS
-                                            </div>
-                                            <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90">
-                                              Questa fattura risultava già acquisita nei server ministeriali del MEF (non inviata da questa sessione). Non occorre reinviarla.
-                                            </p>
-                                          </div>
-                                        ) : (
-                                          <div
-                                            key={idx}
-                                            className={`text-[11px] leading-tight flex items-start gap-1 ${
-                                              err.tipo === "ERRORE"
-                                                ? "text-destructive font-medium"
-                                                : "text-amber-700 dark:text-amber-400"
-                                            }`}
-                                          >
-                                            <span className="font-mono font-bold shrink-0">[{err.codiceErrore}]</span>
-                                            <span>{err.descrizione}</span>
-                                          </div>
-                                        )
-                                      )}
+                                    <div className="space-y-1.5 pt-1 border-t border-border">
+                                      {f.errori.map((err, idx) => (
+                                        <SogeiErrorItem key={idx} error={err} />
+                                      ))}
                                     </div>
                                   )}
                                   <div className="pt-2 flex justify-end border-t border-border">
@@ -1540,22 +1907,43 @@ export function SistemaTsManager({
           <DialogHeader>
             <DialogTitle>Conferma invio a Sistema TS</DialogTitle>
             <DialogDescription>
-              Stai per trasmettere telematicamente {selectedIds.size} documenti di spesa al
+              Stai per trasmettere telematicamente {selectedFatture.length} documenti di spesa al
               Sistema Tessera Sanitaria (Sogei / MEF).
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-sm">
             <div className="rounded-lg bg-muted p-3 space-y-1 text-xs">
-              <p>• Totale fatture selezionate: <strong>{selectedIds.size}</strong></p>
+              <p>• Totale fatture selezionate: <strong>{selectedFatture.length}</strong></p>
               <p>• Totale onorari: <strong>{formatCurrency(selectedTotalImporto)}</strong></p>
               <p>• Verrà generato un archivio ZIP conforme allo schema <strong>v2.5</strong></p>
               <p>• I Codici Fiscali e il PinCode saranno cifrati con chiave pubblica RSA ministeriale</p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Una volta inviate, le fatture riceveranno un numero di protocollo ufficiale e
-              non potranno essere cancellate se non tramite richiesta telematica di annullamento.
-            </p>
+
+            {/* Box di Conformità Verificata */}
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-50/60 p-3 text-xs dark:bg-emerald-950/20 space-y-1.5 text-emerald-900 dark:text-emerald-300">
+              <div className="flex items-center gap-1.5 font-medium">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Verifiche preventive superate con successo:</span>
+              </div>
+              <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground dark:text-emerald-400/80">
+                <li>Date incasso conformi: tutte le spese hanno data incasso &le; oggi ({formatDate(new Date())}) ex DM 19/10/2020.</li>
+                <li>Dati anagrafici e Codici Fiscali validati (o coperti da opposizione del paziente).</li>
+                <li>Importi conformi ai limiti ministeriali (min 0,01 €, max 99.999,99 €).</li>
+              </ul>
+            </div>
+
+            {/* Alert normativo pre-invio */}
+            <div className="rounded-lg border border-amber-500/20 bg-amber-50/60 p-3 text-xs dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Rilevanza fiscale per il 730 precompilato</p>
+                <p className="text-[11px] text-muted-foreground dark:text-amber-400/80 mt-0.5">
+                  I documenti trasmessi saranno registrati ufficialmente presso l&apos;Agenzia delle Entrate.
+                  Una volta inviate, eventuali modifiche richiederanno una procedura telematica formale di annullamento o reinvio.
+                </p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1596,10 +1984,61 @@ export function SistemaTsManager({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-auto rounded border border-border bg-muted/40 p-3 my-2">
-            <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">
-              {selectedReportCsv}
-            </pre>
+          <div className="flex items-center gap-2 pt-1 border-b pb-2">
+            <Button
+              variant={csvViewMode === "guide" ? "secondary" : "ghost"}
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => setCsvViewMode("guide")}
+            >
+              Guida Anomalie
+            </Button>
+            <Button
+              variant={csvViewMode === "raw" ? "secondary" : "ghost"}
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => setCsvViewMode("raw")}
+            >
+              CSV Originale
+            </Button>
+          </div>
+
+          <div className="flex-1 overflow-auto rounded border border-border bg-muted/40 p-3 my-2 min-h-[160px]">
+            {csvViewMode === "guide" ? (
+              parsedCsvErrors.length > 0 ? (
+                <div className="space-y-3">
+                  {parsedCsvErrors.map(({ numDoc, errors }) => (
+                    <div
+                      key={numDoc}
+                      className="rounded-lg border border-border/80 p-3 space-y-2 bg-background/80"
+                    >
+                      <div className="text-xs font-semibold flex items-center justify-between border-b pb-1.5">
+                        <span className="flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>Fattura Documento N. <span className="font-mono font-bold">{numDoc}</span></span>
+                        </span>
+                        <span className="text-muted-foreground text-[11px]">
+                          {errors.length} {errors.length === 1 ? "segnalazione" : "segnalazioni"}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {errors.map((err, errIdx) => (
+                          <SogeiErrorItem key={errIdx} error={err} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground p-2">
+                  Nessuna riga di errore o segnalazione strutturata rilevata nel file.
+                </p>
+              )
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all leading-relaxed">
+                {selectedReportCsv}
+              </pre>
+            )}
           </div>
 
           <DialogFooter className="flex items-center justify-between sm:justify-between">
@@ -1785,6 +2224,19 @@ export function SistemaTsManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FixInvoiceTsDialog
+        invoice={fixingInvoice}
+        open={fixingInvoice !== null}
+        onOpenChange={(open) => {
+          if (!open) setFixingInvoice(null);
+        }}
+        onSuccess={(msg) => {
+          setActionSuccess(msg ?? "Dati della fattura aggiornati con successo.");
+          router.refresh();
+        }}
+        otherDraftsCount={otherDraftsCount}
+      />
     </div>
   );
 }

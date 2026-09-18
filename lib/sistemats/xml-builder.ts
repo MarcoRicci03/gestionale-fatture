@@ -5,7 +5,7 @@ import type { SpesaSanitariaPayload } from "./types";
 
 const MAX_ZIP_SIZE_BYTES = 5 * 1024 * 1024; // Limite Sogei 5 MB
 
-function escapeXml(unsafe: string): string {
+export function escapeXml(unsafe: string): string {
   return unsafe.replace(/[<>&'"]/g, (c) => {
     switch (c) {
       case "<": return "&lt;";

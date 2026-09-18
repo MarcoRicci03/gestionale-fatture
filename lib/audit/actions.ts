@@ -44,6 +44,7 @@ export const AUDIT_ACTIONS = {
   SISTEMA_TS_SYNC: "sistema_ts.sync",
   SISTEMA_TS_CANCEL: "sistema_ts.cancel",
   SISTEMA_TS_RESET: "sistema_ts.reset",
+  SISTEMA_TS_CORRECTION: "sistema_ts.correction",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -82,4 +83,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.SISTEMA_TS_SYNC]: "Sincronizzazione esito trasmissione Sistema TS",
   [AUDIT_ACTIONS.SISTEMA_TS_CANCEL]: "Cancellazione spesa Sistema TS",
   [AUDIT_ACTIONS.SISTEMA_TS_RESET]: "Ripristino stato fattura Sistema TS",
+  [AUDIT_ACTIONS.SISTEMA_TS_CORRECTION]: "Correzione dati Sistema TS",
 };

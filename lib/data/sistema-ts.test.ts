@@ -141,7 +141,7 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
     );
   });
 
-  it("applica il range di date con gte (inizio giornata) e lte (fine giornata)", async () => {
+  it("applica il range di date con gte (inizio giornata) e lte (fine giornata) secondo il principio di cassa (data_pagamento con fallback su data)", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
     await getFatturePerInvioTs(42, {
@@ -150,16 +150,42 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
     });
 
     const callArgs = mockPagamentoFindMany.mock.calls[0][0];
-    const dataFilter = callArgs.where.data;
+    expect(callArgs.where.OR).toBeDefined();
+    expect(callArgs.where.OR).toHaveLength(2);
 
-    expect(dataFilter.gte).toBeInstanceOf(Date);
-    expect(dataFilter.gte.getHours()).toBe(0);
-    expect(dataFilter.gte.getMinutes()).toBe(0);
+    const [pagamentoFilter, fallbackEmissionFilter] = callArgs.where.OR;
 
-    expect(dataFilter.lte).toBeInstanceOf(Date);
-    expect(dataFilter.lte.getHours()).toBe(23);
-    expect(dataFilter.lte.getMinutes()).toBe(59);
-    expect(dataFilter.lte.getSeconds()).toBe(59);
+    const dataPagFilter = pagamentoFilter.data_pagamento;
+    expect(dataPagFilter.gte).toBeInstanceOf(Date);
+    expect(dataPagFilter.gte.getHours()).toBe(0);
+    expect(dataPagFilter.gte.getMinutes()).toBe(0);
+
+    expect(dataPagFilter.lte).toBeInstanceOf(Date);
+    expect(dataPagFilter.lte.getHours()).toBe(23);
+    expect(dataPagFilter.lte.getMinutes()).toBe(59);
+    expect(dataPagFilter.lte.getSeconds()).toBe(59);
+
+    // Fallback: se data_pagamento è null, filtra sulla data di emissione
+    expect(fallbackEmissionFilter.data_pagamento).toBeNull();
+    const fallbackDataFilter = fallbackEmissionFilter.data;
+    expect(fallbackDataFilter.gte).toEqual(dataPagFilter.gte);
+    expect(fallbackDataFilter.lte).toEqual(dataPagFilter.lte);
+  });
+
+  it("applica solo dateFrom o solo dateTo correttamente nel blocco OR", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([]);
+
+    await getFatturePerInvioTs(42, {
+      dateFrom: "2026-01-01",
+    });
+
+    const callArgs = mockPagamentoFindMany.mock.calls[0][0];
+    expect(callArgs.where.OR).toBeDefined();
+    expect(callArgs.where.OR[0].data_pagamento.gte).toBeInstanceOf(Date);
+    expect(callArgs.where.OR[0].data_pagamento.lte).toBeUndefined();
+    expect(callArgs.where.OR[1].data_pagamento).toBeNull();
+    expect(callArgs.where.OR[1].data.gte).toBeInstanceOf(Date);
+    expect(callArgs.where.OR[1].data.lte).toBeUndefined();
   });
 
   it("mappa correttamente le fatture con validazione CF, calcolo bollo e decimali", async () => {
@@ -257,7 +283,7 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
 
     expect(items).toHaveLength(3);
 
-    // Fattura 1: prezzo > 77.47 senza bolloCodice -> bolloMancante = true, CF valido
+    // Fattura 1: prezzo > 77.47 senza bolloCodice -> bolloMancante = true, CF valido, importo valido
     expect(items[0]).toEqual(
       expect.objectContaining({
         id: 10,
@@ -268,12 +294,17 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
         pazienteNomeCompleto: "Rossi Luigi",
         cfValido: true,
         cfErrore: undefined,
+        importoValido: true,
+        importoErrore: undefined,
         richiedeBollo: true,
         bolloMancante: true,
+        isDataFutura: false,
+        haAnomalie: false,
+        isProntaPerInvio: true,
       })
     );
 
-    // Fattura 2: prezzo <= 77.47, CF non valido
+    // Fattura 2: prezzo <= 77.47, CF non valido, importo valido
     expect(items[1]).toEqual(
       expect.objectContaining({
         id: 20,
@@ -281,12 +312,14 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
         prezzo_totale: 50,
         cfValido: false,
         cfErrore: expect.stringContaining("attesi 16 caratteri"),
+        importoValido: true,
+        importoErrore: undefined,
         richiedeBollo: false,
         bolloMancante: false,
       })
     );
 
-    // Fattura 3: opposizione attiva -> cfValido = true, bollo presente -> bolloMancante = false
+    // Fattura 3: opposizione attiva -> cfValido = true, bollo presente -> bolloMancante = false, importo valido
     expect(items[2]).toEqual(
       expect.objectContaining({
         id: 30,
@@ -295,10 +328,41 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
         flag_opposizione: true,
         cfValido: true,
         cfErrore: undefined,
+        importoValido: true,
+        importoErrore: undefined,
         richiedeBollo: true,
         bolloMancante: false,
       })
     );
+  });
+
+  it("identifica correttamente fatture con importo non valido per Sistema TS (<= 0)", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 99,
+        n_fattura: 99,
+        anno: 2026,
+        data: new Date("2026-03-15"),
+        prezzo_totale: new Prisma.Decimal("0.00"),
+        mod_pag: $Enums.ModalitaPagamento.BONIFICO,
+        pagamento_tracciato: true,
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        bollo: new Prisma.Decimal("0.00"),
+        bolloCodice: null,
+        stato_ts: $Enums.StatoTs.DA_INVIARE,
+        protocollo_ts: null,
+        protocollo_cancellazione_ts: null,
+        data_invio_ts: null,
+        pagante: { nome: "Paolo", cognome: "Gialli", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Paolo", cognome: "Gialli", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+
+    const items = await getFatturePerInvioTs(42);
+    expect(items).toHaveLength(1);
+    expect(items[0].importoValido).toBe(false);
+    expect(items[0].importoErrore).toContain("maggiore di zero");
   });
 });
 
@@ -468,5 +532,72 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
     expect(result[0].fatture[0].esitoFattura).toBe("IN_ELABORAZIONE");
     expect(result[0].fatture[0].paganteNome).toBe("-");
     expect(result[0].fatture[0].paganteCf).toBeNull();
+  });
+
+  it("M2: conserva la stessa fattura nello storico di trasmissioni multiple (reinvio dopo scarto)", async () => {
+    const fatturaCondivisa = {
+      id: 77,
+      n_fattura: 77,
+      anno: 2026,
+      data: new Date("2026-03-01"),
+      prezzo_totale: new Prisma.Decimal("150.00"),
+      stato_ts: $Enums.StatoTs.INVIATA,
+      pagante: { nome: "Chiara", cognome: "Gialli", cf: "GLLCHR85A01H501Y" },
+    };
+
+    // T1: Primo invio scartato per errore S050
+    const t1 = {
+      id: 10,
+      id_Utente: 1,
+      protocollo: "PROT_T1_SCARTATA",
+      nomeFile: "lotto_1.zip",
+      dataInvio: new Date("2026-03-01T10:00:00Z"),
+      statoElaborazione: "3",
+      codiceEsito: "000",
+      descrizioneEsito: "Elaborato con errori",
+      numRicevuti: 1,
+      numAccolti: 0,
+      numScartati: 1,
+      pdfRicevuta: null,
+      csvErrori: "numDoc;codErrore;descrizione;tipo\n77;S050;CF errato;ERRORE",
+      fatture: [fatturaCondivisa],
+    };
+
+    // T2: Reinvio in un secondo lotto accolto con successo
+    const t2 = {
+      id: 11,
+      id_Utente: 1,
+      protocollo: "PROT_T2_ACCOLTA",
+      nomeFile: "lotto_2.zip",
+      dataInvio: new Date("2026-03-02T10:00:00Z"),
+      statoElaborazione: "2",
+      codiceEsito: "000",
+      descrizioneEsito: "Accolto interamente",
+      numRicevuti: 1,
+      numAccolti: 1,
+      numScartati: 0,
+      pdfRicevuta: Buffer.from("pdf"),
+      csvErrori: null,
+      fatture: [fatturaCondivisa],
+    };
+
+    mockTrasmissioneFindMany.mockResolvedValueOnce([t2, t1]);
+
+    const result = await getStoricoTrasmissioniTs(1);
+
+    expect(result).toHaveLength(2);
+
+    // T2 ha la fattura con esito ACCOLTA
+    expect(result[0].protocollo).toBe("PROT_T2_ACCOLTA");
+    expect(result[0].totaleFatture).toBe(1);
+    expect(result[0].fatture[0].id).toBe(77);
+    expect(result[0].fatture[0].esitoFattura).toBe("ACCOLTA");
+
+    // T1 conserva tuttora la fattura con esito SCARTATA e dettaglio errori
+    expect(result[1].protocollo).toBe("PROT_T1_SCARTATA");
+    expect(result[1].totaleFatture).toBe(1);
+    expect(result[1].fatture[0].id).toBe(77);
+    expect(result[1].fatture[0].esitoFattura).toBe("SCARTATA");
+    expect(result[1].fatture[0].errori[0].codiceErrore).toBe("S050");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskDateInput } from "./date";
+import { maskDateInput, isDataPagamentoFutura } from "./date";
 
 describe("maskDateInput", () => {
   it("aggiunge lo slash automaticamente dopo 2 cifre del giorno", () => {
@@ -41,3 +41,30 @@ describe("maskDateInput", () => {
     expect(maskDateInput("", "01/")).toBe("");
   });
 });
+
+describe("isDataPagamentoFutura", () => {
+  const referenceNow = new Date("2026-09-18T14:30:00");
+
+  it("restituisce false se la data di pagamento è nel passato", () => {
+    expect(isDataPagamentoFutura(new Date("2026-09-15"), new Date("2026-09-15"), referenceNow)).toBe(false);
+    expect(isDataPagamentoFutura("2026-09-17", "2026-09-17", referenceNow)).toBe(false);
+  });
+
+  it("restituisce false se la data di pagamento è esattamente oggi", () => {
+    expect(isDataPagamentoFutura(new Date("2026-09-18T10:00:00"), new Date("2026-09-18"), referenceNow)).toBe(false);
+    expect(isDataPagamentoFutura("2026-09-18", "2026-09-18", referenceNow)).toBe(false);
+  });
+
+  it("restituisce true se la data di pagamento è nel futuro (domani o oltre)", () => {
+    expect(isDataPagamentoFutura(new Date("2026-09-19T00:00:00"), new Date("2026-09-18"), referenceNow)).toBe(true);
+    expect(isDataPagamentoFutura("2026-09-22", "2026-09-18", referenceNow)).toBe(true);
+    expect(isDataPagamentoFutura("2026-09-26", "2026-09-18", referenceNow)).toBe(true);
+    expect(isDataPagamentoFutura(new Date("2027-01-01"), new Date("2026-09-18"), referenceNow)).toBe(true);
+  });
+
+  it("fa fallback su dataFattura se dataPagamento è null o undefined", () => {
+    expect(isDataPagamentoFutura(null, new Date("2026-09-17"), referenceNow)).toBe(false);
+    expect(isDataPagamentoFutura(undefined, new Date("2026-09-25"), referenceNow)).toBe(true);
+  });
+});
+

@@ -6,3 +6,6 @@ export const ANAGRAFICA_FATTURA_TS_ERROR =
 
 export const FATTURA_ANNULLATA_TS_DELETE_ERROR =
   "Una fattura annullata sul Sistema TS non può essere eliminata dal gestionale per preservare la numerazione progressiva e la conservazione fiscale.";
+
+export const FATTURA_ANNULLATA_TS_EDIT_ERROR =
+  "La fattura risulta annullata sul Sistema TS. Utilizza la funzione 'Ripristina' dalla sezione Sistema TS prima di modificarla.";

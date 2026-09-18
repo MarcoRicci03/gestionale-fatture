@@ -176,4 +176,34 @@ describe("InvoiceRowActions", () => {
     });
     expect(deleteBtn).toBeDisabled();
   });
+
+  it("disabilita 'Modifica fattura' se la fattura è ANNULLATA_TS", async () => {
+    const onEdit = vi.fn();
+    const invoice = makeInvoice({ stato_ts: "ANNULLATA_TS" });
+    const user = userEvent.setup();
+    renderActions({ invoice, onEdit });
+
+    const editBtn = screen.getByRole("button", {
+      name: "Fattura annullata su Sistema TS: ripristinala prima dalla sezione Sistema TS per modificarla",
+    });
+    expect(editBtn).toBeDisabled();
+
+    await user.click(editBtn);
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("disabilita 'Aggiorna anagrafica' se la fattura è ANNULLATA_TS", async () => {
+    const onRefreshAnagrafica = vi.fn();
+    const invoice = makeInvoice({ stato_ts: "ANNULLATA_TS" });
+    const user = userEvent.setup();
+    renderActions({ invoice, onRefreshAnagrafica });
+
+    const refreshBtn = screen.getByRole("button", {
+      name: "Fattura annullata su Sistema TS: ripristinala prima dalla sezione Sistema TS per aggiornare l'anagrafica",
+    });
+    expect(refreshBtn).toBeDisabled();
+
+    await user.click(refreshBtn);
+    expect(onRefreshAnagrafica).not.toHaveBeenCalled();
+  });
 });

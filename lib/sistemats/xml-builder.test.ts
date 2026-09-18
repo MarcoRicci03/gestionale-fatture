@@ -88,4 +88,24 @@ describe("xml-builder — generazione XML e ZIP v2.5", () => {
     expect(xml).toContain("<flagOpposizione>1</flagOpposizione>");
     expect(xml).not.toContain("<cfCittadino>");
   });
+
+  it("supporta date differenti per dataEmissione e dataPagamento per principio di cassa", () => {
+    const crossYearPayload: SpesaSanitariaPayload = {
+      ...samplePayload,
+      documenti: [
+        {
+          ...samplePayload.documenti[0],
+          idSpesa: {
+            ...samplePayload.documenti[0].idSpesa,
+            dataEmissione: new Date(2025, 11, 30), // 30 Dicembre 2025
+          },
+          dataPagamento: new Date(2026, 0, 5), // 5 Gennaio 2026
+        },
+      ],
+    };
+
+    const xml = buildSistemaTsXml(crossYearPayload, MOCK_CERT);
+    expect(xml).toContain("<dataEmissione>2025-12-30</dataEmissione>");
+    expect(xml).toContain("<dataPagamento>2026-01-05</dataPagamento>");
+  });
 });

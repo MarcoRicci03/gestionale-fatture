@@ -5,29 +5,37 @@ import { buildPatientWhere } from "@/lib/patients/list-query";
 import { lastValidPage } from "@/lib/utils/pagination";
 import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 
-function findPatientsPage(where: Prisma.PazienteWhereInput, page: number) {
+function findPatientsPage(
+  where: Prisma.PazienteWhereInput,
+  page: number,
+  pageSize: number = PATIENTS_PAGE_SIZE
+) {
   return prisma.paziente.findMany({
     where,
     include: { pagante: true },
     // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
     // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * PATIENTS_PAGE_SIZE,
-    take: PATIENTS_PAGE_SIZE,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 }
 
-export async function getPatients(search: string, page: number) {
+export async function getPatients(
+  search: string,
+  page: number,
+  pageSize: number = PATIENTS_PAGE_SIZE
+) {
   const userId = await requireUserId();
   const where = buildPatientWhere(userId, { search, archiviato: false });
   const [patients, totalCount] = await Promise.all([
-    findPatientsPage(where, page),
+    findPatientsPage(where, page, pageSize),
     prisma.paziente.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, PATIENTS_PAGE_SIZE));
+  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
   const effectivePatients =
-    clampedPage === page ? patients : await findPatientsPage(where, clampedPage);
+    clampedPage === page ? patients : await findPatientsPage(where, clampedPage, pageSize);
 
   return { patients: effectivePatients, totalCount, page: clampedPage };
 }
@@ -63,7 +71,8 @@ export type ArchivedPatientRow = Awaited<
 
 function findArchivedPatientsPage(
   where: Prisma.PazienteWhereInput,
-  page: number
+  page: number,
+  pageSize: number = PATIENTS_PAGE_SIZE
 ) {
   return prisma.paziente.findMany({
     where,
@@ -71,25 +80,30 @@ function findArchivedPatientsPage(
       pagante: { select: { id: true, nome: true, cognome: true, archiviato: true } },
     },
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * PATIENTS_PAGE_SIZE,
-    take: PATIENTS_PAGE_SIZE,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 }
 
-export async function getArchivedPatients(search: string, page: number) {
+export async function getArchivedPatients(
+  search: string,
+  page: number,
+  pageSize: number = PATIENTS_PAGE_SIZE
+) {
   const userId = await requireUserId();
   const where = buildPatientWhere(userId, { search, archiviato: true });
 
   const [patients, totalCount] = await Promise.all([
-    findArchivedPatientsPage(where, page),
+    findArchivedPatientsPage(where, page, pageSize),
     prisma.paziente.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, PATIENTS_PAGE_SIZE));
+  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
   const effectivePatients =
     clampedPage === page
       ? patients
-      : await findArchivedPatientsPage(where, clampedPage);
+      : await findArchivedPatientsPage(where, clampedPage, pageSize);
+
 
   if (effectivePatients.length === 0) {
     return { patients: [], totalCount, page: clampedPage };

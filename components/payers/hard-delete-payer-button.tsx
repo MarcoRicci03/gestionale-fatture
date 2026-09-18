@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { hardDeletePayer } from "@/lib/actions/payers";
 
 type HardDeletePayerButtonProps = {
@@ -22,6 +21,7 @@ export function HardDeletePayerButton({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const disabled = !!disabledReason;
+  const title = disabled ? (disabledReason ?? undefined) : "Elimina definitivamente pagante";
 
   const handleConfirm = () => {
     startTransition(async () => {
@@ -43,6 +43,7 @@ export function HardDeletePayerButton({
         setError(null);
         setOpen(true);
       }}
+      title={title}
       aria-label="Elimina definitivamente pagante"
     >
       <Trash2 className="h-4 w-4 text-destructive" />
@@ -51,13 +52,7 @@ export function HardDeletePayerButton({
 
   return (
     <>
-      <Tooltip
-        content={disabled ? disabledReason : "Elimina definitivamente pagante"}
-      >
-        {/* Un pulsante disabled riceve pointer-events:none (button.tsx): il
-            wrapper mantiene il tooltip raggiungibile anche in quel caso. */}
-        {disabled ? <span className="inline-flex">{triggerButton}</span> : triggerButton}
-      </Tooltip>
+      {disabled ? <span className="inline-flex" title={title}>{triggerButton}</span> : triggerButton}
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

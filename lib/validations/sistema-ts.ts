@@ -15,20 +15,37 @@ export const sistemaTsSettingsSchema = z.object({
     .optional(),
   codiceRegione: z
     .string()
-    .max(3, "Il codice regione deve contenere al massimo 3 caratteri")
-    .optional()
-    .transform((val) => (val ? val.trim() : "000")),
+    .nullish()
+    .transform((val) => {
+      const trimmed = val?.trim();
+      return !trimmed ? "000" : trimmed.toUpperCase();
+    })
+    .refine(
+      (val) => /^[A-Z0-9]{3}$/.test(val),
+      "Il codice regione deve essere composto da 3 caratteri alfanumerici (es. '000' o '030')"
+    ),
   codiceAsl: z
     .string()
-    .max(3, "Il codice ASL deve contenere al massimo 3 caratteri")
-    .optional()
-    .transform((val) => (val ? val.trim() : "000")),
+    .nullish()
+    .transform((val) => {
+      const trimmed = val?.trim();
+      return !trimmed ? "000" : trimmed.toUpperCase();
+    })
+    .refine(
+      (val) => /^[A-Z0-9]{3}$/.test(val),
+      "Il codice ASL deve essere composto da 3 caratteri alfanumerici (es. '000' o '101')"
+    ),
   codiceStruttura: z
     .string()
-    .max(20)
-    .optional()
-    .nullable()
-    .transform((val) => (val ? val.trim() : null)),
+    .nullish()
+    .transform((val) => {
+      const trimmed = val?.trim();
+      return !trimmed ? null : trimmed.toUpperCase();
+    })
+    .refine(
+      (val) => val === null || /^[A-Z0-9]{5,6}$/.test(val),
+      "Il codice struttura (SSA) deve contenere 5 o 6 caratteri alfanumerici (es. '12345')"
+    ),
   naturaIvaDefault: z
     .enum(["N2.2", "N4"], {
       message: "Seleziona una natura IVA predefinita valida (N2.2 per forfettario o N4 per esente art. 10)",

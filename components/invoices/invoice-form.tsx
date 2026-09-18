@@ -42,6 +42,7 @@ type InvoiceWithRelations = {
   commento: string | null;
   n_fattura: number;
   data: Date;
+  data_pagamento?: Date | null;
   citta: string;
   cap: string;
   pdfLayoutSnapshot: unknown;
@@ -87,6 +88,12 @@ export function InvoiceForm({
   const [serverError, setServerError] = useState<string | null>(null);
 
   const inv = invoice as InvoiceWithRelations | undefined;
+  const initialCoincide = useMemo(() => {
+    if (!inv?.data_pagamento) return true;
+    return formatDateInput(inv.data_pagamento) === formatDateInput(inv.data);
+  }, [inv]);
+  const [dataPagamentoCoincide, setDataPagamentoCoincide] = useState<boolean>(initialCoincide);
+
   const {
     register,
     handleSubmit,
@@ -99,6 +106,7 @@ export function InvoiceForm({
       id_Pagante: inv?.id_Pagante ?? "",
       id_Paziente: inv?.id_Paziente ?? "",
       data: formatDateInput(inv?.data) || formatDateInput(new Date()),
+      data_pagamento: inv?.data_pagamento ? formatDateInput(inv.data_pagamento) : "",
       mod_pag: inv?.mod_pag ?? "",
       sedute: inv?.sedute ?? "",
       commento: inv?.commento ?? "",
@@ -132,6 +140,7 @@ export function InvoiceForm({
 
   const selectedPayerId = useWatch({ control, name: "id_Pagante" });
   const selectedDate = useWatch({ control, name: "data" });
+  const watchedDataPagamento = useWatch({ control, name: "data_pagamento" });
   const watchedModPag = useWatch({ control, name: "mod_pag" });
 
   useEffect(() => {
@@ -245,10 +254,14 @@ export function InvoiceForm({
 
   const onSubmit = (data: InvoiceFormData) => {
     setServerError(null);
+    const finalData: InvoiceFormData = {
+      ...data,
+      data_pagamento: dataPagamentoCoincide ? null : (data.data_pagamento ?? null),
+    };
     startTransition(async () => {
       const result = invoice
-        ? await updateInvoice(invoice.id, data)
-        : await createInvoice(data);
+        ? await updateInvoice(invoice.id, finalData)
+        : await createInvoice(finalData);
 
       if ("error" in result) {
         setServerError(result.error);
@@ -266,6 +279,9 @@ export function InvoiceForm({
 
   const isTransmitted =
     inv?.stato_ts === "INVIATA" || inv?.stato_ts === "DA_CANCELLARE_SU_TS";
+  const isInTransmission = inv?.stato_ts === "IN_TRASMISSIONE";
+  const isCancelledOnTs = inv?.stato_ts === "ANNULLATA_TS";
+  const isFormLocked = isTransmitted || isInTransmission || isCancelledOnTs;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-3xl space-y-4">
@@ -275,6 +291,22 @@ export function InvoiceForm({
           className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300"
         >
           Questa fattura è già stata trasmessa al Sistema TS (stato: {inv?.stato_ts}). Non può essere modificata direttamente. Per apportare modifiche, annullala prima sul Sistema TS.
+        </div>
+      )}
+      {isInTransmission && (
+        <div
+          role="status"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300"
+        >
+          Questa fattura è attualmente in fase di trasmissione al Sistema TS. Non può essere modificata direttamente.
+        </div>
+      )}
+      {isCancelledOnTs && (
+        <div
+          role="status"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300"
+        >
+          Questa fattura risulta annullata sul Sistema TS (stato: ANNULLATA_TS). Non può essere modificata direttamente. Per apportare modifiche e reinviarla, utilizza la funzione &quot;Ripristina&quot; dalla sezione Sistema TS.
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -300,7 +332,7 @@ export function InvoiceForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="data">Data</Label>
+          <Label htmlFor="data">Data emissione</Label>
           <Input
             id="data"
             type="date"
@@ -318,6 +350,52 @@ export function InvoiceForm({
             <p className="text-sm text-destructive">{errors.data.message}</p>
           )}
         </div>
+      </div>
+
+      {/* Opzione Data di Pagamento (Principio di Cassa) */}
+      <div className="rounded-lg border border-input p-3 space-y-3 bg-muted/10">
+        <label className="flex items-center gap-2 text-sm cursor-pointer font-medium">
+          <input
+            type="checkbox"
+            checked={dataPagamentoCoincide}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setDataPagamentoCoincide(checked);
+              if (checked) {
+                setValue("data_pagamento", "");
+              } else if (!watchedDataPagamento) {
+                setValue(
+                  "data_pagamento",
+                  typeof selectedDate === "string" ? selectedDate : formatDateInput(selectedDate || new Date())
+                );
+              }
+            }}
+            className="h-4 w-4 rounded border-input"
+          />
+          <span>La data di pagamento coincide con la data di emissione</span>
+        </label>
+
+        {!dataPagamentoCoincide && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2 border-t border-border/60">
+            <div className="space-y-2">
+              <Label htmlFor="data_pagamento">Data incasso / pagamento effettivo</Label>
+              <Input
+                id="data_pagamento"
+                type="date"
+                {...register("data_pagamento")}
+                aria-invalid={!!errors.data_pagamento}
+              />
+              {errors.data_pagamento && (
+                <p className="text-sm text-destructive">{errors.data_pagamento.message}</p>
+              )}
+            </div>
+            <div className="flex items-end pb-2">
+              <p className="text-xs text-muted-foreground">
+                In base al <strong>principio di cassa</strong> (D.M. 19/10/2020 - Sistema TS), la detrazione fiscale spetta nell&apos;anno in cui il compenso è stato saldato. La data di pagamento deve essere uguale o successiva alla data di emissione.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -604,7 +682,7 @@ export function InvoiceForm({
         </p>
       )}
 
-      <Button type="submit" disabled={isPending || isTransmitted}>
+      <Button type="submit" disabled={isPending || isFormLocked}>
         {isPending
           ? "Salvataggio..."
           : invoice

@@ -1,9 +1,8 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
-import { Tooltip } from "@/components/ui/tooltip";
-import { formatDateDisplay } from "@/lib/utils/date";
+import { formatDateDisplay, isDataPagamentoFutura } from "@/lib/utils/date";
 import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
 import { InvoiceRowActions } from "./invoice-row-actions";
 import type { InvoiceListItem } from "./types";
@@ -46,6 +45,11 @@ export function InvoicesCardList({
                 <p className="text-sm text-muted-foreground">
                   {formatDateDisplay(invoice.data)}
                 </p>
+                {invoice.data_pagamento && (
+                  <p className="text-xs text-muted-foreground">
+                    Pag: {formatDateDisplay(invoice.data_pagamento)}
+                  </p>
+                )}
               </div>
             </div>
             <span className="flex items-center gap-1.5 font-medium">
@@ -58,12 +62,12 @@ export function InvoicesCardList({
               })}
               {invoice.prezzo_totale > SOGLIA_BOLLO &&
                 !invoice.bolloCodice && (
-                  <Tooltip content="Marca da bollo dovuta: codice non ancora inserito">
+                  <span title="Marca da bollo dovuta: codice non ancora inserito">
                     <AlertTriangle
                       className="h-4 w-4 text-amber-600"
                       aria-label="Marca da bollo dovuta: codice non ancora inserito"
                     />
-                  </Tooltip>
+                  </span>
                 )}
             </span>
           </div>
@@ -93,11 +97,20 @@ export function InvoicesCardList({
                     In trasmissione
                   </span>
                 )}
-                {invoice.stato_ts === "DA_INVIARE" && (
-                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
-                    Da inviare
-                  </span>
-                )}
+                {invoice.stato_ts === "DA_INVIARE" &&
+                  (isDataPagamentoFutura(invoice.data_pagamento, invoice.data) ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400"
+                      title="Incasso futuro: trasmissibile a Sistema TS solo a partire dalla data di incasso"
+                    >
+                      <Clock className="h-3 w-3" />
+                      Da inviare (futura)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 dark:bg-blue-950/30 dark:text-blue-400">
+                      Da inviare
+                    </span>
+                  ))}
                 {invoice.stato_ts === "DA_CANCELLARE_SU_TS" && (
                   <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
                     Da cancellare

@@ -76,7 +76,9 @@ vi.mock("@/lib/prisma", () => ({
           create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
         },
         pagamento: {
+          findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
           updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
+          update: (...args: unknown[]) => mockPagamentoUpdate(...args),
         },
       };
       return cb(tx);
@@ -89,6 +91,7 @@ import {
   annullaFatturaTs,
   ripristinaFatturaPerReinvio,
 } from "./sistema-ts";
+import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
 import { Prisma } from "@prisma/client";
 
 function createMockInvoice(id: number, nFattura: number, statoTs = "DA_INVIARE") {
@@ -120,6 +123,7 @@ function createMockInvoice(id: number, nFattura: number, statoTs = "DA_INVIARE")
 describe("Sistema TS Concurrency Lock & State Transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
     mockPagamentoUpdateMany.mockResolvedValue({ count: 2 });
     mockInviaFile.mockResolvedValue({
       success: true,
@@ -193,12 +197,6 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
   });
 
   it("Collisione di concorrenza: se un'altra chiamata ha già acquisito il lock, abortisce senza chiamare Sogei", async () => {
-    const mockInvoices = [
-      createMockInvoice(101, 1),
-      createMockInvoice(102, 2),
-    ];
-    mockPagamentoFindMany.mockResolvedValueOnce(mockInvoices);
-
     // Simulazione di collisione: l'update atomico aggiorna 0 righe perché un'altra richiesta le ha già passate a IN_TRASMISSIONE
     mockPagamentoUpdateMany
       .mockResolvedValueOnce({ count: 0 }) // 1st call: stale recovery
@@ -216,13 +214,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     expect(mockTrasmissioneCreate).not.toHaveBeenCalled();
   });
 
-  it("Collisione parziale: se solo alcune righe vengono bloccate, effettua rollback di quelle bloccate", async () => {
-    const mockInvoices = [
-      createMockInvoice(101, 1),
-      createMockInvoice(102, 2),
-    ];
-    mockPagamentoFindMany.mockResolvedValueOnce(mockInvoices);
-
+  it("Collisione parziale: se solo alcune righe vengono bloccate, abortisce la transazione atomica senza chiamare Sogei", async () => {
     // Simulazione: solo 1 su 2 bloccata
     mockPagamentoUpdateMany
       .mockResolvedValueOnce({ count: 0 }) // 1st call: stale recovery
@@ -230,23 +222,27 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
 
     const result = await inviaLottoFatture([101, 102]);
 
-    expect(result).toHaveProperty("error");
+    expect(result).toEqual({
+      error:
+        "Una o più fatture selezionate sono già in fase di trasmissione o non sono più nello stato 'Da Inviare'. Riprova tra poco.",
+    });
     expect(mockInviaFile).not.toHaveBeenCalled();
+    expect(mockTrasmissioneCreate).not.toHaveBeenCalled();
+  });
 
-    // 3rd call must be rollback of the partial lock
-    expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          id: { in: [101, 102] },
-          stato_ts: "IN_TRASMISSIONE",
-        }),
-        data: expect.objectContaining({
-          stato_ts: "DA_INVIARE",
-          data_invio_ts: null,
-        }),
-      })
-    );
+  it("Prevenzione selezione parziale (phantom selection): se una fattura non è più DA_INVIARE, abortisce", async () => {
+    mockPagamentoUpdateMany
+      .mockResolvedValueOnce({ count: 0 }) // stale recovery
+      .mockResolvedValueOnce({ count: 1 }); // solo 1 su 2 aggiornata
+
+    const result = await inviaLottoFatture([101, 102]);
+
+    expect(result).toEqual({
+      error:
+        "Una o più fatture selezionate sono già in fase di trasmissione o non sono più nello stato 'Da Inviare'. Riprova tra poco.",
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+    expect(mockTrasmissioneCreate).not.toHaveBeenCalled();
   });
 
   it("Rollback su rifiuto Sogei: se Sogei restituisce esito negativo, ripristina DA_INVIARE", async () => {
@@ -333,6 +329,63 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
         "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
     });
     expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("annullaFatturaTs: in caso di doppia invocazione simultanea, solo una acquisisce il lock e invia a Sogei", async () => {
+    const invoice = createMockInvoice(201, 15, "INVIATA");
+    mockPagamentoFindFirst.mockResolvedValue(invoice);
+
+    let locked = false;
+    mockPagamentoUpdateMany.mockImplementation(async (args?: { where?: { data_invio_ts?: unknown } }) => {
+      // Stale recovery (controlla data_invio_ts < soglia): nessun lock orfano
+      if (args?.where?.data_invio_ts) {
+        return { count: 0 };
+      }
+      // Tentativo di lock atomico: solo la prima chiamata concorrente ottiene il lock (CAS)
+      if (!locked) {
+        locked = true;
+        return { count: 1 };
+      }
+      // Collisione: la seconda chiamata trova la risorsa già bloccata
+      return { count: 0 };
+    });
+
+    const [res1, res2] = await Promise.all([
+      annullaFatturaTs(201),
+      annullaFatturaTs(201),
+    ]);
+
+    expect(res1).toEqual(
+      expect.objectContaining({
+        success: true,
+        protocollo: "PROT-2026-999",
+      })
+    );
+
+    expect(res2).toEqual({
+      error:
+        "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
+    });
+
+    // CRITICO: Sogei inviaFile deve essere stato chiamato ESATTAMENTE UNA SOLA VOLTA!
+    expect(mockInviaFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("stale lock recovery in inviaLottoFatture non tocca fatture con protocollo_ts (cancellazioni)", async () => {
+    mockPagamentoUpdateMany.mockResolvedValue({ count: 0 });
+    mockPagamentoFindMany.mockResolvedValueOnce([]);
+
+    await inviaLottoFatture([101]);
+
+    expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          stato_ts: "IN_TRASMISSIONE",
+          protocollo_ts: null,
+        }),
+      })
+    );
   });
 
   it("ripristinaFatturaPerReinvio: consente lo sblocco manuale se la fattura è rimasta in IN_TRASMISSIONE", async () => {

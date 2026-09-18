@@ -18,3 +18,13 @@ export function lastValidPage(totalCount: number, pageSize: number): number {
 // produrrebbe uno `skip` enorme prima ancora che il data layer possa
 // clampare nulla, rischiando un errore non gestito lato Postgres sull'OFFSET.
 export const pageSchema = z.coerce.number().int().positive().max(1_000_000);
+
+export const PAGE_SIZE_OPTIONS = [10, 20, 25, 50] as const;
+export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
+export const DEFAULT_PAGE_SIZE = 25;
+
+export function parsePageSize(val: unknown, fallback: number = DEFAULT_PAGE_SIZE): number {
+  if (val === undefined || val === null || val === "") return fallback;
+  const num = Number(val);
+  return (PAGE_SIZE_OPTIONS as readonly number[]).includes(num) ? num : fallback;
+}

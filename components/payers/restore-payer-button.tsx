@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { ArchiveRestore } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { restorePayer } from "@/lib/actions/payers";
 
 type RestorePayerButtonProps = {
@@ -42,19 +41,18 @@ export function RestorePayerButton({
 
   return (
     <>
-      <Tooltip content="Ripristina pagante">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            setError(null);
-            setOpen(true);
-          }}
-          aria-label="Ripristina pagante"
-        >
-          <ArchiveRestore className="h-4 w-4" />
-        </Button>
-      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        title="Ripristina pagante"
+        aria-label="Ripristina pagante"
+      >
+        <ArchiveRestore className="h-4 w-4" />
+      </Button>
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

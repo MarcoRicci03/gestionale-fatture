@@ -9,6 +9,8 @@ import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
+import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { Prisma } from "@prisma/client";
 
 export type PayerActionState = { success: true } | { error: string };
 
@@ -17,6 +19,7 @@ function revalidatePayerViews() {
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
   revalidatePath("/patients");
+  revalidatePath("/sistema-ts");
 }
 
 async function checkPayerUniqueTaxIds(
@@ -125,17 +128,53 @@ export async function updatePayer(
   }
 
   try {
-    await prisma.pagante.update({
-      where: { id, id_Utente: userId, archiviato: false },
-      data: {
-        nome: parsed.data.nome,
-        cognome: parsed.data.cognome,
-        via: parsed.data.via,
-        citta: parsed.data.citta,
-        cap: parsed.data.cap,
-        cf: parsed.data.cf ?? null,
-        piva: parsed.data.piva ?? null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.pagante.update({
+        where: { id, id_Utente: userId, archiviato: false },
+        data: {
+          nome: parsed.data.nome,
+          cognome: parsed.data.cognome,
+          via: parsed.data.via,
+          citta: parsed.data.citta,
+          cap: parsed.data.cap,
+          cf: parsed.data.cf ?? null,
+          piva: parsed.data.piva ?? null,
+        },
+      });
+
+      if (parsed.data.propagaFattureInAttesa) {
+        const drafts = await tx.pagamento.findMany({
+          where: {
+            id_Utente: userId,
+            id_Pagante: id,
+            stato_ts: "DA_INVIARE",
+          },
+          include: { pagante: true, paziente: true },
+        });
+
+        for (const draft of drafts) {
+          const snap = resolveAnagrafica(draft);
+          const newSnap = {
+            ...snap,
+            pagante: {
+              ...snap.pagante,
+              nome: parsed.data.nome,
+              cognome: parsed.data.cognome,
+              via: parsed.data.via,
+              citta: parsed.data.citta,
+              cap: parsed.data.cap,
+              cf: parsed.data.cf ?? null,
+              piva: parsed.data.piva ?? null,
+            },
+          };
+          await tx.pagamento.update({
+            where: { id: draft.id },
+            data: {
+              snapshotAnagrafica: newSnap as unknown as Prisma.InputJsonValue,
+            },
+          });
+        }
+      }
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
@@ -154,9 +193,12 @@ export async function updatePayer(
     entita: "Pagante",
     entitaId: id,
     ip: await getClientIp(),
+    meta: {
+      propagaFattureInAttesa: !!parsed.data.propagaFattureInAttesa,
+    },
   });
 
-  revalidatePath("/payers");
+  revalidatePayerViews();
   revalidatePath(`/payers/${id}/edit`);
   return { success: true };
 }

@@ -53,6 +53,8 @@ export interface SistemaTsConfig {
   endpointErrori?: string;
   tlsVerify?: boolean;
   timeoutMs?: number;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
 }
 
 export interface InvioTsResult {

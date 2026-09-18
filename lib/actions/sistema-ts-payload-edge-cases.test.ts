@@ -97,6 +97,7 @@ vi.mock("@/lib/prisma", () => ({
           create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
         },
         pagamento: {
+          findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
           updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
         },
       };
@@ -106,10 +107,12 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { inviaLottoFatture } from "./sistema-ts";
+import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
 
 describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
     capturedPayload = null;
     mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
     mockTrasmissioneCreate.mockResolvedValue({ id: 10, protocollo: "PROT-EDGE-CASE-12345" });
@@ -256,8 +259,8 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
     });
   });
 
-  describe("Iniezione Automatica Marca da Bollo (2.00 € - Natura N1)", () => {
-    it("aggiunge riga bollo da 2.00 € con natura N1 per importo superiore alla soglia di 77.47 €", async () => {
+  describe("Iniezione Automatica Marca da Bollo (2.00 € - Natura dinamica per regime)", () => {
+    it("aggiunge riga bollo da 2.00 € con natura N2.2 per forfettari per importo superiore alla soglia di 77.47 €", async () => {
       mockPagamentoFindMany.mockResolvedValueOnce([
         {
           id: 301,
@@ -286,12 +289,50 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
       expect(doc.vociSpesa[1]).toEqual({
         tipoSpesa: "SP",
         importo: 2,
-        naturaIva: "N1",
+        naturaIva: "N2.2",
       });
 
       const xml = buildSistemaTsXml(capturedPayload!);
       expect(xml).toContain("<importo>120.00</importo>");
       expect(xml).toContain("<importo>2.00</importo>");
+      expect(xml).toContain("<naturaIVA>N2.2</naturaIVA>");
+    });
+
+    it("assegna natura N1 alla marca da bollo per fatture in regime ordinario esente art. 10 (N4)", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([
+        {
+          id: 3010,
+          n_fattura: 200,
+          anno: 2026,
+          data: new Date("2026-03-10"),
+          prezzo_totale: new Prisma.Decimal("150.00"), // > 77.47
+          natura_iva: "N4", // Ordinario esente art. 10
+          flag_opposizione: false,
+          pagamento_tracciato: true,
+          bolloCodice: null,
+          pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+          paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        },
+      ]);
+
+      await inviaLottoFatture([3010]);
+
+      const doc = capturedPayload!.documenti[0];
+      expect(doc.vociSpesa).toHaveLength(2);
+      expect(doc.vociSpesa[0]).toEqual({
+        tipoSpesa: "SP",
+        importo: 150,
+        naturaIva: "N4",
+      });
+      expect(doc.vociSpesa[1]).toEqual({
+        tipoSpesa: "SP",
+        importo: 2,
+        naturaIva: "N1",
+      });
+
+      const xml = buildSistemaTsXml(capturedPayload!);
+      expect(xml).toContain("<importo>150.00</importo>");
+      expect(xml).toContain("<naturaIVA>N4</naturaIVA>");
       expect(xml).toContain("<naturaIVA>N1</naturaIVA>");
     });
 
@@ -316,7 +357,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
 
       const doc = capturedPayload!.documenti[0];
       expect(doc.vociSpesa).toHaveLength(2);
-      expect(doc.vociSpesa[1].naturaIva).toBe("N1");
+      expect(doc.vociSpesa[1].naturaIva).toBe("N2.2");
       expect(doc.vociSpesa[1].importo).toBe(2);
     });
 
@@ -403,6 +444,99 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
       const xml = buildSistemaTsXml(capturedPayload!);
       expect(xml).toContain("<cfCittadino>");
       expect(xml).not.toContain("<flagOpposizione>1</flagOpposizione>");
+    });
+  });
+
+  describe("Validazione Preventiva Importo (XSD Dec7MinTipo: min 0.01 €, max 99.999,99 €)", () => {
+    it("rifiuta preventivamente fatture con importo pari a 0.00 € ed esegue il rollback del lock", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([
+        {
+          id: 501,
+          n_fattura: 50,
+          anno: 2026,
+          data: new Date("2026-03-15"),
+          prezzo_totale: new Prisma.Decimal("0.00"), // Importo non valido per XSD Sogei
+          natura_iva: "N2.2",
+          flag_opposizione: false,
+          pagamento_tracciato: true,
+          bolloCodice: null,
+          pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+          paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        },
+      ]);
+
+      const result = await inviaLottoFatture([501]);
+      expect(result).toHaveProperty("error");
+      if ("error" in result) {
+        expect(result.error).toContain("Fattura n. 50/2026");
+        expect(result.error).toContain("maggiore di zero");
+      }
+
+      // Verifica che non sia stata effettuata alcuna chiamata HTTP a Sogei
+      expect(mockInviaFile).not.toHaveBeenCalled();
+
+      // Verifica rollback atomico del lock su DA_INVIARE
+      expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: [501] } }),
+          data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+        })
+      );
+    });
+
+    it("rifiuta fatture con importo superiore a 99.999,99 € ed esegue il rollback del lock", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([
+        {
+          id: 502,
+          n_fattura: 51,
+          anno: 2026,
+          data: new Date("2026-03-15"),
+          prezzo_totale: new Prisma.Decimal("100000.00"), // Supera Dec7MinTipo
+          natura_iva: "N2.2",
+          flag_opposizione: false,
+          pagamento_tracciato: true,
+          bolloCodice: null,
+          pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+          paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        },
+      ]);
+
+      const result = await inviaLottoFatture([502]);
+      expect(result).toHaveProperty("error");
+      if ("error" in result) {
+        expect(result.error).toContain("Fattura n. 51/2026");
+        expect(result.error).toContain("supera il limite massimo");
+      }
+
+      expect(mockInviaFile).not.toHaveBeenCalled();
+      expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { in: [502] } }),
+          data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+        })
+      );
+    });
+
+    it("accetta e trasmette fatture con importo valido minimo (0.01 €)", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([
+        {
+          id: 503,
+          n_fattura: 52,
+          anno: 2026,
+          data: new Date("2026-03-15"),
+          prezzo_totale: new Prisma.Decimal("0.01"),
+          natura_iva: "N2.2",
+          flag_opposizione: false,
+          pagamento_tracciato: true,
+          bolloCodice: null,
+          pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+          paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        },
+      ]);
+
+      const result = await inviaLottoFatture([503]);
+      expect(result).toHaveProperty("success", true);
+      expect(mockInviaFile).toHaveBeenCalled();
     });
   });
 });

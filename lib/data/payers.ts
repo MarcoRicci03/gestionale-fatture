@@ -6,7 +6,11 @@ import { buildPayerWhere } from "@/lib/payers/list-query";
 import { lastValidPage } from "@/lib/utils/pagination";
 import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 
-function findPayersPage(where: Prisma.PaganteWhereInput, page: number) {
+function findPayersPage(
+  where: Prisma.PaganteWhereInput,
+  page: number,
+  pageSize: number = PAYERS_PAGE_SIZE
+) {
   return prisma.pagante.findMany({
     where,
     include: {
@@ -18,22 +22,26 @@ function findPayersPage(where: Prisma.PaganteWhereInput, page: number) {
     // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
     // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * PAYERS_PAGE_SIZE,
-    take: PAYERS_PAGE_SIZE,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 }
 
-export async function getPayers(search: string, page: number) {
+export async function getPayers(
+  search: string,
+  page: number,
+  pageSize: number = PAYERS_PAGE_SIZE
+) {
   const userId = await requireUserId();
   const where = buildPayerWhere(userId, { search, archiviato: false });
   const [payers, totalCount] = await Promise.all([
-    findPayersPage(where, page),
+    findPayersPage(where, page, pageSize),
     prisma.pagante.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, PAYERS_PAGE_SIZE));
+  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
   const effectivePayers =
-    clampedPage === page ? payers : await findPayersPage(where, clampedPage);
+    clampedPage === page ? payers : await findPayersPage(where, clampedPage, pageSize);
 
   return { payers: effectivePayers, totalCount, page: clampedPage };
 }
@@ -49,21 +57,29 @@ export type ArchivedPayerRow = Awaited<
   ReturnType<typeof getArchivedPayers>
 >["payers"][number];
 
-function findArchivedPayersPage(where: Prisma.PaganteWhereInput, page: number) {
+function findArchivedPayersPage(
+  where: Prisma.PaganteWhereInput,
+  page: number,
+  pageSize: number = PAYERS_PAGE_SIZE
+) {
   return prisma.pagante.findMany({
     where,
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * PAYERS_PAGE_SIZE,
-    take: PAYERS_PAGE_SIZE,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 }
 
-export async function getArchivedPayers(search: string, page: number) {
+export async function getArchivedPayers(
+  search: string,
+  page: number,
+  pageSize: number = PAYERS_PAGE_SIZE
+) {
   const userId = await requireUserId();
   const where = buildPayerWhere(userId, { search, archiviato: true });
 
   const [payers, totalCount, activePayers] = await Promise.all([
-    findArchivedPayersPage(where, page),
+    findArchivedPayersPage(where, page, pageSize),
     prisma.pagante.count({ where }),
     prisma.pagante.findMany({
       where: { id_Utente: userId, archiviato: false },
@@ -71,9 +87,10 @@ export async function getArchivedPayers(search: string, page: number) {
     }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, PAYERS_PAGE_SIZE));
+  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
   const effectivePayers =
-    clampedPage === page ? payers : await findArchivedPayersPage(where, clampedPage);
+    clampedPage === page ? payers : await findArchivedPayersPage(where, clampedPage, pageSize);
+
 
   if (effectivePayers.length === 0) {
     return { payers: [], totalCount, page: clampedPage };

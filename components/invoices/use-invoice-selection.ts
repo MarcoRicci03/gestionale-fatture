@@ -17,16 +17,11 @@ export function useInvoiceSelection({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  // Azzera la selezione ogni volta che filtri o pagina cambiano (nuova
-  // navigazione dal server), per evitare di esportare "a sorpresa" righe non
-  // più visibili. Aggiornamento di stato durante il render (pattern
-  // consigliato da React per "adjusting state when a prop changes"), non in
-  // un effect, per non innescare un render a cascata evitabile.
+  // Azzera la selezione solo quando i filtri cambiano (nuovo set di ricerca),
+  // MA NON quando cambia la pagina (vincolo critico di persistenza tra pagine).
   const [prevFilters, setPrevFilters] = useState(filters);
-  const [prevPage, setPrevPage] = useState(page);
-  if (filters !== prevFilters || page !== prevPage) {
+  if (filters !== prevFilters) {
     setPrevFilters(filters);
-    setPrevPage(page);
     setSelectedIds(new Set());
   }
 
@@ -47,8 +42,20 @@ export function useInvoiceSelection({
   };
 
   const toggleSelectAll = (checked: boolean) => {
-    setSelectedIds(checked ? new Set(invoices.map((i) => i.id)) : new Set());
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        invoices.forEach((i) => next.add(i.id));
+      } else {
+        invoices.forEach((i) => next.delete(i.id));
+      }
+      return next;
+    });
   };
 
-  return { selectedIds, selectAllRef, toggleSelected, toggleSelectAll };
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  return { selectedIds, selectAllRef, toggleSelected, toggleSelectAll, clearSelection };
 }

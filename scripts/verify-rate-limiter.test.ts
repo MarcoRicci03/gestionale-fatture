@@ -39,6 +39,22 @@ describe("createRateLimiter", () => {
     await sleep(70);
     expect(limiter.consume("a").allowed).toBe(true);
   });
+
+  it("resetta il conteggio per una chiave specifica o per tutte le chiavi", () => {
+    const limiter = createRateLimiter({ maxRequests: 1, windowMs: 60000 });
+    expect(limiter.consume("a").allowed).toBe(true);
+    expect(limiter.consume("a").allowed).toBe(false);
+    expect(limiter.consume("b").allowed).toBe(true);
+    expect(limiter.consume("b").allowed).toBe(false);
+
+    limiter.reset("a");
+    expect(limiter.consume("a").allowed).toBe(true);
+    expect(limiter.consume("b").allowed).toBe(false);
+
+    limiter.reset();
+    expect(limiter.consume("a").allowed).toBe(true);
+    expect(limiter.consume("b").allowed).toBe(true);
+  });
 });
 
 describe("rate limiter usato dalle rotte sensibili", () => {
@@ -67,5 +83,26 @@ describe("rate limiter usato dalle rotte sensibili", () => {
     );
     expect(source.includes("createRateLimiter")).toBe(true);
     expect(/pdfGenerationLimiter\.consume/.test(source)).toBe(true);
+  });
+
+  it("le chiamate telematiche Sistema TS consumano rate limiter dedicati", () => {
+    const source = readFileSync(
+      join(__dirname, "..", "lib", "actions", "sistema-ts.ts"),
+      "utf-8"
+    );
+    expect(source.includes("sistemaTsTransmissionLimiter")).toBe(true);
+    expect(source.includes("sistemaTsSyncLimiter")).toBe(true);
+    expect(/sistemaTsTransmissionLimiter\.consume/.test(source)).toBe(true);
+    expect(/sistemaTsSyncLimiter\.consume/.test(source)).toBe(true);
+  });
+
+  it("il modulo dei rate limiter Sistema TS non è marcato 'use server'", () => {
+    const source = readFileSync(
+      join(__dirname, "..", "lib", "sistemats", "rate-limiters.ts"),
+      "utf-8"
+    );
+    expect(source.includes('"use server"')).toBe(false);
+    expect(source.includes("'use server'")).toBe(false);
+    expect(source.includes("createRateLimiter")).toBe(true);
   });
 });

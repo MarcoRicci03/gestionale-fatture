@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { ArchiveRestore } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { restorePatient } from "@/lib/actions/patients";
 
 export function RestorePatientButton({ id }: { id: number }) {
@@ -25,19 +24,18 @@ export function RestorePatientButton({ id }: { id: number }) {
 
   return (
     <>
-      <Tooltip content="Ripristina paziente">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            setError(null);
-            setOpen(true);
-          }}
-          aria-label="Ripristina paziente"
-        >
-          <ArchiveRestore className="h-4 w-4" />
-        </Button>
-      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        title="Ripristina paziente"
+        aria-label="Ripristina paziente"
+      >
+        <ArchiveRestore className="h-4 w-4" />
+      </Button>
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

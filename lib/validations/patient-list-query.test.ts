@@ -2,13 +2,25 @@ import { describe, expect, it } from "vitest";
 import { parsePatientListQuery } from "./patient-list-query";
 
 describe("parsePatientListQuery", () => {
-  it("nessun parametro: ricerca vuota, entrambe le pagine a 1", () => {
+  it("nessun parametro: ricerca vuota, entrambe le pagine a 1, pageSize di default a 25", () => {
     expect(parsePatientListQuery({})).toEqual({
       search: "",
       page: 1,
       archivedPage: 1,
+      pageSize: 25,
     });
   });
+
+  it("pageSize valido impostato", () => {
+    expect(parsePatientListQuery({ pageSize: "10" }).pageSize).toBe(10);
+    expect(parsePatientListQuery({ pageSize: "50" }).pageSize).toBe(50);
+  });
+
+  it("pageSize non valido o non ammesso: fallback a 25", () => {
+    expect(parsePatientListQuery({ pageSize: "15" }).pageSize).toBe(25);
+    expect(parsePatientListQuery({ pageSize: "invalid" }).pageSize).toBe(25);
+  });
+
 
   it("q impostato: usato così com'è", () => {
     expect(parsePatientListQuery({ q: "Rossi" }).search).toBe("Rossi");

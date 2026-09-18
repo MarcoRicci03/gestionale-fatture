@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lastValidPage, pageSchema } from "./pagination";
+import { lastValidPage, pageSchema, parsePageSize } from "./pagination";
+
 
 describe("lastValidPage", () => {
   it("0 risultati: pagina 1 (mai 0)", () => {
@@ -40,5 +41,28 @@ describe("pageSchema", () => {
   it("rifiuta oltre il limite superiore, anche per valori enormi da URL manomesso", () => {
     expect(pageSchema.safeParse("1000001").success).toBe(false);
     expect(pageSchema.safeParse("100000000000000000000").success).toBe(false);
+  });
+});
+
+describe("parsePageSize", () => {
+  it("valori ammessi restituiscono il numero corrispondente", () => {
+    expect(parsePageSize("10")).toBe(10);
+    expect(parsePageSize(20)).toBe(20);
+    expect(parsePageSize("25")).toBe(25);
+    expect(parsePageSize(50)).toBe(50);
+  });
+
+  it("valori null/undefined/vuoti usano il fallback", () => {
+    expect(parsePageSize(undefined)).toBe(25);
+    expect(parsePageSize(null)).toBe(25);
+    expect(parsePageSize("")).toBe(25);
+    expect(parsePageSize(undefined, 10)).toBe(10);
+  });
+
+  it("valori non ammessi usano il fallback", () => {
+    expect(parsePageSize("15")).toBe(25);
+    expect(parsePageSize("invalid")).toBe(25);
+    expect(parsePageSize(-10)).toBe(25);
+    expect(parsePageSize(999, 20)).toBe(20);
   });
 });

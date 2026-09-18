@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { escapeXml } from "./xml-builder";
 
 export interface MtomPayload {
   contentTypeHeader: string;
@@ -20,16 +21,16 @@ export function buildSoapInviaFileXml(params: {
   const attachmentCid = params.attachmentCid || "allegato@sistemats.it";
 
   const strutturaElem = params.codiceStruttura
-    ? `        <codiceSSA>${params.codiceStruttura}</codiceSSA>\n`
+    ? `        <codiceSSA>${escapeXml(params.codiceStruttura)}</codiceSSA>\n`
     : "";
   const regioneElem = params.codiceRegione
-    ? `        <codiceRegione>${params.codiceRegione.padStart(3, "0")}</codiceRegione>\n`
+    ? `        <codiceRegione>${escapeXml(params.codiceRegione.padStart(3, "0"))}</codiceRegione>\n`
     : "";
   const aslElem = params.codiceAsl
-    ? `        <codiceAsl>${params.codiceAsl.padStart(3, "0")}</codiceAsl>\n`
+    ? `        <codiceAsl>${escapeXml(params.codiceAsl.padStart(3, "0"))}</codiceAsl>\n`
     : "";
   const cfElem = params.cfProprietario
-    ? `        <cfProprietario>${params.cfProprietario}</cfProprietario>\n`
+    ? `        <cfProprietario>${escapeXml(params.cfProprietario)}</cfProprietario>\n`
     : "";
 
   let datiProprietarioBlock = "";

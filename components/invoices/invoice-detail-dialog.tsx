@@ -58,10 +58,15 @@ export function InvoiceDetailDialog({
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Data</p>
+                <p className="text-sm text-muted-foreground">Data emissione</p>
                 <p className="font-medium">
                   {formatDateDisplay(invoice.data)}
                 </p>
+                {invoice.data_pagamento && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pagamento: {formatDateDisplay(invoice.data_pagamento)}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Mesi</p>

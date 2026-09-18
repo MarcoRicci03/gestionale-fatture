@@ -23,6 +23,7 @@ import {
   FATTURA_GIA_INVIATA_TS_ERROR,
   ANAGRAFICA_FATTURA_TS_ERROR,
   FATTURA_ANNULLATA_TS_DELETE_ERROR,
+  FATTURA_ANNULLATA_TS_EDIT_ERROR,
 } from "@/lib/invoices/errors";
 import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
@@ -142,6 +143,7 @@ export async function createInvoice(
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
+    data_pagamento,
     mod_pag,
     sedute,
     commento,
@@ -206,6 +208,7 @@ export async function createInvoice(
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        data_pagamento: data_pagamento ?? null,
         anno: year,
         prezzo_totale,
         mod_pag,
@@ -292,6 +295,10 @@ export async function updateInvoice(
     return { error: "Fattura non trovata" };
   }
 
+  if (existing.stato_ts === "ANNULLATA_TS") {
+    return { error: FATTURA_ANNULLATA_TS_EDIT_ERROR };
+  }
+
   if (
     existing.stato_ts === "INVIATA" ||
     existing.stato_ts === "DA_CANCELLARE_SU_TS" ||
@@ -304,6 +311,7 @@ export async function updateInvoice(
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
+    data_pagamento,
     mod_pag,
     sedute,
     commento,
@@ -384,6 +392,7 @@ export async function updateInvoice(
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        data_pagamento: data_pagamento ?? null,
         anno: year,
         prezzo_totale,
         mod_pag,
@@ -547,6 +556,10 @@ export async function refreshInvoiceAnagrafica(
   });
   if (!invoice) {
     return { error: "Fattura non trovata" };
+  }
+
+  if (invoice.stato_ts === "ANNULLATA_TS") {
+    return { error: FATTURA_ANNULLATA_TS_EDIT_ERROR };
   }
 
   if (

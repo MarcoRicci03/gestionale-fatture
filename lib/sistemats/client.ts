@@ -54,7 +54,47 @@ function verifyEndpointSafety(endpoint: string): void {
   }
 }
 
+export class RetryableHttpError extends Error {
+  constructor(
+    public statusCode: number,
+    public responseBody: string
+  ) {
+    super(`HTTP ${statusCode}: Errore temporaneo del server Sistema TS`);
+    this.name = "RetryableHttpError";
+  }
+}
+
+export function isRetryableError(error: unknown): boolean {
+  if (error instanceof RetryableHttpError) {
+    return true;
+  }
+  if (error instanceof Error) {
+    if (error.name === "TimeoutError" || error.name === "AbortError") {
+      return true;
+    }
+    const msg = error.message.toLowerCase();
+    if (
+      msg.includes("timeout") ||
+      msg.includes("fetch failed") ||
+      msg.includes("econnreset") ||
+      msg.includes("etimedout") ||
+      msg.includes("econnrefused") ||
+      msg.includes("socket") ||
+      msg.includes("network")
+    ) {
+      return true;
+    }
+    if ("cause" in error && error.cause) {
+      return isRetryableError(error.cause);
+    }
+  }
+  return false;
+}
+
 function formatErrorWithCause(error: unknown, timeoutMs = 120_000): string {
+  if (error instanceof RetryableHttpError) {
+    return `Server temporaneamente non disponibile (HTTP ${error.statusCode}). Riprova più tardi.`;
+  }
   if (error instanceof Error) {
     if (
       error.name === "TimeoutError" ||
@@ -102,6 +142,59 @@ export class SistemaTsClient {
         },
       });
     }
+  }
+
+  private getMaxRetries(): number {
+    if (this.config.maxRetries !== undefined && this.config.maxRetries >= 0) {
+      return this.config.maxRetries;
+    }
+    if (process.env.SISTEMATS_MAX_RETRIES) {
+      const parsed = parseInt(process.env.SISTEMATS_MAX_RETRIES, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) return parsed;
+    }
+    return 2;
+  }
+
+  private getRetryDelayMs(): number {
+    if (this.config.retryBaseDelayMs !== undefined && this.config.retryBaseDelayMs >= 0) {
+      return this.config.retryBaseDelayMs;
+    }
+    if (process.env.SISTEMATS_RETRY_DELAY_MS) {
+      const parsed = parseInt(process.env.SISTEMATS_RETRY_DELAY_MS, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) return parsed;
+    }
+    return process.env.NODE_ENV === "test" ? 10 : 1000;
+  }
+
+  private isRetryableHttpStatus(status: number): boolean {
+    return status === 429 || status === 502 || status === 503 || status === 504;
+  }
+
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    formatError: (error: unknown) => T
+  ): Promise<T> {
+    const maxRetries = this.getMaxRetries();
+    const baseDelay = this.getRetryDelayMs();
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries && isRetryableError(error)) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+          continue;
+        }
+        break;
+      }
+    }
+
+    return formatError(lastError);
   }
 
   private getTimeoutMs(): number {
@@ -152,29 +245,35 @@ export class SistemaTsClient {
     });
 
     const timeoutMs = this.getTimeoutMs();
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": mtomPayload.contentTypeHeader,
-          SOAPAction: '""',
-          Authorization: this.getBasicAuthHeader(),
-          "User-Agent": "SistemaTS-TypeScript-Client/2.5",
-        },
-        body: new Uint8Array(mtomPayload.bodyBuffer),
-        signal: AbortSignal.timeout(timeoutMs),
-        ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
-      } as RequestInit);
 
-      const responseText = await response.text();
-      return this.parseInvioResponse(responseText, response.status);
-    } catch (error) {
-      return {
+    return this.executeWithRetry(
+      async () => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": mtomPayload.contentTypeHeader,
+            SOAPAction: '""',
+            Authorization: this.getBasicAuthHeader(),
+            "User-Agent": "SistemaTS-TypeScript-Client/2.5",
+          },
+          body: new Uint8Array(mtomPayload.bodyBuffer),
+          signal: AbortSignal.timeout(timeoutMs),
+          ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+        } as RequestInit);
+
+        if (this.isRetryableHttpStatus(response.status)) {
+          throw new RetryableHttpError(response.status, await response.text());
+        }
+
+        const responseText = await response.text();
+        return this.parseInvioResponse(responseText, response.status);
+      },
+      (error) => ({
         success: false,
-        statusCode: 0,
+        statusCode: error instanceof RetryableHttpError ? error.statusCode : 0,
         errorMessage: `Errore di rete durante la trasmissione a Sistema TS: ${formatErrorWithCause(error, timeoutMs)}`,
-      };
-    }
+      })
+    );
   }
 
   /**
@@ -192,31 +291,36 @@ export class SistemaTsClient {
     );
 
     const soapXml = buildSoapEsitoXml(protocollo, pincodeCifrato);
-
     const timeoutMs = this.getTimeoutMs();
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: '""',
-          Authorization: this.getBasicAuthHeader(),
-          "User-Agent": "SistemaTS-TypeScript-Client/2.5",
-        },
-        body: soapXml,
-        signal: AbortSignal.timeout(timeoutMs),
-        ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
-      } as RequestInit);
 
-      const responseText = await response.text();
-      return this.parseEsitoResponse(responseText, response.status, protocollo);
-    } catch (error) {
-      return {
+    return this.executeWithRetry(
+      async () => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            SOAPAction: '""',
+            Authorization: this.getBasicAuthHeader(),
+            "User-Agent": "SistemaTS-TypeScript-Client/2.5",
+          },
+          body: soapXml,
+          signal: AbortSignal.timeout(timeoutMs),
+          ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+        } as RequestInit);
+
+        if (this.isRetryableHttpStatus(response.status)) {
+          throw new RetryableHttpError(response.status, await response.text());
+        }
+
+        const responseText = await response.text();
+        return this.parseEsitoResponse(responseText, response.status, protocollo);
+      },
+      (error) => ({
         success: false,
-        statusCode: 0,
+        statusCode: error instanceof RetryableHttpError ? error.statusCode : 0,
         errorMessage: `Errore durante l'interrogazione dell'esito per il protocollo ${protocollo}: ${formatErrorWithCause(error, timeoutMs)}`,
-      };
-    }
+      })
+    );
   }
 
   /**
@@ -234,48 +338,53 @@ export class SistemaTsClient {
     );
 
     const soapXml = buildSoapRicevutaPdfXml(protocollo, pincodeCifrato);
-
     const timeoutMs = this.getTimeoutMs();
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: '""',
-          Authorization: this.getBasicAuthHeader(),
-          "User-Agent": "SistemaTS-TypeScript-Client/2.5",
-        },
-        body: soapXml,
-        signal: AbortSignal.timeout(timeoutMs),
-        ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
-      } as RequestInit);
 
-      if (!response.ok) {
+    return this.executeWithRetry(
+      async () => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            SOAPAction: '""',
+            Authorization: this.getBasicAuthHeader(),
+            "User-Agent": "SistemaTS-TypeScript-Client/2.5",
+          },
+          body: soapXml,
+          signal: AbortSignal.timeout(timeoutMs),
+          ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+        } as RequestInit);
+
+        if (this.isRetryableHttpStatus(response.status)) {
+          throw new RetryableHttpError(response.status, await response.text());
+        }
+
+        if (!response.ok) {
+          return {
+            success: false,
+            message: `HTTP Error ${response.status}: ${await response.text()}`,
+          };
+        }
+
+        const responseText = await response.text();
+        const pdfBase64 = extractTagValue(responseText, "pdf");
+
+        if (pdfBase64) {
+          const pdfBuffer = Buffer.from(pdfBase64, "base64");
+          return { success: true, pdfBuffer, message: "Ricevuta PDF scaricata con successo." };
+        }
+
+        const desc = extractTagValue(responseText, "descrizione") || extractTagValue(responseText, "faultstring");
         return {
           success: false,
-          message: `HTTP Error ${response.status}: ${await response.text()}`,
+          message: desc || "Nessun contenuto PDF restituito dal servizio ricevute.",
         };
-      }
-
-      const responseText = await response.text();
-      const pdfBase64 = extractTagValue(responseText, "pdf");
-
-      if (pdfBase64) {
-        const pdfBuffer = Buffer.from(pdfBase64, "base64");
-        return { success: true, pdfBuffer, message: "Ricevuta PDF scaricata con successo." };
-      }
-
-      const desc = extractTagValue(responseText, "descrizione") || extractTagValue(responseText, "faultstring");
-      return {
-        success: false,
-        message: desc || "Nessun contenuto PDF restituito dal servizio ricevute.",
-      };
-    } catch (error) {
-      return {
+      },
+      (error) => ({
         success: false,
         message: `Errore durante lo scaricamento della ricevuta PDF: ${formatErrorWithCause(error, timeoutMs)}`,
-      };
-    }
+      })
+    );
   }
 
   /**
@@ -293,77 +402,82 @@ export class SistemaTsClient {
     );
 
     const soapXml = buildSoapDettaglioErroriXml(protocollo, pincodeCifrato);
-
     const timeoutMs = this.getTimeoutMs();
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: '""',
-          Authorization: this.getBasicAuthHeader(),
-          "User-Agent": "SistemaTS-TypeScript-Client/2.5",
-        },
-        body: soapXml,
-        signal: AbortSignal.timeout(timeoutMs),
-        ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
-      } as RequestInit);
 
-      if (!response.ok) {
-        return {
-          success: false,
-          message: `HTTP Error ${response.status}: ${await response.text()}`,
-        };
-      }
+    return this.executeWithRetry(
+      async () => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            SOAPAction: '""',
+            Authorization: this.getBasicAuthHeader(),
+            "User-Agent": "SistemaTS-TypeScript-Client/2.5",
+          },
+          body: soapXml,
+          signal: AbortSignal.timeout(timeoutMs),
+          ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+        } as RequestInit);
 
-      const responseText = await response.text();
+        if (this.isRetryableHttpStatus(response.status)) {
+          throw new RetryableHttpError(response.status, await response.text());
+        }
 
-      // Esito WS11 = Assenza di errori
-      const codNegativo = extractTagValue(responseText, "codice");
-      if (codNegativo === "WS11") {
+        if (!response.ok) {
+          return {
+            success: false,
+            message: `HTTP Error ${response.status}: ${await response.text()}`,
+          };
+        }
+
+        const responseText = await response.text();
+
+        // Esito WS11 = Assenza di errori
+        const codNegativo = extractTagValue(responseText, "codice");
+        if (codNegativo === "WS11") {
+          return {
+            success: true,
+            message: "Non sono presenti errori o segnalazioni per questa trasmissione.",
+          };
+        }
+
+        const csvBase64 = extractTagValue(responseText, "csv");
+        if (!csvBase64) {
+          const fault = extractTagValue(responseText, "faultstring") || extractTagValue(responseText, "descrizione");
+          return {
+            success: false,
+            message: fault || "Nessun dato CSV restituito dal server.",
+          };
+        }
+
+        const rawBytes = Buffer.from(csvBase64, "base64");
+        let csvText = "";
+
+        // Verifica se i byte sono un archivio ZIP
+        if (rawBytes.length >= 4 && rawBytes[0] === 0x50 && rawBytes[1] === 0x4b) {
+          const zip = await JSZip.loadAsync(rawBytes);
+          const csvFile = Object.values(zip.files).find((f) =>
+            f.name.toLowerCase().endsWith(".csv")
+          );
+          const targetFile = csvFile ?? Object.values(zip.files)[0];
+          if (targetFile) {
+            const buf = await targetFile.async("nodebuffer");
+            csvText = buf.toString("latin1");
+          }
+        } else {
+          csvText = rawBytes.toString("latin1");
+        }
+
         return {
           success: true,
-          message: "Non sono presenti errori o segnalazioni per questa trasmissione.",
+          rawCsv: csvText,
         };
-      }
-
-      const csvBase64 = extractTagValue(responseText, "csv");
-      if (!csvBase64) {
-        const fault = extractTagValue(responseText, "faultstring") || extractTagValue(responseText, "descrizione");
-        return {
-          success: false,
-          message: fault || "Nessun dato CSV restituito dal server.",
-        };
-      }
-
-      const rawBytes = Buffer.from(csvBase64, "base64");
-      let csvText = "";
-
-      // Verifica se i byte sono un archivio ZIP
-      if (rawBytes.length >= 4 && rawBytes[0] === 0x50 && rawBytes[1] === 0x4b) {
-        const zip = await JSZip.loadAsync(rawBytes);
-        const csvFile = Object.values(zip.files).find((f) =>
-          f.name.toLowerCase().endsWith(".csv")
-        );
-        const targetFile = csvFile ?? Object.values(zip.files)[0];
-        if (targetFile) {
-          const buf = await targetFile.async("nodebuffer");
-          csvText = buf.toString("latin1");
-        }
-      } else {
-        csvText = rawBytes.toString("latin1");
-      }
-
-      return {
-        success: true,
-        rawCsv: csvText,
-      };
-    } catch (error) {
-      return {
+      },
+      (error) => ({
         success: false,
         message: `Errore durante il recupero degli errori: ${formatErrorWithCause(error, timeoutMs)}`,
-      };
-    }
+      })
+    );
   }
 
   private parseInvioResponse(responseText: string, statusCode: number): InvioTsResult {

@@ -227,6 +227,9 @@ export function SistemaTsForm({ settings, userCf, userPiva }: SistemaTsFormProps
               placeholder="000"
               aria-invalid={!!errors.codiceRegione}
             />
+            {errors.codiceRegione && (
+              <p className="text-sm text-destructive">{errors.codiceRegione.message}</p>
+            )}
             <p className="text-xs text-muted-foreground">Default &quot;000&quot; per professionisti</p>
           </div>
 
@@ -239,6 +242,9 @@ export function SistemaTsForm({ settings, userCf, userPiva }: SistemaTsFormProps
               placeholder="000"
               aria-invalid={!!errors.codiceAsl}
             />
+            {errors.codiceAsl && (
+              <p className="text-sm text-destructive">{errors.codiceAsl.message}</p>
+            )}
             <p className="text-xs text-muted-foreground">Default &quot;000&quot; per professionisti</p>
           </div>
 
@@ -246,10 +252,14 @@ export function SistemaTsForm({ settings, userCf, userPiva }: SistemaTsFormProps
             <Label htmlFor="codiceStruttura">Codice Struttura (SSA)</Label>
             <Input
               id="codiceStruttura"
+              maxLength={6}
               {...register("codiceStruttura")}
               placeholder="Lascia vuoto se non applicabile"
               aria-invalid={!!errors.codiceStruttura}
             />
+            {errors.codiceStruttura && (
+              <p className="text-sm text-destructive">{errors.codiceStruttura.message}</p>
+            )}
             <p className="text-xs text-muted-foreground">Solo se operi all&apos;interno di struttura autorizzata</p>
           </div>
         </CardContent>

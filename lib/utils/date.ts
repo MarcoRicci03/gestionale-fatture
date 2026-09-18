@@ -95,3 +95,32 @@ export function maskDateInput(rawValue: string, prevValue = ""): string {
   return `${day}/${month}/${year}`;
 }
 
+/**
+ * Determina se la data di effettivo incasso (o data emissione se pagamento non valorizzato)
+ * è successiva alla data odierna di trasmissione.
+ * Il confronto avviene sui giorni di calendario solari (anno, mese, giorno) in ora locale
+ * per garantire consistenza assoluta e prevenire scarti Sogei [S036].
+ */
+export function isDataPagamentoFutura(
+  dataPagamento: Date | string | null | undefined,
+  dataFattura: Date | string,
+  now: Date = new Date()
+): boolean {
+  const raw = dataPagamento || dataFattura;
+  const d = toLocalDate(raw);
+
+  const dYear = d.getFullYear();
+  const dMonth = d.getMonth();
+  const dDay = d.getDate();
+
+  const nYear = now.getFullYear();
+  const nMonth = now.getMonth();
+  const nDay = now.getDate();
+
+  if (dYear > nYear) return true;
+  if (dYear < nYear) return false;
+  if (dMonth > nMonth) return true;
+  if (dMonth < nMonth) return false;
+  return dDay > nDay;
+}
+

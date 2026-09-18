@@ -61,9 +61,30 @@ const mockPagamentoFindFirst = vi.fn();
 const mockPagamentoFindMany = vi.fn();
 const mockPagamentoUpdate = vi.fn();
 const mockPagamentoUpdateMany = vi.fn();
+const mockPaganteFindFirst = vi.fn();
+const mockPaganteUpdate = vi.fn();
 const mockTrasmissioneFindFirst = vi.fn();
 const mockTrasmissioneCreate = vi.fn();
 const mockTrasmissioneUpdate = vi.fn();
+const mockTransaction = vi.fn(async (cb: (tx: unknown) => unknown) => {
+  const tx = {
+    trasmissioneTs: {
+      create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
+      update: (...args: unknown[]) => mockTrasmissioneUpdate(...args),
+    },
+    pagamento: {
+      findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
+      findFirst: (...args: unknown[]) => mockPagamentoFindFirst(...args),
+      update: (...args: unknown[]) => mockPagamentoUpdate(...args),
+      updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
+    },
+    pagante: {
+      findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
+      update: (...args: unknown[]) => mockPaganteUpdate(...args),
+    },
+  };
+  return cb(tx);
+});
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -85,18 +106,11 @@ vi.mock("@/lib/prisma", () => ({
       create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
       update: (...args: unknown[]) => mockTrasmissioneUpdate(...args),
     },
-    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => {
-      const tx = {
-        trasmissioneTs: {
-          create: (...args: unknown[]) => mockTrasmissioneCreate(...args),
-        },
-        pagamento: {
-          update: (...args: unknown[]) => mockPagamentoUpdate(...args),
-          updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
-        },
-      };
-      return cb(tx);
-    }),
+    pagante: {
+      findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
+      update: (...args: unknown[]) => mockPaganteUpdate(...args),
+    },
+    $transaction: (...args: unknown[]) => mockTransaction(...args as [(tx: unknown) => unknown]),
   },
 }));
 
@@ -107,7 +121,13 @@ import {
   annullaFatturaTs,
   ripristinaFatturaPerReinvio,
   getRicevutaPdfBase64,
+  correggiFatturaTs,
 } from "./sistema-ts";
+import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
+
+beforeEach(() => {
+  resetSistemaTsRateLimiters();
+});
 
 describe("lib/actions/sistema-ts — saveSistemaTsSettings", () => {
   beforeEach(() => {
@@ -162,7 +182,7 @@ describe("lib/actions/sistema-ts — saveSistemaTsSettings", () => {
       pincode: "",
       codiceRegione: "030",
       codiceAsl: "001",
-      codiceStruttura: "STRUTT_A",
+      codiceStruttura: "SSA001",
       naturaIvaDefault: "N2.2" as const,
     };
 
@@ -271,6 +291,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
     capturedXmlPayload = null;
     mockImpostazioniFindUnique.mockResolvedValue(defaultSettings);
     mockUtenteFindUnique.mockResolvedValue(defaultUser);
@@ -288,6 +309,19 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     const result = await inviaLottoFatture([]);
     expect(result).toEqual({ error: "Nessuna fattura selezionata per l'invio." });
     expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("blocca con errore se si superano le 10 richieste di trasmissione al minuto", async () => {
+    mockPagamentoFindMany.mockResolvedValue([]);
+    for (let i = 0; i < 10; i++) {
+      await inviaLottoFatture([1]);
+    }
+    const eleventh = await inviaLottoFatture([1]);
+    expect(eleventh).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Troppe richieste di trasmissione inviate"),
+      })
+    );
   });
 
   it("restituisce errore se le credenziali Sistema TS non sono configurate", async () => {
@@ -357,6 +391,47 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(mockInviaFile).not.toHaveBeenCalled();
   });
 
+  it("blocca la trasmissione se la data di incasso è futura rispetto alla data odierna (DM 19/10/2020)", async () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 5);
+
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 1,
+        n_fattura: 99,
+        anno: 2026,
+        data: new Date(),
+        data_pagamento: futureDate,
+        prezzo_totale: new Prisma.Decimal("100.00"),
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+
+    const result = await inviaLottoFatture([1]);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Fattura n. 99/2026"),
+      })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("è futura rispetto alla data odierna"),
+      })
+    );
+    expect(mockInviaFile).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+      })
+    );
+  });
+
   it("gestisce correttamente l'opposizione assistito: salta validazione CF, invia cf vuoto e flag 1", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([
       {
@@ -416,6 +491,36 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(payload.documenti[0].vociSpesa[1]).toEqual({
       tipoSpesa: "SP",
       importo: 2,
+      naturaIva: "N2.2",
+    });
+  });
+
+  it("aggiunge la riga bollo con natura N1 se la fattura è in regime ordinario esente art. 10 (N4)", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 33,
+        n_fattura: 77,
+        anno: 2026,
+        data: new Date("2026-03-03"),
+        prezzo_totale: new Prisma.Decimal("100.00"),
+        natura_iva: "N4",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+
+    const result = await inviaLottoFatture([33]);
+    expect(result).toHaveProperty("success", true);
+
+    const payload = capturedXmlPayload as {
+      documenti: Array<{ vociSpesa: Array<{ importo: number; naturaIva: string }> }>;
+    };
+    expect(payload.documenti[0].vociSpesa[1]).toEqual({
+      tipoSpesa: "SP",
+      importo: 2,
       naturaIva: "N1",
     });
   });
@@ -445,7 +550,61 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
       documenti: Array<{ vociSpesa: Array<{ importo: number; naturaIva: string }> }>;
     };
     expect(payload.documenti[0].vociSpesa).toHaveLength(2);
-    expect(payload.documenti[0].vociSpesa[1].naturaIva).toBe("N1");
+    expect(payload.documenti[0].vociSpesa[1].naturaIva).toBe("N2.2");
+  });
+
+  it("utilizza data_pagamento per dataPagamento se valorizzata, altrimenti fa fallback su data", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 101,
+        n_fattura: 20,
+        anno: 2026,
+        data: new Date("2026-01-10"),
+        data_pagamento: new Date("2026-02-15"),
+        prezzo_totale: new Prisma.Decimal("100.00"),
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      },
+      {
+        id: 102,
+        n_fattura: 21,
+        anno: 2026,
+        data: new Date("2026-01-12"),
+        data_pagamento: null,
+        prezzo_totale: new Prisma.Decimal("100.00"),
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Luigi", cognome: "Bianchi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Luigi", cognome: "Bianchi", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+
+    mockPagamentoUpdateMany
+      .mockResolvedValueOnce({ count: 0 }) // Stale locks cleanup
+      .mockResolvedValueOnce({ count: 2 }); // Atomic lock candidate invoices
+    const result = await inviaLottoFatture([101, 102]);
+    expect(result).toHaveProperty("success", true);
+
+    const payload = capturedXmlPayload as {
+      documenti: Array<{
+        idSpesa: { dataEmissione: Date; numDocumento: string };
+        dataPagamento: Date;
+      }>;
+    };
+    expect(payload.documenti).toHaveLength(2);
+    // Fattura 1: dataPagamento = data_pagamento
+    expect(payload.documenti[0].idSpesa.dataEmissione).toEqual(new Date("2026-01-10"));
+    expect(payload.documenti[0].dataPagamento).toEqual(new Date("2026-02-15"));
+
+    // Fattura 2: dataPagamento fallback su data di emissione
+    expect(payload.documenti[1].idSpesa.dataEmissione).toEqual(new Date("2026-01-12"));
+    expect(payload.documenti[1].dataPagamento).toEqual(new Date("2026-01-12"));
   });
 
   it("invia una sola riga spesa se sotto soglia e senza bolloCodice", async () => {
@@ -521,12 +680,40 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
     expect(mockTrasmissioneUpdate).not.toHaveBeenCalled();
   });
 
+  it("blocca con errore se si superano le 15 richieste di verifica esito al minuto", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValue({
+      id: 10,
+      id_Utente: 1,
+      protocollo: "PROT_10",
+      nomeFile: "invio_1.zip",
+    });
+    mockInterrogaEsito.mockResolvedValue({
+      success: false,
+      errorMessage: "Non ancora pronto",
+    });
+
+    for (let i = 0; i < 15; i++) {
+      await sincronizzaEsitoTrasmissione(10);
+    }
+
+    const sixteenth = await sincronizzaEsitoTrasmissione(10);
+    expect(sixteenth).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Troppe richieste di verifica esito ravvicinate"),
+      })
+    );
+  });
+
   it("scarica la ricevuta PDF per trasmissioni accolte con stato '3' (segnalazioni)", async () => {
     mockTrasmissioneFindFirst.mockResolvedValueOnce({
       id: 20,
       id_Utente: 1,
       protocollo: "PROT_20",
       nomeFile: "invio_2.zip",
+      fatture: [
+        { id: 101, n_fattura: 1 },
+        { id: 102, n_fattura: 2 },
+      ],
     });
 
     mockInterrogaEsito.mockResolvedValueOnce({
@@ -572,8 +759,9 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          id_TrasmissioneTs: 20,
-          n_fattura: { in: [1] },
+          id: { in: [101] },
+          id_Utente: 1,
+          protocollo_ts: "PROT_20",
         }),
         data: { stato_ts: "INVIATA" },
       })
@@ -583,12 +771,15 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          id_TrasmissioneTs: 20,
-          n_fattura: { in: [2] },
+          id: { in: [102] },
+          id_Utente: 1,
+          protocollo_ts: "PROT_20",
         }),
-        data: { stato_ts: "DA_INVIARE" },
+        data: { stato_ts: "DA_INVIARE", protocollo_ts: null, data_invio_ts: null },
       })
     );
+
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
 
     expect(mockLogAudit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -596,6 +787,197 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
         entitaId: 20,
       })
     );
+  });
+
+  it("esegue tutte le mutazioni su DB in una transazione atomica e gestisce il rollback in caso di errore DB", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce({
+      id: 25,
+      id_Utente: 1,
+      protocollo: "PROT_TX_ERR",
+      nomeFile: "invio_tx.zip",
+      fatture: [{ id: 101, n_fattura: 1 }],
+    });
+
+    mockInterrogaEsito.mockResolvedValueOnce({
+      success: true,
+      statoElaborazione: "3",
+      codiceEsito: "000",
+      descrizioneEsito: "Elaborato con errori",
+      numDocumentiRicevuti: 1,
+      numDocumentiAccolti: 0,
+      numDocumentiScartati: 1,
+    });
+
+    mockScaricaRicevutaPdf.mockResolvedValueOnce({
+      success: true,
+      pdfBuffer: Buffer.from("pdf"),
+    });
+
+    mockScaricaDettaglioErrori.mockResolvedValueOnce({
+      success: true,
+      rawCsv: "numDoc;codErrore;descrizione;tipo\n1;S050;Errore;ERRORE",
+    });
+
+    mockPagamentoUpdateMany.mockRejectedValueOnce(new Error("DB transaction failure"));
+
+    const result = await sincronizzaEsitoTrasmissione(25);
+
+    expect(result).toEqual({
+      error: "Errore durante la sincronizzazione dell'esito: DB transaction failure",
+    });
+    expect(mockTransaction).toHaveBeenCalled();
+  });
+
+  it("M2: sincronizzando un vecchio lotto, non muta fatture che sono già state reinviate con un protocollo più recente", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce({
+      id: 30,
+      id_Utente: 1,
+      protocollo: "PROT_VECCHIO",
+      nomeFile: "invio_vecchio.zip",
+      fatture: [
+        { id: 101, n_fattura: 1 },
+        { id: 102, n_fattura: 2 },
+      ],
+    });
+
+    mockInterrogaEsito.mockResolvedValueOnce({
+      success: true,
+      statoElaborazione: "4", // Scarto totale
+      codiceEsito: "004",
+      descrizioneEsito: "File scartato",
+      numDocumentiRicevuti: 2,
+      numDocumentiAccolti: 0,
+      numDocumentiScartati: 2,
+    });
+
+    mockScaricaDettaglioErrori.mockResolvedValueOnce({
+      success: false,
+    });
+
+    const result = await sincronizzaEsitoTrasmissione(30);
+
+    expect(result).toHaveProperty("success", true);
+    // L'update deve essere rigorosamente vincolato a protocollo_ts: "PROT_VECCHIO"
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: [101, 102] },
+          id_Utente: 1,
+          protocollo_ts: "PROT_VECCHIO",
+        }),
+        data: { stato_ts: "DA_INVIARE", protocollo_ts: null, data_invio_ts: null },
+      })
+    );
+  });
+
+  it("disambigua fatture con stesso n_fattura ma anni diversi in base alla data del CSV Sogei", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce({
+      id: 35,
+      id_Utente: 1,
+      protocollo: "PROT_MULTI_ANNO",
+      nomeFile: "invio_multi.zip",
+      fatture: [
+        { id: 101, n_fattura: 1, anno: 2025, data: new Date("2025-04-10") },
+        { id: 102, n_fattura: 1, anno: 2026, data: new Date("2026-04-10") },
+      ],
+    });
+
+    mockInterrogaEsito.mockResolvedValueOnce({
+      success: true,
+      statoElaborazione: "3",
+      codiceEsito: "000",
+      descrizioneEsito: "Elaborato con errori",
+      numDocumentiRicevuti: 2,
+      numDocumentiAccolti: 1,
+      numDocumentiScartati: 1,
+    });
+
+    mockScaricaRicevutaPdf.mockResolvedValueOnce({
+      success: true,
+      pdfBuffer: Buffer.from("pdf-ricevuta"),
+    });
+
+    // Errore Sogei solo per la fattura 1 del 2025 (data 10/04/2025)
+    mockScaricaDettaglioErrori.mockResolvedValueOnce({
+      success: true,
+      rawCsv:
+        "protocollo;id;tipo;cf;pi;10/04/2025;disp;1;v;S050;CF non valido;ERRORE",
+    });
+
+    const result = await sincronizzaEsitoTrasmissione(35);
+
+    expect(result).toHaveProperty("success", true);
+
+    // Solo la fattura 101 (2025) deve essere reimpostata a DA_INVIARE
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: [101] },
+          id_Utente: 1,
+          protocollo_ts: "PROT_MULTI_ANNO",
+        }),
+        data: { stato_ts: "DA_INVIARE", protocollo_ts: null, data_invio_ts: null },
+      })
+    );
+
+    // La fattura 102 (2026) non deve essere stata inserita negli scartati
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: [102] },
+        }),
+      })
+    );
+  });
+
+  it("azzera completamente protocollo_ts e data_invio_ts per le fatture scartate, garantendo la compatibilità con il recovery lock orfani", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce({
+      id: 40,
+      id_Utente: 1,
+      protocollo: "PROT_SCARTO_RESET",
+      nomeFile: "invio_scarto.zip",
+      fatture: [
+        { id: 101, n_fattura: 1, anno: 2026, data: new Date("2026-03-01") },
+      ],
+    });
+
+    mockInterrogaEsito.mockResolvedValueOnce({
+      success: true,
+      statoElaborazione: "3",
+      codiceEsito: "000",
+      descrizioneEsito: "Elaborato con errori",
+      numDocumentiRicevuti: 1,
+      numDocumentiAccolti: 0,
+      numDocumentiScartati: 1,
+    });
+
+    mockScaricaRicevutaPdf.mockResolvedValueOnce({
+      success: true,
+      pdfBuffer: Buffer.from("pdf-ricevuta"),
+    });
+
+    mockScaricaDettaglioErrori.mockResolvedValueOnce({
+      success: true,
+      rawCsv:
+        "numDoc;codErrore;descrizione;tipo\n1;S050;CF cittadino non valido;ERRORE",
+    });
+
+    const result = await sincronizzaEsitoTrasmissione(40);
+
+    expect(result).toHaveProperty("success", true);
+
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [101] },
+        id_Utente: 1,
+        protocollo_ts: "PROT_SCARTO_RESET",
+      },
+      data: {
+        stato_ts: "DA_INVIARE",
+        protocollo_ts: null,
+        data_invio_ts: null,
+      },
+    });
   });
 });
 
@@ -621,6 +1003,69 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     const result = await annullaFatturaTs(999);
 
     expect(result).toEqual({ error: "Fattura non trovata." });
+  });
+
+  it("rifiuta l'annullamento se la fattura è in stato DA_INVIARE", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 50,
+      n_fattura: 1,
+      anno: 2026,
+      stato_ts: "DA_INVIARE",
+    });
+
+    const result = await annullaFatturaTs(50);
+
+    expect(result).toEqual({
+      error:
+        "Non è possibile annullare sul Sistema TS una fattura che non è mai stata trasmessa (stato 'Da Inviare').",
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("rifiuta l'annullamento se la fattura è in stato ANNULLATA_TS", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 51,
+      n_fattura: 2,
+      anno: 2026,
+      stato_ts: "ANNULLATA_TS",
+    });
+
+    const result = await annullaFatturaTs(51);
+
+    expect(result).toEqual({
+      error: "La fattura risulta già annullata sul Sistema TS.",
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
+  it("blocca con errore se si superano le 10 richieste di annullamento/trasmissione al minuto", async () => {
+    mockPagamentoFindFirst.mockResolvedValue({
+      id: 50,
+      n_fattura: 1,
+      anno: 2026,
+      data: new Date("2026-03-01"),
+      prezzo_totale: new Prisma.Decimal("100"),
+      stato_ts: "INVIATA",
+      flag_opposizione: false,
+      pagamento_tracciato: true,
+      pagante: { cf: "RSSMRA85M01H501Q" },
+      paziente: { cf: "RSSMRA85M01H501Q" },
+    });
+    mockInviaFile.mockResolvedValue({
+      success: true,
+      protocollo: "PROT_CANC",
+    });
+
+    for (let i = 0; i < 10; i++) {
+      await annullaFatturaTs(50);
+    }
+
+    const eleventh = await annullaFatturaTs(50);
+    expect(eleventh).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("Troppe richieste di trasmissione inviate"),
+      })
+    );
   });
 
   it("imposta DA_CANCELLARE_SU_TS e fallback=true se il client restituisce esito non positivo", async () => {
@@ -723,7 +1168,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     expect(payload.documenti[0].vociSpesa[1]).toEqual({
       tipoSpesa: "SP",
       importo: 2,
-      naturaIva: "N1",
+      naturaIva: "N2.2",
     });
   });
 
@@ -881,3 +1326,261 @@ describe("lib/actions/sistema-ts — getRicevutaPdfBase64", () => {
     });
   });
 });
+
+describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const baseInvoice = {
+    id: 10,
+    id_Utente: 1,
+    id_Pagante: 100,
+    id_Paziente: 200,
+    n_fattura: 5,
+    anno: 2026,
+    stato_ts: "DA_INVIARE",
+    prezzo_totale: new Prisma.Decimal("100.00"),
+    data: new Date("2026-03-01T12:00:00Z"),
+    data_pagamento: null,
+    flag_opposizione: false,
+    pagamento_tracciato: true,
+    bolloCodice: null,
+    snapshotAnagrafica: {
+      pagante: {
+        nome: "Mario",
+        cognome: "Rossi",
+        via: "Via Roma 1",
+        citta: "Roma",
+        cap: "00100",
+        cf: "WRONG_CF",
+        piva: null,
+      },
+      paziente: {
+        nome: "Luigi",
+        cognome: "Rossi",
+      },
+    },
+    pagante: {
+      id: 100,
+      id_Utente: 1,
+      nome: "Mario",
+      cognome: "Rossi",
+      via: "Via Roma 1",
+      citta: "Roma",
+      cap: "00100",
+      cf: "WRONG_CF",
+      piva: null,
+      archiviato: false,
+    },
+    paziente: {
+      id: 200,
+      id_Utente: 1,
+      nome: "Luigi",
+      cognome: "Rossi",
+      archiviato: false,
+    },
+  };
+
+  it("restituisce errore se la fattura non esiste o appartiene ad altro utente", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(null);
+
+    const res = await correggiFatturaTs({
+      invoiceId: 999,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect(res).toEqual({ error: "Fattura non trovata." });
+  });
+
+  it("blocca la correzione se la fattura è già stata trasmessa a TS", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      ...baseInvoice,
+      stato_ts: "INVIATA",
+    });
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect(res).toEqual({
+      error: "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.",
+    });
+  });
+
+  it("restituisce errore se il Codice Fiscale ha formato non valido e non c'è opposizione", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "INVALID123",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect("error" in res && res.error).toBeTruthy();
+    expect((res as { error: string }).error).toContain("Codice fiscale non valido");
+  });
+
+  it("restituisce errore se il CF appartiene già ad un altro cliente dell'utente", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+    mockPaganteFindFirst.mockResolvedValueOnce({
+      id: 101,
+      nome: "Giuseppe",
+      cognome: "Verdi",
+      cf: "RSSMRA80A01H501U",
+    });
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect("error" in res && res.error).toBeTruthy();
+    expect((res as { error: string }).error).toContain("è già associato ad un altro cliente");
+  });
+
+  it("corregge la fattura corrente e aggiorna l'anagrafica Pagante", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+    mockPaganteFindFirst.mockResolvedValueOnce(null);
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect(res).toEqual({
+      success: true,
+      message: "Fattura n. 5/2026 corretta con successo.",
+    });
+
+    expect(mockPaganteUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 100 },
+        data: { cf: "RSSMRA80A01H501U" },
+      })
+    );
+
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({
+          snapshotAnagrafica: expect.objectContaining({
+            pagante: expect.objectContaining({
+              cf: "RSSMRA80A01H501U",
+            }),
+          }),
+        }),
+      })
+    );
+
+    expect(mockLogAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        azione: AUDIT_ACTIONS.SISTEMA_TS_CORRECTION,
+        entita: "Pagamento",
+        entitaId: 10,
+      })
+    );
+  });
+
+  it("propaga il nuovo CF alle altre fatture DA_INVIARE dello stesso pagante quando la spunta è attiva", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+    mockPaganteFindFirst.mockResolvedValueOnce(null);
+
+    const otherDraft = {
+      id: 11,
+      id_Utente: 1,
+      id_Pagante: 100,
+      id_Paziente: 200,
+      stato_ts: "DA_INVIARE",
+      snapshotAnagrafica: {
+        pagante: { nome: "Mario", cognome: "Rossi", via: "Via Roma 1", citta: "Roma", cap: "00100", cf: "WRONG_CF", piva: null },
+        paziente: { nome: "Luigi", cognome: "Rossi" },
+      },
+      pagante: baseInvoice.pagante,
+      paziente: baseInvoice.paziente,
+    };
+
+    mockPagamentoFindMany.mockResolvedValueOnce([otherDraft]);
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: true,
+      flagOpposizione: false,
+    });
+
+    expect(res.success).toBe(true);
+
+    // Deve aggiornare sia la fattura 10 che l'altra bozza 11
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 11 },
+        data: expect.objectContaining({
+          snapshotAnagrafica: expect.objectContaining({
+            pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("NON propaga il nuovo CF alle altre fatture quando la spunta è disattivata", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+    mockPaganteFindFirst.mockResolvedValueOnce(null);
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: false,
+      propagaFattureInAttesa: false,
+      flagOpposizione: false,
+    });
+
+    expect(res.success).toBe(true);
+    expect(mockPagamentoFindMany).not.toHaveBeenCalled();
+    expect(mockPaganteUpdate).not.toHaveBeenCalled();
+  });
+
+  it("consente il salvataggio con opposizione senza richiedere il Codice Fiscale", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "",
+      aggiornaAnagrafica: false,
+      propagaFattureInAttesa: false,
+      flagOpposizione: true,
+    });
+
+    expect(res).toEqual({
+      success: true,
+      message: "Fattura n. 5/2026 corretta con successo.",
+    });
+
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({
+          flag_opposizione: true,
+        }),
+      })
+    );
+  });
+});
+
