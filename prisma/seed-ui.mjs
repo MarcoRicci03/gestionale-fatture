@@ -215,54 +215,7 @@ async function seedUi() {
   }
   console.log(`   ${createdPairs.length} coppie pagante/paziente create.`);
 
-  console.log("5. Creazione trasmissioni di esempio nello storico...");
-  const trasmissioni = [
-    await prisma.trasmissioneTs.create({
-      data: {
-        id_Utente: admin.id,
-        protocollo: "2026021500000001",
-        nomeFile: "invio_lotto_2026_01.zip",
-        dataInvio: new Date("2026-02-15T10:30:00Z"),
-        statoElaborazione: "2", // Accolto
-        codiceEsito: "ES01",
-        descrizioneEsito: "Elaborazione completata con successo",
-        numRicevuti: 15,
-        numAccolti: 15,
-        numScartati: 0,
-      },
-    }),
-    await prisma.trasmissioneTs.create({
-      data: {
-        id_Utente: admin.id,
-        protocollo: "2026030100000002",
-        nomeFile: "invio_lotto_2026_02.zip",
-        dataInvio: new Date("2026-03-01T14:15:00Z"),
-        statoElaborazione: "3", // Accolto con segnalazioni
-        codiceEsito: "ES02",
-        descrizioneEsito: "Accolto con segnalazioni non bloccanti",
-        numRicevuti: 10,
-        numAccolti: 9,
-        numScartati: 1,
-      },
-    }),
-    await prisma.trasmissioneTs.create({
-      data: {
-        id_Utente: admin.id,
-        protocollo: "2026031500000003",
-        nomeFile: "invio_lotto_2026_03.zip",
-        dataInvio: new Date("2026-03-15T09:00:00Z"),
-        statoElaborazione: "0", // In elaborazione
-        codiceEsito: null,
-        descrizioneEsito: "File in elaborazione da parte di Sogei",
-        numRicevuti: 5,
-        numAccolti: null,
-        numScartati: 0,
-      },
-    }),
-  ];
-  console.log(`   ${trasmissioni.length} trasmissioni storiche create.`);
-
-  console.log("6. Generazione di 105 fatture realistiche (2025 e 2026)...");
+  console.log("5. Generazione di 105 fatture realistiche (2025 e 2026)...");
 
   // Creiamo 35 fatture nel 2025 e 70 fatture nel 2026
   let globalCount = 0;
@@ -285,16 +238,6 @@ async function seedUi() {
     const modPag = n % 5 === 0 ? "CONTANTI" : n % 3 === 0 ? "CARTA" : "BONIFICO";
     const tracciato = modPag !== "CONTANTI";
     const naturaIva = n % 10 === 0 ? "N4" : "N2.2";
-
-    // Nel 2025 la maggior parte sono già inviate o archiviate
-    let statoTs = "INVIATA";
-    let protocolloTs = `2025${String(n).padStart(8, "0")}`;
-    let trasmissioneId = trasmissioni[0].id;
-
-    if (n === 35) {
-      statoTs = "ANNULLATA_TS";
-      protocolloTs = "202500000035";
-    }
 
     const snapshotAnagrafica = {
       pagante: {
@@ -329,10 +272,9 @@ async function seedUi() {
         commento: `Seduta riabilitativa logopedica (${meseNome.toLowerCase()} 2025)`,
         natura_iva: naturaIva,
         flag_opposizione: false,
-        stato_ts: statoTs,
-        protocollo_ts: protocolloTs,
-        data_invio_ts: new Date(data.getTime() + 86400000),
-        trasmissioniTs: trasmissioneId ? { connect: [{ id: trasmissioneId }] } : undefined,
+        stato_ts: "DA_INVIARE",
+        protocollo_ts: null,
+        data_invio_ts: null,
         citta: pair.pagante.citta,
         cap: pair.pagante.cap,
         snapshotAnagrafica,
@@ -377,39 +319,6 @@ async function seedUi() {
     // Opposizione cittadino per n = 15 e n = 30
     const flagOpposizione = n === 15 || n === 30;
 
-    // Distribuzione variegata degli stati Sistema TS per testare i filtri UI:
-    let statoTs = "DA_INVIARE";
-    let protocolloTs = null;
-    let dataInvioTs = null;
-    let trasmissioneId = null;
-
-    if (n <= 15) {
-      // 15 già inviate e accolte
-      statoTs = "INVIATA";
-      protocolloTs = `2026021500000001`;
-      dataInvioTs = new Date("2026-02-15T10:30:00Z");
-      trasmissioneId = trasmissioni[0].id;
-    } else if (n <= 20) {
-      // 5 in trasmissione
-      statoTs = "IN_TRASMISSIONE";
-      protocolloTs = `2026031500000003`;
-      dataInvioTs = new Date("2026-03-15T09:00:00Z");
-      trasmissioneId = trasmissioni[2].id;
-    } else if (n === 21 || n === 22) {
-      // 2 da cancellare
-      statoTs = "DA_CANCELLARE_SU_TS";
-      protocolloTs = `2026030100000002`;
-      trasmissioneId = trasmissioni[1].id;
-    } else if (n === 23) {
-      // 1 annullata
-      statoTs = "ANNULLATA_TS";
-      protocolloTs = `2026030100000002`;
-      trasmissioneId = trasmissioni[1].id;
-    } else {
-      // Tutte le altre (circa 47 fatture) DA_INVIARE
-      statoTs = "DA_INVIARE";
-    }
-
     const snapshotAnagrafica = {
       pagante: {
         nome: pair.pagante.nome,
@@ -443,10 +352,9 @@ async function seedUi() {
         commento: `Terapia riabilitativa logopedia seduta n. ${n}`,
         natura_iva: naturaIva,
         flag_opposizione: flagOpposizione,
-        stato_ts: statoTs,
-        protocollo_ts: protocolloTs,
-        data_invio_ts: dataInvioTs,
-        trasmissioniTs: trasmissioneId ? { connect: [{ id: trasmissioneId }] } : undefined,
+        stato_ts: "DA_INVIARE",
+        protocollo_ts: null,
+        data_invio_ts: null,
         citta: pair.pagante.citta,
         cap: pair.pagante.cap,
         snapshotAnagrafica,
@@ -462,15 +370,12 @@ async function seedUi() {
 
   console.log(`\n=== COMPLETATO CON SUCCESSO: ${globalCount} FATTURE INSERITE ===`);
   console.log("Riepilogo dati pronti per collaudo UI:");
-  console.log("- Anno 2025: 35 fatture storiche (paginazione, ricerca, archivio)");
-  console.log("- Anno 2026: 70 fatture attuali con tutti gli stati TS:");
-  console.log("  • ~47 DA_INVIARE (perfette per selezione massiva, test pulsante, filtri)");
-  console.log("  • 15 INVIATA (con protocolli e ricevuta)");
-  console.log("  • 5 IN_TRASMISSIONE (con lock e sblocco)");
-  console.log("  • 2 DA_CANCELLARE_SU_TS");
-  console.log("  • 1 ANNULLATA_TS");
-  console.log("  • Alcune fatture con bollo mancante, contanti e opposizione privacy");
-  console.log("  • 1 pagante con CF errato per testare gli alert rossi di convalida");
+  console.log("- Anno 2025: 35 fatture (stato DA_INVIARE)");
+  console.log("- Anno 2026: 70 fatture (tutte DA_INVIARE, pronte per test invio TS)");
+  console.log("- Storico trasmissioni: 0 record (pulito, nessun dato fittizio)");
+  console.log("  • Fatture con scenari: bollo mancante (#12), contanti, opposizione privacy (#15, #30)");
+  console.log("  • 1 pagante con CF errato (#4) per testare gli alert rossi di convalida");
+  console.log("  • Fatture con date future a settembre 2026 per testare filtro e pillola");
 }
 
 seedUi()

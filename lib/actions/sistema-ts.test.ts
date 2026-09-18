@@ -1525,7 +1525,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       flagOpposizione: false,
     });
 
-    expect(res.success).toBe(true);
+    expect(res).toHaveProperty("success", true);
 
     // Deve aggiornare sia la fattura 10 che l'altra bozza 11
     expect(mockPagamentoUpdate).toHaveBeenCalledWith(
@@ -1552,7 +1552,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       flagOpposizione: false,
     });
 
-    expect(res.success).toBe(true);
+    expect(res).toHaveProperty("success", true);
     expect(mockPagamentoFindMany).not.toHaveBeenCalled();
     expect(mockPaganteUpdate).not.toHaveBeenCalled();
   });
