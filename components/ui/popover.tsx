@@ -18,6 +18,7 @@ function PopoverPortal({ ...props }: PopoverPrimitive.Portal.Props) {
 
 function PopoverContent({
   className,
+  positionerClassName,
   align = "center",
   sideOffset = 6,
   side = "top",
@@ -29,14 +30,20 @@ function PopoverContent({
   sideOffset?: number;
   side?: "top" | "bottom" | "left" | "right";
   showArrow?: boolean;
+  positionerClassName?: string;
 }) {
   return (
     <PopoverPortal>
-      <PopoverPrimitive.Positioner side={side} sideOffset={sideOffset} align={align}>
+      <PopoverPrimitive.Positioner
+        side={side}
+        sideOffset={sideOffset}
+        align={align}
+        className={cn("isolate z-50", positionerClassName)}
+      >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "z-50 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-md outline-none",
+            "relative z-50 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-md outline-none",
             "origin-[var(--transform-origin)] transition-[transform,opacity] duration-100 ease-out",
             "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
             "data-[ending-style]:scale-95 data-[ending-style]:opacity-0",

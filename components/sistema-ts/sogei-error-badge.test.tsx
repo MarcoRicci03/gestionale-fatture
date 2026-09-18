@@ -94,5 +94,11 @@ describe("SogeiErrorBadge", () => {
     expect(dialog).toHaveTextContent(/IL DOCUMENTO E' STATO TRASMESSO OLTRE I TERMINI PREVISTI/i);
     expect(dialog).toHaveTextContent(/Cosa fare:/i);
     expect(dialog).toHaveTextContent(/Nessuna azione richiesta per questo invio/i);
+
+    // Verifica che il popup e il suo positioner abbiano z-50 per stare sopra gli header sticky (z-10)
+    expect(dialog).toHaveClass("z-50");
+    const positioner = dialog.closest("[role='presentation']");
+    expect(positioner).toHaveClass("z-50");
+    expect(positioner).toHaveClass("isolate");
   });
 });

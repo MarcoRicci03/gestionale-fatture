@@ -22,10 +22,10 @@ export function Tooltip({
     <BaseTooltip.Root>
       <BaseTooltip.Trigger render={children} />
       <BaseTooltip.Portal>
-        <BaseTooltip.Positioner side={side} sideOffset={sideOffset} align="center">
+        <BaseTooltip.Positioner side={side} sideOffset={sideOffset} align="center" className="isolate z-50">
           <BaseTooltip.Popup
             className={cn(
-              "z-50 rounded-md border border-border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md",
+              "relative z-50 rounded-md border border-border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md",
               "origin-[var(--transform-origin)] transition-[transform,opacity] duration-100 ease-out",
               "data-[starting-style]:opacity-0 data-[starting-style]:scale-95",
               "data-[ending-style]:opacity-0 data-[ending-style]:scale-95"
