@@ -3,13 +3,27 @@
 import { AlertTriangle, AlertCircle, ArrowRight } from "lucide-react";
 import { getSogeiErrorHelper } from "@/lib/sistemats/error-catalog";
 import type { ErroreDocumentoTs } from "@/lib/sistemats/csv-parser";
+import { SogeiErrorBadge } from "./sogei-error-badge";
 
-interface SogeiErrorItemProps {
+export { SogeiErrorBadge };
+
+export interface SogeiErrorItemProps {
   error: ErroreDocumentoTs;
   showGuidance?: boolean;
+  variant?: "card" | "badge";
+  className?: string;
 }
 
-export function SogeiErrorItem({ error, showGuidance = true }: SogeiErrorItemProps) {
+export function SogeiErrorItem({
+  error,
+  showGuidance = true,
+  variant = "card",
+  className,
+}: SogeiErrorItemProps) {
+  if (variant === "badge") {
+    return <SogeiErrorBadge error={error} showGuidance={showGuidance} className={className} />;
+  }
+
   const helper = getSogeiErrorHelper(error.codiceErrore, error.descrizione, error.tipo);
 
   if (helper.gravita === "INFO") {

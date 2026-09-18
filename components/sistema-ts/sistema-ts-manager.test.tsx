@@ -460,9 +460,16 @@ describe("SistemaTsManager", () => {
     const detailBtn = screen.getByRole("button", { name: /Dettaglio fatture/i });
     await user.click(detailBtn);
 
-    // Nello Storico Trasmissioni, la riga/card della fattura scartata mostra l'helper e 'Cosa fare'
-    expect(screen.getAllByText(/\[S050\] Codice Fiscale formalmente errato/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Cosa fare:/i).length).toBeGreaterThan(0);
+    // Nello Storico Trasmissioni, la riga/card della fattura mostra la pillola compatta con codice ed etichetta
+    expect(screen.getAllByText(/\[S050\]/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CF errato/i).length).toBeGreaterThan(0);
+
+    // Cliccando sul badge compatto si apre il popover con i dettagli e 'Cosa fare'
+    const errorBadge = screen.getAllByRole("button", { name: /Dettagli anomalia S050/i })[0];
+    await user.click(errorBadge);
+    const popover = await screen.findByRole("dialog");
+    expect(popover).toHaveTextContent(/Codice Fiscale formalmente errato/i);
+    expect(popover).toHaveTextContent(/Cosa fare:/i);
 
     // Clicca sul pulsante 'Report Errori'
     const reportBtn = screen.getByRole("button", { name: /Report Errori/i });

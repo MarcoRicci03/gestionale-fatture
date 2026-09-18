@@ -34,7 +34,15 @@ describe("lib/sistemats/error-catalog", () => {
     const w003 = getSogeiErrorHelper("W003");
     expect(w003.codice).toBe("W003");
     expect(w003.gravita).toBe("WARNING");
+    expect(w003.etichetta).toBe("Spesa accolta");
     expect(w003.azioneConsigliata).toContain("Nessuna azione richiesta");
+
+    const w008 = getSogeiErrorHelper("W008");
+    expect(w008.codice).toBe("W008");
+    expect(w008.gravita).toBe("WARNING");
+    expect(w008.etichetta).toBe("Oltre i termini");
+    expect(w008.titolo).toContain("Trasmesso oltre i termini");
+    expect(w008.azioneConsigliata).toContain("Nessuna azione richiesta");
   });
 
   it("normalizza spazi e maiuscole/minuscole", () => {
@@ -47,7 +55,8 @@ describe("lib/sistemats/error-catalog", () => {
     const fallback = getSogeiErrorHelper("S999", "Descrizione sconosciuta da Sogei", "ERRORE");
     expect(fallback.codice).toBe("S999");
     expect(fallback.gravita).toBe("ERRORE");
-    expect(fallback.titolo).toBe("Scarto ministeriale [S999]");
+    expect(fallback.titolo).toBe("Scarto ministeriale");
+    expect(fallback.etichetta).toBe("Scarto S999");
     expect(fallback.significato).toBe("Descrizione sconosciuta da Sogei");
     expect(fallback.azioneConsigliata).toContain("Consulta la descrizione");
   });
@@ -56,7 +65,8 @@ describe("lib/sistemats/error-catalog", () => {
     const fallback = getSogeiErrorHelper("W999", "Avviso sconosciuto da Sogei");
     expect(fallback.codice).toBe("W999");
     expect(fallback.gravita).toBe("WARNING");
-    expect(fallback.titolo).toBe("Segnalazione ministeriale [W999]");
+    expect(fallback.titolo).toBe("Segnalazione ministeriale");
+    expect(fallback.etichetta).toBe("Segnalazione W999");
     expect(fallback.significato).toBe("Avviso sconosciuto da Sogei");
     expect(fallback.azioneConsigliata).toContain("La spesa è stata acquisita regolarmente");
   });

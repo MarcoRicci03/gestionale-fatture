@@ -58,7 +58,7 @@ import {
   ripristinaFatturaPerReinvio,
 } from "@/lib/actions/sistema-ts";
 import { maskDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
-import { SogeiErrorItem } from "./sogei-error-item";
+import { SogeiErrorItem, SogeiErrorBadge } from "./sogei-error-item";
 import { FixInvoiceTsDialog } from "./fix-invoice-ts-dialog";
 import { parseCsvErroriTs, type ErroreDocumentoTs } from "@/lib/sistemats/csv-parser";
 import type { FatturaTsListItem, FatturaInTrasmissioneItem } from "@/lib/data/sistema-ts";
@@ -1715,11 +1715,11 @@ export function SistemaTsManager({
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell className="whitespace-normal align-top py-3 min-w-[300px] max-w-xl">
+                                      <TableCell className="whitespace-normal align-top py-3 min-w-[240px] max-w-xl">
                                         {f.errori.length > 0 ? (
-                                          <div className="space-y-1.5">
+                                          <div className="flex flex-wrap items-center gap-1.5">
                                             {f.errori.map((err, idx) => (
-                                              <SogeiErrorItem key={idx} error={err} />
+                                              <SogeiErrorBadge key={idx} error={err} />
                                             ))}
                                           </div>
                                         ) : f.esitoFattura === "ACCOLTA" ? (
@@ -1824,9 +1824,9 @@ export function SistemaTsManager({
                                     </div>
                                   </div>
                                   {f.errori.length > 0 && (
-                                    <div className="space-y-1.5 pt-1 border-t border-border">
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border">
                                       {f.errori.map((err, idx) => (
-                                        <SogeiErrorItem key={idx} error={err} />
+                                        <SogeiErrorBadge key={idx} error={err} />
                                       ))}
                                     </div>
                                   )}
@@ -2021,9 +2021,9 @@ export function SistemaTsManager({
                           {errors.length} {errors.length === 1 ? "segnalazione" : "segnalazioni"}
                         </span>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
                         {errors.map((err, errIdx) => (
-                          <SogeiErrorItem key={errIdx} error={err} />
+                          <SogeiErrorBadge key={errIdx} error={err} />
                         ))}
                       </div>
                     </div>

@@ -1,6 +1,7 @@
 export interface SogeiErrorHelp {
   codice: string;
   titolo: string;
+  etichetta: string;
   significato: string;
   azioneConsigliata: string;
   gravita: "ERRORE" | "WARNING" | "INFO";
@@ -9,6 +10,7 @@ export interface SogeiErrorHelp {
 export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">> = {
   S017: {
     titolo: "Documento già presente nel Sistema TS",
+    etichetta: "Già presente su TS",
     significato:
       "Questa fattura risulta già acquisita nei server ministeriali del MEF da una precedente trasmissione o da un altro gestionale.",
     azioneConsigliata:
@@ -17,6 +19,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S003: {
     titolo: "Codice Fiscale non presente in Anagrafe Tributaria",
+    etichetta: "CF non in Anagrafe",
     significato:
       "Il Codice Fiscale dell'assistito o del pagante non è stato trovato negli archivi dell'Agenzia delle Entrate (frequente per neonati, stranieri con codice provvisorio o variazioni recenti).",
     azioneConsigliata:
@@ -25,6 +28,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S050: {
     titolo: "Codice Fiscale formalmente errato",
+    etichetta: "CF errato",
     significato:
       "Il Codice Fiscale inserito non rispetta i criteri formali ministeriali (lunghezza non valida, caratteri errati o carattere di controllo CIN scorretto).",
     azioneConsigliata:
@@ -33,6 +37,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S004: {
     titolo: "Mittente non autorizzato alla trasmissione",
+    etichetta: "Mittente non autorizzato",
     significato:
       "Il Codice Fiscale del professionista sanitario mittente non risulta autorizzato all'invio per l'anno di competenza presso il Sistema TS.",
     azioneConsigliata:
@@ -41,6 +46,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S001: {
     titolo: "P.IVA o Codice Fiscale mittente non conforme",
+    etichetta: "Dati mittente non conformi",
     significato:
       "La combinazione di Partita IVA e Codice Fiscale mittente indicata non coincide con i dati registrati negli archivi del Sistema TS.",
     azioneConsigliata:
@@ -49,6 +55,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S022: {
     titolo: "Pagamento anticipato senza contrassegno ministeriale",
+    etichetta: "Pagamento anticipato",
     significato:
       "La data di effettivo incasso della fattura è antecedente alla data di emissione, ma nel documento inviato non era presente il flag ministeriale di pagamento anticipato.",
     azioneConsigliata:
@@ -57,6 +64,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S010: {
     titolo: "Documento fiscale non trovato in archivio",
+    etichetta: "Doc. non in archivio",
     significato:
       "Si è tentato di annullare o variare una fattura che non risulta presente negli archivi Sogei o i cui identificativi (numero, anno, data) differiscono da quelli originari.",
     azioneConsigliata:
@@ -65,6 +73,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S016: {
     titolo: "Dati spesa o aliquota IVA non conformi",
+    etichetta: "Dati spesa non conformi",
     significato:
       "Uno o più elementi di dettaglio della spesa, la natura IVA (es. N2.2, N4) o l'imposta di bollo non rispettano le specifiche XSD del disciplinare tecnico ministeriale.",
     azioneConsigliata:
@@ -73,6 +82,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   S036: {
     titolo: "Data pagamento futura rispetto alla data di invio",
+    etichetta: "Data incasso futura",
     significato:
       "La data di incasso indicata nella fattura è successiva alla data di trasmissione del lotto al Sistema TS.",
     azioneConsigliata:
@@ -81,6 +91,7 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   W001: {
     titolo: "Segnalazione su Codice Fiscale (Spesa Accolta)",
+    etichetta: "Segnalazione CF",
     significato:
       "Il documento è stato regolarmente acquisito dal Sistema TS per il Modello 730, ma l'Anagrafe Tributaria ha rilevato un avviso non bloccante sul Codice Fiscale.",
     azioneConsigliata:
@@ -89,10 +100,20 @@ export const SOGEI_ERROR_CATALOG: Record<string, Omit<SogeiErrorHelp, "codice">>
   },
   W003: {
     titolo: "Anomalia formale non bloccante (Spesa Accolta)",
+    etichetta: "Spesa accolta",
     significato:
       "La spesa è stata accolta con successo nei server ministeriali, con una segnalazione formale di avviso.",
     azioneConsigliata:
       "Nessuna azione richiesta: la trasmissione ha avuto esito positivo e la detrazione è garantita.",
+    gravita: "WARNING",
+  },
+  W008: {
+    titolo: "Trasmesso oltre i termini previsti (Spesa Accolta)",
+    etichetta: "Oltre i termini",
+    significato:
+      "Il documento è stato regolarmente acquisito dal Sistema TS per il Modello 730, ma è stato trasmesso oltre la scadenza ordinaria prevista dal calendario ministeriale.",
+    azioneConsigliata:
+      "Nessuna azione richiesta per questo invio: la spesa è valida ed è stata registrata regolarmente da Sogei. Verifica le scadenze in vista dei prossimi invii.",
     gravita: "WARNING",
   },
 };
@@ -122,7 +143,8 @@ export function getSogeiErrorHelper(
   if (isWarning) {
     return {
       codice: normalizedCode || "AVVISO",
-      titolo: `Segnalazione ministeriale [${normalizedCode || "WARNING"}]`,
+      titolo: "Segnalazione ministeriale",
+      etichetta: normalizedCode ? `Segnalazione ${normalizedCode}` : "Segnalazione",
       significato:
         descrizioneMinisteriale ||
         "Il documento è stato accolto nei server ministeriali, ma è presente un avviso formale non bloccante.",
@@ -134,7 +156,8 @@ export function getSogeiErrorHelper(
 
   return {
     codice: normalizedCode || "ERRORE",
-    titolo: `Scarto ministeriale [${normalizedCode || "ERRORE"}]`,
+    titolo: "Scarto ministeriale",
+    etichetta: normalizedCode ? `Scarto ${normalizedCode}` : "Scarto",
     significato:
       descrizioneMinisteriale ||
       "La fattura è stata scartata dai server del Sistema TS e non è stata inserita nella precompilata del cittadino.",
