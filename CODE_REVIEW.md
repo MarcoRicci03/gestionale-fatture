@@ -40,12 +40,12 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ⏳ DA RISOLVERE | - |
 | [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ⏳ DA RISOLVERE | - |
 | [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ⏳ DA RISOLVERE | - |
-| [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ⏳ DA RISOLVERE | - |
-| [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ⏳ DA RISOLVERE | - |
+| [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ✅ RISOLTO | Branch `perf/memoize-x509-cert-perf01` |
+| [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ✅ RISOLTO | Branch `perf/propagation-n-plus-one-perf02` |
 | [`PERF-03`](#perf-03) | **Medio** | Performance ed Efficienza | Caricamento non paginato di tutti i paganti attivi nella vista archiviati | ⏳ DA RISOLVERE | - |
 | [`PERF-04`](#perf-04) | **Basso** | Performance ed Efficienza | Ordinamento non deterministico in `getLatestInvoices` per assenza di Tie-Breaker | ⏳ DA RISOLVERE | - |
 | [`ERR-01`](#err-01) | **Alto** | Error Handling e Robustezza | Parsing XML delle risposte SOAP tramite Regular Expression | ✅ RISOLTO | Branch `fix/sistemats-xml-parser-err01` |
-| [`ERR-02`](#err-02) | **Medio** | Error Handling e Robustezza | Race Condition (TOCTOU) su cancellazione definitiva Pagante/Paziente | ⏳ DA RISOLVERE | - |
+| [`ERR-02`](#err-02) | **Medio** | Error Handling e Robustezza | Race Condition (TOCTOU) su cancellazione definitiva Pagante/Paziente | ✅ RISOLTO | Branch `fix/hard-delete-toctou-err02` |
 | [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ⏳ DA RISOLVERE | - |
 | [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ⏳ DA RISOLVERE | - |
 | [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ⏳ DA RISOLVERE | - |
