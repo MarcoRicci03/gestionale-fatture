@@ -37,7 +37,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ✅ RISOLTO | Branch `refactor/arch01-sistema-ts-manager-decomposition` |
-| [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ⏳ DA RISOLVERE | - |
+| [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ✅ RISOLTO | Branch `refactor/arch02-sistema-ts-actions-decomposition` |
 | [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ✅ RISOLTO | Branch `refactor/arch03-action-result-smell02` |
 | [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ✅ RISOLTO | Branch `perf/memoize-x509-cert-perf01` |
@@ -342,20 +342,24 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ARCH-02`
 - **Gravità:** `Alto`
 - **Categoria:** Architettura, Manutenibilità e Modularità
-- **Stato:** ⏳ DA RISOLVERE
-- **Posizione:** [`lib/actions/sistema-ts.ts:1-1216`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts#L1-L1216) (1.216 righe)
-- **Descrizione:** Il modulo raccoglie in un unico file `"use server"`:
+- **Stato:** ✅ RISOLTO (Branch `refactor/arch02-sistema-ts-actions-decomposition`)
+- **Posizione:** [`lib/actions/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts) (decomposto da 1.239 righe a ~230 righe)
+- **Descrizione:** Il modulo raccoglieva in un unico file `"use server"`:
   - Gestione impostazioni e crittografia credenziali.
   - Acquisizione del lock di concorrenza e rollback transazionale.
   - Costruzione dell'archivio ZIP e chiamata di rete SOAP MTOM.
   - Logica di riconciliazione esiti con parser errori CSV e riassegnazione automatica stati (`DA_INVIARE`, `INVIATA`, `ANNULLATA_TS`).
   - Annullamento sincrono e correzione anagrafica con propagazione a cascata sulle bozze.
-  La logica di dominio (business logic) è strettamente intrecciata con le chiamate al database Prisma, le chiamate HTTP esterne e le API di caching di Next.js (`revalidatePath`).
-- **Soluzione consigliata:**
-  Estrarre la logica di dominio in un layer di servizio disaccoppiato da Next.js:
-  - `lib/sistemats/services/transmission.service.ts` (orchestrazione lock, build payload e chiamata SOAP).
-  - `lib/sistemats/services/reconciliation.service.ts` (interpretazione codici Sogei e aggiornamento stati DB).
-  Le Server Action in `lib/actions/sistema-ts.ts` dovranno limitarsi ad autenticare l'utente (`requireUserId`), validare l'input con Zod e delegare al service.
+  La logica di dominio (business logic) era strettamente intrecciata con le chiamate al database Prisma, le chiamate HTTP esterne e le API di caching di Next.js (`revalidatePath`).
+- **Risoluzione:**
+  Estratta la logica di dominio in un layer di servizio modulare e disaccoppiato da Next.js sotto [`lib/sistemats/services/`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/):
+  1. [`lib/sistemats/services/client.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/client.service.ts): Inizializzazione `SistemaTsClient`, decrittografia credenziali da Vault e verifica requisiti profilo utente (CF e P.IVA).
+  2. [`lib/sistemats/services/transmission.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/transmission.service.ts): Self-healing lock orfani, acquisizione lock concorrente atomico, validazione fatture lotto (CF, importo, data incasso non futura), generazione XML/ZIP, chiamata SOAP MTOM, registrazione trasmissione e aggiornamento stati transazionale.
+  3. [`lib/sistemats/services/reconciliation.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/reconciliation.service.ts): Interrogazione esito Sogei, download condizionale ricevuta PDF e CSV errori, riconciliazione transazionale (gestione cancellazioni, `S017` vs scarti/anomalie formali, scarto intera trasmissione).
+  4. [`lib/sistemats/services/cancellation.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/cancellation.service.ts): Annullamento telematico sincrono con lock atomico, payload operazione `"C"`, gestione esito/fallback offline `DA_CANCELLARE_SU_TS`, e ripristino a `DA_INVIARE`.
+  5. [`lib/sistemats/services/correction.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/correction.service.ts): Correzione in-place di dati fiscali/spesa, verifica unicità CF e marca da bollo, aggiornamento anagrafica cliente e propagazione alle altre bozze `DA_INVIARE`.
+  6. [`lib/sistemats/services/settings.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/settings.service.ts): Cifratura credenziali TS e upsert su `impostazioniSistemaTs`.
+  7. [`lib/actions/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts): Controller snello (~230 righe) focalizzato esclusivamente su autenticazione (`requireUserId`), rate-limiting, validazione Zod, delega al service, audit logging (`logAudit`) e revalidazione cache (`revalidatePath`).
 
 ---
 
