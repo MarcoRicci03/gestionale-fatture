@@ -413,7 +413,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `PERF-01`
 - **Gravità:** `Alto`
 - **Categoria:** Performance ed Efficienza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/memoize-x509-cert-perf01`
 - **Posizione:** [`lib/sistemats/crypto.ts:11-25`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/crypto.ts#L11-L25) e [`lib/sistemats/xml-builder.ts:60, 90`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/xml-builder.ts#L60)
 - **Descrizione:** Durante la composizione dell'XML per il Sistema TS (`buildSistemaTsXml`), per ogni singola fattura priva di opposizione viene cifrato il Codice Fiscale del cittadino tramite `encryptRsaPkcs1`. Tale funzione richiama `loadPublicKeyFromCert()`, che esegue in maniera sincrona:
   1. `fs.existsSync(targetPath)`

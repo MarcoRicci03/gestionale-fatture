@@ -1,13 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { decryptRsaPkcs1, encryptRsaPkcs1, loadPublicKeyFromCert } from "./crypto";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import {
+  decryptRsaPkcs1,
+  encryptRsaPkcs1,
+  loadPublicKeyFromCert,
+  clearPublicKeyCache,
+} from "./crypto";
 
 const MOCK_CERT = path.join(process.cwd(), "certs", "mock_sanitelcf.cer");
 const MOCK_KEY = path.join(process.cwd(), "certs", "mock_sanitelcf.key");
 const SANITEL_CERT = path.join(process.cwd(), "certs", "SanitelCF.cer");
 
 describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
+  beforeEach(() => {
+    clearPublicKeyCache();
+    vi.restoreAllMocks();
+  });
+
   it.skipIf(!fs.existsSync(SANITEL_CERT))("carica la chiave pubblica dal certificato ufficiale SanitelCF.cer (DER)", () => {
     const key = loadPublicKeyFromCert(SANITEL_CERT);
     expect(key).toBeDefined();
@@ -32,5 +42,43 @@ describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
 
     expect(encryptedB64).toBeDefined();
     expect(encryptedB64.length).toBeGreaterThan(50);
+  });
+
+  describe("memoizzazione in-memory certificato X.509 (PERF-01)", () => {
+    it("memoizza la chiave pubblica ed evita letture duplicate da disco", () => {
+      const readSpy = vi.spyOn(fs, "readFileSync");
+
+      const key1 = loadPublicKeyFromCert(MOCK_CERT);
+      const key2 = loadPublicKeyFromCert(MOCK_CERT);
+
+      // Entrambe le chiamate restituiscono la medesima istanza
+      expect(key1).toBe(key2);
+      // fs.readFileSync deve essere stato invocato una sola volta
+      expect(readSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("esegue una nuova lettura da disco dopo clearPublicKeyCache()", () => {
+      const readSpy = vi.spyOn(fs, "readFileSync");
+
+      const key1 = loadPublicKeyFromCert(MOCK_CERT);
+      expect(readSpy).toHaveBeenCalledTimes(1);
+
+      clearPublicKeyCache();
+
+      const key2 = loadPublicKeyFromCert(MOCK_CERT);
+      expect(readSpy).toHaveBeenCalledTimes(2);
+      expect(key1).not.toBe(key2);
+    });
+
+    it("su 100 cifrature consecutive invoca fs.readFileSync una sola volta", () => {
+      const readSpy = vi.spyOn(fs, "readFileSync");
+
+      for (let i = 0; i < 100; i++) {
+        const encrypted = encryptRsaPkcs1(`RSSMRA80A01H501${i % 10}`, MOCK_CERT);
+        expect(encrypted).toBeTruthy();
+      }
+
+      expect(readSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
