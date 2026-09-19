@@ -243,10 +243,11 @@ export async function getMonthlyRevenue(year: number, month: number) {
 export async function getLatestInvoices(limit: number) {
   const userId = await requireUserId();
   // Vedi nota in getInvoices: nessun filtro su archiviato.
+  // `{ id: "desc" }` come tie-breaker per determinismo a parità di data (PERF-04).
   const invoices = await prisma.pagamento.findMany({
     where: { id_Utente: userId },
     include: { pagante: true, paziente: true, mesi: true },
-    orderBy: { data: "desc" },
+    orderBy: [{ data: "desc" }, { id: "desc" }],
     take: limit,
   });
   return invoices.map((invoice) => ({

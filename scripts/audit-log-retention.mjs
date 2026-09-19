@@ -14,7 +14,7 @@
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { msUntilNextRun } from "./lib/retention-schedule.mjs";
+import { msUntilNextRun, calculateCutoffDate } from "./lib/retention-schedule.mjs";
 
 const RETENTION_MONTHS = Number(process.env.AUDIT_LOG_RETENTION_MONTHS ?? 12);
 const TARGET_WEEKDAY = Number(process.env.AUDIT_LOG_RETENTION_WEEKDAY ?? 0); // 0 = domenica
@@ -51,8 +51,7 @@ async function purgeOnce() {
   const prisma = new PrismaClient({ adapter });
 
   try {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - RETENTION_MONTHS);
+    const cutoff = calculateCutoffDate(new Date(), RETENTION_MONTHS);
 
     const { count } = await prisma.auditLog.deleteMany({
       where: { createdAt: { lt: cutoff } },

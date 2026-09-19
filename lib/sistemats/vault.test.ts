@@ -25,8 +25,10 @@ describe("vault — cifratura AES-256-GCM a riposo", () => {
   it("lancia errore su payload cifrato corrotto o manomesso", () => {
     const valid = encryptCredential("segreto");
     const parts = valid.split(":");
-    // Manomettiamo il ciphertext
-    const corrupted = `${parts[0]}:${parts[1]}:ff${parts[2].slice(2)}`;
+    // Manomettiamo il ciphertext invertendo i bit del primo byte per garantire la corruzione
+    const firstByte = parts[2].slice(0, 2);
+    const flipped = (parseInt(firstByte, 16) ^ 0xff).toString(16).padStart(2, "0");
+    const corrupted = `${parts[0]}:${parts[1]}:${flipped}${parts[2].slice(2)}`;
 
     expect(() => decryptCredential(corrupted)).toThrow();
   });

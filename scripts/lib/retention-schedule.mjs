@@ -18,3 +18,11 @@ export function msUntilNextRun(now, targetWeekday, targetHour) {
 
   return next.getTime() - now.getTime();
 }
+
+// Calcola la data di cutoff per la retention sottraendo (retentionMonths * 30) giorni.
+// Evita il date-drift di setMonth() sui giorni 29, 30 e 31 (ERR-03).
+export function calculateCutoffDate(now, retentionMonths) {
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - retentionMonths * 30);
+  return cutoff;
+}

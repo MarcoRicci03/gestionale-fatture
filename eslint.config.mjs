@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Worktree/harness dir: può contenere una copia completa del repo.
     ".claude/**",
+    // Cartella dati bind mount Postgres locale (può avere permessi root/postgres):
+    "postgres_dev_data/**",
   ]),
 ]);
 

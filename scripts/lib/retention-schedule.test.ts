@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { msUntilNextRun } from "./retention-schedule.mjs";
+import { msUntilNextRun, calculateCutoffDate } from "./retention-schedule.mjs";
 
 // TZ mutato esplicitamente (stesso pattern di mutableEnv in
 // scripts/verify-security-headers.test.ts): il container di produzione fissa
@@ -65,3 +65,39 @@ describe("msUntilNextRun", () => {
     expect(waitMs).not.toBe((6 * 24 + 17) * 60 * 60 * 1000);
   });
 });
+
+describe("calculateCutoffDate", () => {
+  it("sottrae esattamente retentionMonths * 30 giorni", () => {
+    const now = new Date(2026, 5, 15, 12, 0, 0); // 15 giugno 2026
+    const cutoff = calculateCutoffDate(now, 1);
+    // 30 giorni prima del 15 giugno = 16 maggio (maggio ha 31 giorni)
+    const expected = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    expect(cutoff.getTime()).toBe(expected.getTime());
+  });
+
+  it("non muta l'oggetto Date originale", () => {
+    const now = new Date(2026, 5, 15, 12, 0, 0);
+    const originalTime = now.getTime();
+    calculateCutoffDate(now, 6);
+    expect(now.getTime()).toBe(originalTime);
+  });
+
+  it("previene il date drift tipico di setMonth sui giorni a fine mese (ERR-03)", () => {
+    // 31 marzo: con setMonth(getMonth() - 1), JS calcolerebbe 31 febbraio -> 3 marzo (salto di mese involontario).
+    // Con sottrazione a giorni fissi (30 giorni), 31 marzo - 30 giorni = 1 marzo.
+    const march31 = new Date(2026, 2, 31, 10, 0, 0);
+    const cutoff = calculateCutoffDate(march31, 1);
+
+    expect(cutoff.getFullYear()).toBe(2026);
+    expect(cutoff.getMonth()).toBe(2); // marzo (0-indexed: 2)
+    expect(cutoff.getDate()).toBe(1); // 1 marzo
+  });
+
+  it("calcola correttamente una retention di 12 mesi (360 giorni)", () => {
+    const now = new Date(2026, 8, 19, 12, 0, 0);
+    const cutoff = calculateCutoffDate(now, 12);
+    const diffMs = now.getTime() - cutoff.getTime();
+    expect(diffMs).toBe(12 * 30 * 24 * 60 * 60 * 1000);
+  });
+});
+

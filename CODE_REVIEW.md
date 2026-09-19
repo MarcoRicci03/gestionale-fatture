@@ -42,12 +42,12 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ⏳ DA RISOLVERE | - |
 | [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ✅ RISOLTO | Branch `perf/memoize-x509-cert-perf01` |
 | [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ✅ RISOLTO | Branch `perf/propagation-n-plus-one-perf02` |
-| [`PERF-03`](#perf-03) | **Medio** | Performance ed Efficienza | Caricamento non paginato di tutti i paganti attivi nella vista archiviati | ⏳ DA RISOLVERE | - |
-| [`PERF-04`](#perf-04) | **Basso** | Performance ed Efficienza | Ordinamento non deterministico in `getLatestInvoices` per assenza di Tie-Breaker | ⏳ DA RISOLVERE | - |
+| [`PERF-03`](#perf-03) | **Medio** | Performance ed Efficienza | Caricamento non paginato di tutti i paganti attivi nella vista archiviati | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
+| [`PERF-04`](#perf-04) | **Basso** | Performance ed Efficienza | Ordinamento non deterministico in `getLatestInvoices` per assenza di Tie-Breaker | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`ERR-01`](#err-01) | **Alto** | Error Handling e Robustezza | Parsing XML delle risposte SOAP tramite Regular Expression | ✅ RISOLTO | Branch `fix/sistemats-xml-parser-err01` |
 | [`ERR-02`](#err-02) | **Medio** | Error Handling e Robustezza | Race Condition (TOCTOU) su cancellazione definitiva Pagante/Paziente | ✅ RISOLTO | Branch `fix/hard-delete-toctou-err02` |
-| [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ⏳ DA RISOLVERE | - |
-| [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ⏳ DA RISOLVERE | - |
+| [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
+| [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ⏳ DA RISOLVERE | - |
 | [`SMELL-03`](#smell-03) | **Basso** | Code Smells e Naming Conventions | Valore sentinella fittizio `id: 0` in `getPdfSettings` (Rilievo QUA-03) | ⏳ DA RISOLVERE | - |
 | [`SMELL-04`](#smell-04) | **Basso** | Code Smells e Naming Conventions | Riferimenti a documentazione non presente nel repository (Rilievo DOC-01) | ⏳ DA RISOLVERE | - |
@@ -491,7 +491,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `PERF-03`
 - **Gravità:** `Medio`
 - **Categoria:** Performance ed Efficienza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/perf03-perf04-err03-smell01`
 - **Posizione:** [`lib/data/payers.ts:85-88`](file:///home/marcor/Projects/gestionale-fatture/lib/data/payers.ts#L85-L88)
 - **Descrizione:** In `getArchivedPayers`, a ogni richiesta di pagina della sezione "Archiviati" (anche per soli 20 record visualizzati), viene eseguita la query:
   ```typescript
@@ -528,7 +528,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `PERF-04`
 - **Gravità:** `Basso`
 - **Categoria:** Performance ed Efficienza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/perf03-perf04-err03-smell01`
 - **Posizione:** [`lib/data/invoices.ts:249`](file:///home/marcor/Projects/gestionale-fatture/lib/data/invoices.ts#L249)
 - **Descrizione:** In `findInvoicesPage` l'ordinamento è configurato come `orderBy: [{ data: "desc" }, { id: "desc" }]` per assicurare stabilità in caso di fatture emesse nella stessa data. In `getLatestInvoices` (utilizzato dalla dashboard) l'ordinamento è invece impostato unicamente su `orderBy: { data: "desc" }`. Poiché PostgreSQL non garantisce l'ordine tra tuple con valori identici di `data`, l'elenco delle fatture recenti può mutare ordine arbitrariamente tra reload successivi.
 - **Soluzione consigliata:**
@@ -597,7 +597,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ERR-03`
 - **Gravità:** `Basso`
 - **Categoria:** Error Handling e Robustezza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/perf03-perf04-err03-smell01`
 - **Posizione:** [`scripts/audit-log-retention.mjs:54-56`](file:///home/marcor/Projects/gestionale-fatture/scripts/audit-log-retention.mjs#L54-L56)
 - **Descrizione:** Il calcolo della soglia di eliminazione dell'audit log è implementato come:
   ```javascript
@@ -621,7 +621,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SMELL-01`
 - **Gravità:** `Medio`
 - **Categoria:** Code Smells e Naming Conventions
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/perf03-perf04-err03-smell01`
 - **Posizione:** [`eslint.config.mjs:9-17`](file:///home/marcor/Projects/gestionale-fatture/eslint.config.mjs#L9-L17)
 - **Descrizione:** Eseguendo `npm run lint` nell'ambiente di lavoro corrente, il linter fallisce immediatamente con errore bloccante:
   ```text
