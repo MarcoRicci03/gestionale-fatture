@@ -8,6 +8,7 @@ import { patientSchema, type PatientFormData } from "@/lib/validations/patient";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePatient } from "@/lib/archive/guards";
+import { isForeignKeyViolation } from "@/lib/prisma-errors";
 
 export type PatientActionState = { success: true } | { error: string };
 
@@ -189,26 +190,45 @@ export async function hardDeletePatient(
 ): Promise<PatientActionState> {
   const userId = await requireUserId();
 
-  const patient = await prisma.paziente.findFirst({
-    where: { id, id_Utente: userId, archiviato: true },
-  });
-  if (!patient) {
-    return { error: "Paziente non trovato tra gli archiviati" };
-  }
-
-  const fatture = await prisma.pagamento.count({
-    where: { id_Utente: userId, id_Paziente: id },
-  });
-
-  if (!canHardDeletePatient({ fatture })) {
-    return {
-      error: `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`,
-    };
-  }
+  let idPagante: number | null = null;
 
   try {
-    await prisma.paziente.delete({ where: { id, id_Utente: userId } });
+    await prisma.$transaction(async (tx) => {
+      const patient = await tx.paziente.findFirst({
+        where: { id, id_Utente: userId, archiviato: true },
+      });
+      if (!patient) {
+        throw new Error("Paziente non trovato tra gli archiviati");
+      }
+
+      const fatture = await tx.pagamento.count({
+        where: { id_Utente: userId, id_Paziente: id },
+      });
+
+      if (!canHardDeletePatient({ fatture })) {
+        throw new Error(
+          `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`
+        );
+      }
+
+      idPagante = patient.id_Pagante;
+      await tx.paziente.delete({ where: { id, id_Utente: userId } });
+    });
   } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      return {
+        error:
+          "Impossibile eliminare: sono presenti record (fatture) collegati a questo paziente",
+      };
+    }
+    if (error instanceof Error) {
+      if (
+        error.message === "Paziente non trovato tra gli archiviati" ||
+        error.message.startsWith("Impossibile eliminare:")
+      ) {
+        return { error: error.message };
+      }
+    }
     console.error("hardDeletePatient error", error);
     return { error: "Errore durante l'eliminazione definitiva del paziente" };
   }
@@ -219,7 +239,7 @@ export async function hardDeletePatient(
     entita: "Paziente",
     entitaId: id,
     meta: {
-      id_Pagante: patient.id_Pagante,
+      id_Pagante: idPagante,
     },
     ip: await getClientIp(),
   });

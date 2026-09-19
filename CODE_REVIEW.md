@@ -577,7 +577,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ERR-02`
 - **Gravità:** `Medio`
 - **Categoria:** Error Handling e Robustezza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/hard-delete-toctou-err02`
 - **Posizione:** [`lib/actions/payers.ts:348-379`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/payers.ts#L348-L379)
 - **Descrizione:** In `hardDeletePayer`, il controllo che verifica l'assenza di fatture o pazienti non archiviati collegati (`canHardDeletePayer`) viene eseguito tramite conteggi indipendenti:
   ```typescript

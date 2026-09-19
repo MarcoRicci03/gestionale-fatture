@@ -25,18 +25,27 @@ vi.mock("@/lib/audit/log", () => ({
 const mockPaganteFindFirst = vi.fn();
 const mockPaganteCreate = vi.fn();
 const mockPaganteUpdate = vi.fn();
+const mockPaganteDelete = vi.fn();
 const mockPagamentoFindMany = vi.fn();
 const mockPagamentoUpdate = vi.fn();
+const mockPagamentoCount = vi.fn();
+const mockPazienteCount = vi.fn();
 
 const mockTransaction = vi.fn(async (cb: (tx: unknown) => unknown) => {
   const tx = {
     pagante: {
+      findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
       update: (...args: unknown[]) => mockPaganteUpdate(...args),
       create: (...args: unknown[]) => mockPaganteCreate(...args),
+      delete: (...args: unknown[]) => mockPaganteDelete(...args),
     },
     pagamento: {
       findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
       update: (...args: unknown[]) => mockPagamentoUpdate(...args),
+      count: (...args: unknown[]) => mockPagamentoCount(...args),
+    },
+    paziente: {
+      count: (...args: unknown[]) => mockPazienteCount(...args),
     },
   };
   return cb(tx);
@@ -48,16 +57,22 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
       create: (...args: unknown[]) => mockPaganteCreate(...args),
       update: (...args: unknown[]) => mockPaganteUpdate(...args),
+      delete: (...args: unknown[]) => mockPaganteDelete(...args),
     },
     pagamento: {
       findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
       update: (...args: unknown[]) => mockPagamentoUpdate(...args),
+      count: (...args: unknown[]) => mockPagamentoCount(...args),
+    },
+    paziente: {
+      count: (...args: unknown[]) => mockPazienteCount(...args),
     },
     $transaction: (...args: unknown[]) => mockTransaction(...args as [(tx: unknown) => unknown]),
   },
 }));
 
-import { updatePayer, createPayer } from "./payers";
+import { Prisma } from "@prisma/client";
+import { updatePayer, createPayer, hardDeletePayer } from "./payers";
 
 describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
   beforeEach(() => {
@@ -157,5 +172,84 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
         meta: { propagaFattureInAttesa: true },
       })
     );
+  });
+});
+
+describe("lib/actions/payers — hardDeletePayer transazionale e gestione vincoli", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("elimina definitivamente il pagante ed esegue l'audit log quando non ci sono fatture o pazienti attivi", async () => {
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 10, archiviato: true });
+    mockPagamentoCount.mockResolvedValueOnce(0); // fatture
+    mockPazienteCount
+      .mockResolvedValueOnce(0) // pazienti non archiviati
+      .mockResolvedValueOnce(2); // pazienti archiviati collegati
+    mockPaganteDelete.mockResolvedValueOnce({ id: 10 });
+
+    const res = await hardDeletePayer(10);
+
+    expect(res).toEqual({ success: true });
+    expect(mockTransaction).toHaveBeenCalled();
+    expect(mockPaganteDelete).toHaveBeenCalledWith({
+      where: { id: 10, id_Utente: 1 },
+    });
+    expect(mockLogAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        azione: AUDIT_ACTIONS.PAYER_DELETE,
+        entita: "Pagante",
+        entitaId: 10,
+        meta: { pazientiEliminatiInCascata: 2 },
+      })
+    );
+  });
+
+  it("blocca l'eliminazione se ci sono fatture collegate", async () => {
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 10, archiviato: true });
+    mockPagamentoCount.mockResolvedValueOnce(2); // fatture
+    mockPazienteCount.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+    const res = await hardDeletePayer(10);
+
+    expect(res).toEqual({
+      error: expect.stringContaining("ci sono 2 fattura/e collegata/e"),
+    });
+    expect(mockPaganteDelete).not.toHaveBeenCalled();
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it("blocca l'eliminazione se ci sono pazienti non archiviati collegati", async () => {
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 10, archiviato: true });
+    mockPagamentoCount.mockResolvedValueOnce(0);
+    mockPazienteCount.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+
+    const res = await hardDeletePayer(10);
+
+    expect(res).toEqual({
+      error: expect.stringContaining("1 paziente/i collegato/i non è/sono ancora archiviato/i"),
+    });
+    expect(mockPaganteDelete).not.toHaveBeenCalled();
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it("gestisce la violazione di vincolo foreign key (P2003) con messaggio esplicito", async () => {
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 10, archiviato: true });
+    mockPagamentoCount.mockResolvedValueOnce(0);
+    mockPazienteCount.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+    mockPaganteDelete.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("FK violation", {
+        code: "P2003",
+        clientVersion: "5.0.0",
+      })
+    );
+
+    const res = await hardDeletePayer(10);
+
+    expect(res).toEqual({
+      error:
+        "Impossibile eliminare: sono presenti record (fatture o pazienti) collegati a questo pagante",
+    });
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });

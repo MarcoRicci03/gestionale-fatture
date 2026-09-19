@@ -38,3 +38,10 @@ export function isUniqueViolationOnField(
 
   return false;
 }
+
+export function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2003"
+  );
+}
