@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useState } from "react";
 import { PlusCircle, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +26,12 @@ import { SearchField } from "@/components/ui/search-field";
 import { ListPagination } from "@/components/ui/list-pagination";
 import { SelectionFloatingBar } from "@/components/ui/selection-floating-bar";
 import { useTableSelection } from "@/lib/hooks/use-table-selection";
+import { useManagerPagination } from "@/lib/hooks/use-manager-pagination";
+import {
+  formatArchiveInvoiceImpact,
+  getHardDeleteInvoiceBlockReason,
+  getHardDeletePatientsBlockReason,
+} from "@/lib/archive/formatting";
 import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 import type { Pagante, Paziente } from "@prisma/client";
 import type { ArchivedPayerRow } from "@/lib/data/payers";
@@ -44,33 +49,19 @@ type PayersManagerProps = {
   search: string;
 };
 
-function formatCurrency(amount: number) {
-  return amount.toLocaleString("it-IT", {
-    style: "currency",
-    currency: "EUR",
+function invoiceImpactLabel(row: ArchivedPayerRow): string | null {
+  return formatArchiveInvoiceImpact({
+    count: row.fattureCount,
+    totale: row.fattureTotale,
+    annoMin: row.fatturaAnnoMin,
+    annoMax: row.fatturaAnnoMax,
   });
 }
 
-function invoiceImpactLabel(row: ArchivedPayerRow): string | null {
-  if (row.fattureCount === 0) return null;
-  const years =
-    row.fatturaAnnoMin === row.fatturaAnnoMax
-      ? `${row.fatturaAnnoMin}`
-      : `${row.fatturaAnnoMin}-${row.fatturaAnnoMax}`;
-  const plural = row.fattureCount === 1 ? "" : "e";
-  return `${row.fattureCount} fattura${plural} collegata${plural} (${years}, ${formatCurrency(row.fattureTotale)})`;
-}
-
 function hardDeleteBlockReason(row: ArchivedPayerRow): string | null {
-  if (row.fattureCount > 0) {
-    const plural = row.fattureCount === 1 ? "" : "e";
-    return `Impossibile eliminare: ci sono ${row.fattureCount} fattura${plural} collegata${plural}. Le fatture non possono essere cancellate.`;
-  }
-  if (row.pazientiNonArchiviati > 0) {
-    const plural = row.pazientiNonArchiviati === 1 ? "" : "i";
-    return `Impossibile eliminare: ${row.pazientiNonArchiviati} paziente${plural} collegato${plural} non ${row.pazientiNonArchiviati === 1 ? "è" : "sono"} ancora archiviato${plural}. Archivialo prima di procedere.`;
-  }
-  return null;
+  const invoiceReason = getHardDeleteInvoiceBlockReason(row.fattureCount);
+  if (invoiceReason) return invoiceReason;
+  return getHardDeletePatientsBlockReason(row.pazientiNonArchiviati);
 }
 
 function restoreConflictLabel(row: ArchivedPayerRow): string | null {
@@ -90,9 +81,6 @@ export function PayersManager({
   archivedPage,
   search,
 }: PayersManagerProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-
   const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [editingPayer, setEditingPayer] = useState<ActivePayer | null>(null);
@@ -113,43 +101,18 @@ export function PayersManager({
     clearSelection();
   }
 
-  // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
-  // dello stato più recente verso cui si è navigato, aggiornato
-  // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
-  // cambiano), per evitare che due navigazioni ravvicinate (es. il flush del
-  // debounce di ricerca seguito a ruota da un click di paginazione)
-  // leggano entrambe closure stale e la seconda perda silenziosamente la
-  // patch della prima.
-  const latestListStateRef = useRef({ search, page, archivedPage, pageSize });
-  useEffect(() => {
-    latestListStateRef.current = { search, page, archivedPage, pageSize };
-  }, [search, page, archivedPage, pageSize]);
-
-  function navigate(next: { search: string; page: number; archivedPage: number; pageSize: number }) {
-    latestListStateRef.current = next;
-    const params = new URLSearchParams();
-    if (next.search) params.set("q", next.search);
-    if (next.page > 1) params.set("page", String(next.page));
-    if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
-    if (next.pageSize !== PAYERS_PAGE_SIZE) params.set("pageSize", String(next.pageSize));
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }
-
-  const handleSearchChange = (nextSearch: string) => {
-    navigate({ ...latestListStateRef.current, search: nextSearch, page: 1, archivedPage: 1 });
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    navigate({ ...latestListStateRef.current, page: nextPage });
-  };
-
-  const handleArchivedPageChange = (nextArchivedPage: number) => {
-    navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
-  };
-
-  const handlePageSizeChange = (nextPageSize: number) => {
-    navigate({ ...latestListStateRef.current, page: 1, archivedPage: 1, pageSize: nextPageSize });
-  };
+  const {
+    handleSearchChange,
+    handlePageChange,
+    handleArchivedPageChange,
+    handlePageSizeChange,
+  } = useManagerPagination({
+    search,
+    page,
+    archivedPage,
+    pageSize,
+    defaultPageSize: PAYERS_PAGE_SIZE,
+  });
 
   const handleOpenNew = () => {
     setEditingPayer(null);

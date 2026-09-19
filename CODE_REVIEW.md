@@ -32,8 +32,8 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`SEC-03`](#sec-03) | **Medio** | Sicurezza e Vulnerabilità | Spoofing IP ed evasione lockout tramite primo elemento di `X-Forwarded-For` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
 | [`SEC-04`](#sec-04) | **Medio** | Sicurezza e Vulnerabilità | Memory Leak potenziale per assenza di tetto massimo in `createRateLimiter` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
 | [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ⏳ DA RISOLVERE | - |
-| [`DRY-01`](#dry-01) | **Alto** | Duplicazione e Principi DRY | Duplicazione strutturale estesa tra `patients-manager.tsx` e `payers-manager.tsx` | ⏳ DA RISOLVERE | - |
-| [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ⏳ DA RISOLVERE | - |
+| [`DRY-01`](#dry-01) | **Alto** | Duplicazione e Principi DRY | Duplicazione strutturale estesa tra `patients-manager.tsx` e `payers-manager.tsx` | ✅ RISOLTO | Branch `refactor/dry01-dry02-managers-duplication` |
+| [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ✅ RISOLTO | Branch `refactor/dry01-dry02-managers-duplication` |
 | [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ⏳ DA RISOLVERE | - |
@@ -211,7 +211,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `DRY-01`
 - **Gravità:** `Alto`
 - **Categoria:** Duplicazione e Principi DRY
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `refactor/dry01-dry02-managers-duplication`)
 - **Posizione:** [`components/patients/patients-manager.tsx:49-74, 224-348, 372-477`](file:///home/marcor/Projects/gestionale-fatture/components/patients/patients-manager.tsx#L49-L74) e [`components/payers/payers-manager.tsx:47-74, 224-348, 372-490`](file:///home/marcor/Projects/gestionale-fatture/components/payers/payers-manager.tsx#L47-L74)
 - **Descrizione:** Oltre 350 righe di logica UI e business presentation sono clonate quasi identiche tra i due componenti:
   1. `formatCurrency` e `invoiceImpactLabel` sono identiche al 100%.
@@ -242,7 +242,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `DRY-02`
 - **Gravità:** `Medio`
 - **Categoria:** Duplicazione e Principi DRY
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `refactor/dry01-dry02-managers-duplication`)
 - **Posizione:** [`components/patients/patients-manager.tsx:588-630`](file:///home/marcor/Projects/gestionale-fatture/components/patients/patients-manager.tsx#L588-L630) e [`components/invoices/payer-detail-dialog.tsx:1-61`](file:///home/marcor/Projects/gestionale-fatture/components/invoices/payer-detail-dialog.tsx#L1-L61)
 - **Descrizione:** All'interno di `patients-manager.tsx`, alle righe 588-630 è definita inline una finestra di dialogo completa di 42 righe per visualizzare i dettagli del pagante collegato (Nome, Cognome, Indirizzo, CF, Partita IVA). Il progetto dispone già di un componente isolato e collaudato con i relativi test unitari: [`components/invoices/payer-detail-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/invoices/payer-detail-dialog.tsx).
 - **Soluzione consigliata:**
