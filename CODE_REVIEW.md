@@ -29,8 +29,8 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | [`SEC-01`](#sec-01) | **Critico** | Sicurezza e Vulnerabilità | Denial of Service & Container Crash-Loop tramite Healthcheck Starvation | ✅ RISOLTO | Branch `fix/healthcheck-dos-starvation` (commit `af85c7b`) |
 | [`SEC-02`](#sec-02) | **Alto** | Sicurezza e Vulnerabilità | Troncamento silenzioso a 72 byte di bcryptjs e potenziale Lockout da disallineamento schemi password | ✅ RISOLTO | Branch `fix/password-bcrypt-72byte-limit` |
-| [`SEC-03`](#sec-03) | **Medio** | Sicurezza e Vulnerabilità | Spoofing IP ed evasione lockout tramite primo elemento di `X-Forwarded-For` | ⏳ DA RISOLVERE | - |
-| [`SEC-04`](#sec-04) | **Medio** | Sicurezza e Vulnerabilità | Memory Leak potenziale per assenza di tetto massimo in `createRateLimiter` | ⏳ DA RISOLVERE | - |
+| [`SEC-03`](#sec-03) | **Medio** | Sicurezza e Vulnerabilità | Spoofing IP ed evasione lockout tramite primo elemento di `X-Forwarded-For` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
+| [`SEC-04`](#sec-04) | **Medio** | Sicurezza e Vulnerabilità | Memory Leak potenziale per assenza di tetto massimo in `createRateLimiter` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
 | [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ⏳ DA RISOLVERE | - |
 | [`DRY-01`](#dry-01) | **Alto** | Duplicazione e Principi DRY | Duplicazione strutturale estesa tra `patients-manager.tsx` e `payers-manager.tsx` | ⏳ DA RISOLVERE | - |
 | [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ⏳ DA RISOLVERE | - |
@@ -134,7 +134,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SEC-03`
 - **Gravità:** `Medio`
 - **Categoria:** Sicurezza e Vulnerabilità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/sec03-sec04-ip-spoofing-rate-limiter`
 - **Posizione:** [`lib/auth/client-ip.ts:36-40`](file:///home/marcor/Projects/gestionale-fatture/lib/auth/client-ip.ts#L36-L40)
 - **Descrizione:** In `parseClientIpFromHeaders`, se `CF-Connecting-IP` è assente e `TRUSTED_PROXY=true` è configurato, il codice estrae l'IP con:
   `const first = forwardedFor.split(",")[0]?.trim();`
@@ -160,7 +160,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SEC-04`
 - **Gravità:** `Medio`
 - **Categoria:** Sicurezza e Vulnerabilità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/sec03-sec04-ip-spoofing-rate-limiter`
 - **Posizione:** [`lib/auth/rate-limiter.ts:27-40`](file:///home/marcor/Projects/gestionale-fatture/lib/auth/rate-limiter.ts#L27-L40)
 - **Descrizione:** A differenza di [`lib/auth/rate-limit.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/auth/rate-limit.ts#L17) (che implementa `MAX_ENTRIES_PER_MAP = 10_000` con espulsione LRU e sweep temporizzato), l'istanza generica `createRateLimiter` mantiene una `Map<string, WindowRecord>` senza alcun limite di cardinalità massima. La rimozione delle chiavi scadute si affida esclusivamente a uno sweep probabilistico all'1% (`Math.random() < 0.01`). Sotto attacco o con endpoint interrogati con parametri/chiavi arbitrarie, la `Map` cresce senza vincoli consumando la memoria del processo Node.js.
 - **Soluzione consigliata:**

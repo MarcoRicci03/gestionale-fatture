@@ -55,6 +55,29 @@ describe("createRateLimiter", () => {
     expect(limiter.consume("a").allowed).toBe(true);
     expect(limiter.consume("b").allowed).toBe(true);
   });
+
+  it("rispetta maxEntries ed applica eviction della chiave più vecchia (SEC-04)", () => {
+    const limiter = createRateLimiter({
+      maxRequests: 2,
+      windowMs: 60000,
+      maxEntries: 3,
+    });
+
+    // Inseriamo 3 chiavi (raggiunge la capienza massima di 3)
+    expect(limiter.consume("key1").allowed).toBe(true);
+    expect(limiter.consume("key2").allowed).toBe(true);
+    expect(limiter.consume("key3").allowed).toBe(true);
+
+    // Consumiamo di nuovo key1 fino a bloccarla
+    expect(limiter.consume("key1").allowed).toBe(true);
+    expect(limiter.consume("key1").allowed).toBe(false);
+
+    // L'inserimento di una 4a chiave 'key4' deve causare l'eviction di 'key1' (la più vecchia)
+    expect(limiter.consume("key4").allowed).toBe(true);
+
+    // Poiché key1 è stata evitta, un nuovo consume di key1 riparte da zero (allowed: true)
+    expect(limiter.consume("key1").allowed).toBe(true);
+  });
 });
 
 describe("rate limiter usato dalle rotte sensibili", () => {

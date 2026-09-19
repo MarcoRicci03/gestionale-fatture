@@ -23,8 +23,14 @@ export function createRateLimiter(options: {
   maxRequests: number;
   windowMs: number;
   sweepProbability?: number;
+  maxEntries?: number;
 }): RateLimiter {
-  const { maxRequests, windowMs, sweepProbability = 0.01 } = options;
+  const {
+    maxRequests,
+    windowMs,
+    sweepProbability = 0.01,
+    maxEntries = 5000,
+  } = options;
   const records = new Map<string, WindowRecord>();
 
   function isExpired(record: WindowRecord, now: number): boolean {
@@ -46,23 +52,36 @@ export function createRateLimiter(options: {
         sweepExpired(now);
       }
 
-      const record = records.get(key);
-      if (!record || isExpired(record, now)) {
-        records.set(key, { count: 1, windowStart: now });
+      const existingRecord = records.get(key);
+      if (existingRecord && !isExpired(existingRecord, now)) {
+        if (existingRecord.count >= maxRequests) {
+          return {
+            allowed: false,
+            retryAfterSeconds: Math.max(
+              0,
+              Math.ceil((existingRecord.windowStart + windowMs - now) / 1000)
+            ),
+          };
+        }
+
+        existingRecord.count += 1;
         return { allowed: true };
       }
 
-      if (record.count >= maxRequests) {
-        return {
-          allowed: false,
-          retryAfterSeconds: Math.max(
-            0,
-            Math.ceil((record.windowStart + windowMs - now) / 1000)
-          ),
-        };
+      // Se la chiave è nuova e la mappa ha raggiunto la capacità massima,
+      // eseguiamo lo sweep delle chiavi scadute e, se ancora piena, eliminiamo
+      // la voce più vecchia per evitare memory leak.
+      if (!existingRecord && records.size >= maxEntries) {
+        sweepExpired(now);
+        if (records.size >= maxEntries) {
+          const oldestKey = records.keys().next().value;
+          if (oldestKey !== undefined) {
+            records.delete(oldestKey);
+          }
+        }
       }
 
-      record.count += 1;
+      records.set(key, { count: 1, windowStart: now });
       return { allowed: true };
     },
 
