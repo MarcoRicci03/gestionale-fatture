@@ -289,3 +289,99 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
     expect(res.success).toBe(false);
   });
 });
+
+describe("SistemaTsClient — XML Parsing Robustness (ERR-01)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  it("inviaFile parsa correttamente codiceEsito '000' (stringa con zeri) e decodifica entità XML", async () => {
+    const soapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:inv="http://ejb.invioTelematicoSS730p.sanita.finanze.it/">
+      <soapenv:Body>
+        <inv:inviaFileMtomResponse>
+          <protocollo>00123456789</protocollo>
+          <esitoChiamata>000</esitoChiamata>
+          <codiceEsito>000</codiceEsito>
+          <descrizioneEsito>Documento ricevuto &amp; preso in carico</descrizioneEsito>
+        </inv:inviaFileMtomResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => soapResponse,
+    })) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient(mockConfig);
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    expect(res.success).toBe(true);
+    expect(res.protocollo).toBe("00123456789");
+    expect(res.codiceEsito).toBe("000");
+    expect(res.descrizioneEsito).toBe("Documento ricevuto & preso in carico");
+  });
+
+  it("interrogaEsito gestisce risposte con tag auto-chiusi e contatori multipli", async () => {
+    const soapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <esito>
+          <stato>2</stato>
+          <codiceEsito>00</codiceEsito>
+          <descrizione>Elaborazione completata &lt;OK&gt;</descrizione>
+          <nInviati>10</nInviati>
+          <nAccolti>8</nAccolti>
+          <nErrori>2</nErrori>
+          <nWarnings>1</nWarnings>
+          <dettaglioErrori />
+        </esito>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => soapResponse,
+    })) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient(mockConfig);
+    const res = await client.interrogaEsito("00123456789");
+
+    expect(res.success).toBe(true);
+    expect(res.statoElaborazione).toBe("2");
+    expect(res.codiceEsito).toBe("00");
+    expect(res.descrizioneEsito).toBe("Elaborazione completata <OK>");
+    expect(res.numDocumentiRicevuti).toBe(10);
+    expect(res.numDocumentiAccolti).toBe(8);
+    expect(res.numDocumentiScartati).toBe(2);
+    expect(res.numDocumentiWarnings).toBe(1);
+  });
+
+  it("scaricaDettaglioErrori gestisce codice WS11 (nessun errore) senza tentare parse CSV", async () => {
+    const soapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <DettaglioErroriResponse>
+          <codice>WS11</codice>
+          <descrizione>Non sono presenti errori</descrizione>
+          <csv />
+        </DettaglioErroriResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>`;
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => soapResponse,
+    })) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient(mockConfig);
+    const res = await client.scaricaDettaglioErrori("00123456789");
+
+    expect(res.success).toBe(true);
+    expect(res.message).toBe("Non sono presenti errori o segnalazioni per questa trasmissione.");
+    expect(res.rawCsv).toBeUndefined();
+  });
+});

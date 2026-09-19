@@ -8,6 +8,7 @@ import {
   buildSoapRicevutaPdfXml,
 } from "./mtom-builder";
 import { Agent } from "undici";
+import { parseXml, findTagValue } from "./xml-parser";
 import type {
   DettaglioErroriResult,
   EsitoTsResult,
@@ -31,12 +32,6 @@ const DEFAULT_ENDPOINT_RICEVUTA =
 const DEFAULT_ENDPOINT_ERRORI =
   process.env.SISTEMATS_ENDPOINT_ERRORI ||
   "https://invioSS730pTest.sanita.finanze.it/EsitoStatoInviiWEB/DettaglioErrori730Service";
-
-function extractTagValue(xml: string, tagName: string): string | undefined {
-  const regex = new RegExp(`<(?:[a-zA-Z0-9_-]+:)?${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:[a-zA-Z0-9_-]+:)?${tagName}>`, "i");
-  const match = xml.match(regex);
-  return match ? match[1].trim() : undefined;
-}
 
 function verifyEndpointSafety(endpoint: string): void {
   const isSafeTest = ["test", "localhost", "127.0.0.1", "mock"].some((token) =>
@@ -367,14 +362,15 @@ export class SistemaTsClient {
         }
 
         const responseText = await response.text();
-        const pdfBase64 = extractTagValue(responseText, "pdf");
+        const parsed = parseXml(responseText);
+        const pdfBase64 = findTagValue(parsed, "pdf");
 
         if (pdfBase64) {
           const pdfBuffer = Buffer.from(pdfBase64, "base64");
           return { success: true, pdfBuffer, message: "Ricevuta PDF scaricata con successo." };
         }
 
-        const desc = extractTagValue(responseText, "descrizione") || extractTagValue(responseText, "faultstring");
+        const desc = findTagValue(parsed, "descrizione") || findTagValue(parsed, "faultstring");
         return {
           success: false,
           message: desc || "Nessun contenuto PDF restituito dal servizio ricevute.",
@@ -431,9 +427,10 @@ export class SistemaTsClient {
         }
 
         const responseText = await response.text();
+        const parsed = parseXml(responseText);
 
         // Esito WS11 = Assenza di errori
-        const codNegativo = extractTagValue(responseText, "codice");
+        const codNegativo = findTagValue(parsed, "codice");
         if (codNegativo === "WS11") {
           return {
             success: true,
@@ -441,9 +438,9 @@ export class SistemaTsClient {
           };
         }
 
-        const csvBase64 = extractTagValue(responseText, "csv");
+        const csvBase64 = findTagValue(parsed, "csv");
         if (!csvBase64) {
-          const fault = extractTagValue(responseText, "faultstring") || extractTagValue(responseText, "descrizione");
+          const fault = findTagValue(parsed, "faultstring") || findTagValue(parsed, "descrizione");
           return {
             success: false,
             message: fault || "Nessun dato CSV restituito dal server.",
@@ -481,7 +478,8 @@ export class SistemaTsClient {
   }
 
   private parseInvioResponse(responseText: string, statusCode: number): InvioTsResult {
-    const fault = extractTagValue(responseText, "faultstring");
+    const parsed = parseXml(responseText);
+    const fault = findTagValue(parsed, "faultstring");
     if (fault) {
       return {
         success: false,
@@ -491,10 +489,10 @@ export class SistemaTsClient {
       };
     }
 
-    const protocollo = extractTagValue(responseText, "protocollo");
-    const esitoChiamata = extractTagValue(responseText, "esitoChiamata");
-    const codiceEsito = extractTagValue(responseText, "codiceEsito");
-    const descrizioneEsito = extractTagValue(responseText, "descrizioneEsito");
+    const protocollo = findTagValue(parsed, "protocollo");
+    const esitoChiamata = findTagValue(parsed, "esitoChiamata");
+    const codiceEsito = findTagValue(parsed, "codiceEsito");
+    const descrizioneEsito = findTagValue(parsed, "descrizioneEsito");
 
     // Successo se protocollo presente e codiceEsito non è errore bloccante ("000" = accolto in elaborazione, "00", "0", "WS11")
     const isSuccess =
@@ -522,7 +520,8 @@ export class SistemaTsClient {
     statusCode: number,
     protocollo: string
   ): EsitoTsResult {
-    const fault = extractTagValue(responseText, "faultstring");
+    const parsed = parseXml(responseText);
+    const fault = findTagValue(parsed, "faultstring");
     if (fault) {
       return {
         success: false,
@@ -534,26 +533,26 @@ export class SistemaTsClient {
     }
 
     const stato =
-      extractTagValue(responseText, "stato") ||
-      extractTagValue(responseText, "statoElaborazione") ||
-      extractTagValue(responseText, "esito");
+      findTagValue(parsed, "stato") ||
+      findTagValue(parsed, "statoElaborazione") ||
+      findTagValue(parsed, "esito");
     const codiceEsito =
-      extractTagValue(responseText, "esitoChiamata") ||
-      extractTagValue(responseText, "codiceEsito");
+      findTagValue(parsed, "esitoChiamata") ||
+      findTagValue(parsed, "codiceEsito");
     const descrizioneEsito =
-      extractTagValue(responseText, "descrizione") ||
-      extractTagValue(responseText, "descrizioneEsito");
+      findTagValue(parsed, "descrizione") ||
+      findTagValue(parsed, "descrizioneEsito");
 
     const numRicevutiStr =
-      extractTagValue(responseText, "nInviati") ||
-      extractTagValue(responseText, "numDocumentiRicevuti");
+      findTagValue(parsed, "nInviati") ||
+      findTagValue(parsed, "numDocumentiRicevuti");
     const numAccoltiStr =
-      extractTagValue(responseText, "nAccolti") ||
-      extractTagValue(responseText, "numDocumentiAccolti");
+      findTagValue(parsed, "nAccolti") ||
+      findTagValue(parsed, "numDocumentiAccolti");
     const numScartatiStr =
-      extractTagValue(responseText, "nErrori") ||
-      extractTagValue(responseText, "numDocumentiScartati");
-    const numWarningsStr = extractTagValue(responseText, "nWarnings");
+      findTagValue(parsed, "nErrori") ||
+      findTagValue(parsed, "numDocumentiScartati");
+    const numWarningsStr = findTagValue(parsed, "nWarnings");
 
     return {
       success: true,

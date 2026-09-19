@@ -44,7 +44,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ⏳ DA RISOLVERE | - |
 | [`PERF-03`](#perf-03) | **Medio** | Performance ed Efficienza | Caricamento non paginato di tutti i paganti attivi nella vista archiviati | ⏳ DA RISOLVERE | - |
 | [`PERF-04`](#perf-04) | **Basso** | Performance ed Efficienza | Ordinamento non deterministico in `getLatestInvoices` per assenza di Tie-Breaker | ⏳ DA RISOLVERE | - |
-| [`ERR-01`](#err-01) | **Alto** | Error Handling e Robustezza | Parsing XML delle risposte SOAP tramite Regular Expression | ⏳ DA RISOLVERE | - |
+| [`ERR-01`](#err-01) | **Alto** | Error Handling e Robustezza | Parsing XML delle risposte SOAP tramite Regular Expression | ✅ RISOLTO | Branch `fix/sistemats-xml-parser-err01` |
 | [`ERR-02`](#err-02) | **Medio** | Error Handling e Robustezza | Race Condition (TOCTOU) su cancellazione definitiva Pagante/Paziente | ⏳ DA RISOLVERE | - |
 | [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ⏳ DA RISOLVERE | - |
 | [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ⏳ DA RISOLVERE | - |
@@ -543,7 +543,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ERR-01`
 - **Gravità:** `Alto`
 - **Categoria:** Error Handling e Robustezza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/sistemats-xml-parser-err01`
 - **Posizione:** [`lib/sistemats/client.ts:35-39, 483-570`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/client.ts#L35-L39)
 - **Descrizione:** L'estrazione dei dati delle risposte del Sistema TS (protocollo, esito elaborazione, contatori accolti/scartati, payload base64 di ricevute ed errori) è affidata alla funzione `extractTagValue`, basata sulla regex:
   ```typescript
