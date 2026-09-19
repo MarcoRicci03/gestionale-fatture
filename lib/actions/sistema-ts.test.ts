@@ -163,6 +163,7 @@ describe("lib/actions/sistema-ts — saveSistemaTsSettings", () => {
     const result = await saveSistemaTsSettings(inputWithoutPwd);
 
     expect(result).toEqual({
+      success: false,
       error: "La password del Sistema TS è obbligatoria.",
     });
     expect(mockImpostazioniUpsert).not.toHaveBeenCalled();
@@ -267,6 +268,7 @@ describe("lib/actions/sistema-ts — saveSistemaTsSettings", () => {
     });
 
     expect(result).toEqual({
+      success: false,
       error: "Errore durante il salvataggio delle impostazioni Sistema TS.",
     });
   });
@@ -307,7 +309,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
 
   it("restituisce errore se non viene passata alcuna fattura", async () => {
     const result = await inviaLottoFatture([]);
-    expect(result).toEqual({ error: "Nessuna fattura selezionata per l'invio." });
+    expect(result).toEqual({ success: false, error: "Nessuna fattura selezionata per l'invio." });
     expect(mockInviaFile).not.toHaveBeenCalled();
   });
 
@@ -355,6 +357,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     const result = await inviaLottoFatture([999]);
 
     expect(result).toEqual({
+      success: false,
       error: "Nessuna fattura idonea trovata tra quelle selezionate.",
     });
   });
@@ -657,7 +660,7 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
 
     const result = await sincronizzaEsitoTrasmissione(999);
 
-    expect(result).toEqual({ error: "Trasmissione non trovata." });
+    expect(result).toEqual({ success: false, error: "Trasmissione non trovata." });
     expect(mockInterrogaEsito).not.toHaveBeenCalled();
   });
 
@@ -676,7 +679,7 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
 
     const result = await sincronizzaEsitoTrasmissione(10);
 
-    expect(result).toEqual({ error: "Errore di autenticazione con Sogei" });
+    expect(result).toEqual({ success: false, error: "Errore di autenticazione con Sogei" });
     expect(mockTrasmissioneUpdate).not.toHaveBeenCalled();
   });
 
@@ -823,6 +826,7 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
     const result = await sincronizzaEsitoTrasmissione(25);
 
     expect(result).toEqual({
+      success: false,
       error: "Errore durante la sincronizzazione dell'esito: DB transaction failure",
     });
     expect(mockTransaction).toHaveBeenCalled();
@@ -1002,7 +1006,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
 
     const result = await annullaFatturaTs(999);
 
-    expect(result).toEqual({ error: "Fattura non trovata." });
+    expect(result).toEqual({ success: false, error: "Fattura non trovata." });
   });
 
   it("rifiuta l'annullamento se la fattura è in stato DA_INVIARE", async () => {
@@ -1016,6 +1020,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     const result = await annullaFatturaTs(50);
 
     expect(result).toEqual({
+      success: false,
       error:
         "Non è possibile annullare sul Sistema TS una fattura che non è mai stata trasmessa (stato 'Da Inviare').",
     });
@@ -1033,6 +1038,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     const result = await annullaFatturaTs(51);
 
     expect(result).toEqual({
+      success: false,
       error: "La fattura risulta già annullata sul Sistema TS.",
     });
     expect(mockInviaFile).not.toHaveBeenCalled();
@@ -1219,7 +1225,7 @@ describe("lib/actions/sistema-ts — ripristinaFatturaPerReinvio", () => {
 
     const result = await ripristinaFatturaPerReinvio(999);
 
-    expect(result).toEqual({ error: "Fattura non trovata." });
+    expect(result).toEqual({ success: false, error: "Fattura non trovata." });
   });
 
   it("rifiuta il ripristino se la fattura non è in ANNULLATA_TS o IN_TRASMISSIONE", async () => {
@@ -1291,6 +1297,7 @@ describe("lib/actions/sistema-ts — getRicevutaPdfBase64", () => {
     const result = await getRicevutaPdfBase64(999);
 
     expect(result).toEqual({
+      success: false,
       error: "Ricevuta PDF non trovata per questa trasmissione.",
     });
   });
@@ -1305,6 +1312,7 @@ describe("lib/actions/sistema-ts — getRicevutaPdfBase64", () => {
     const result = await getRicevutaPdfBase64(30);
 
     expect(result).toEqual({
+      success: false,
       error: "Ricevuta PDF non trovata per questa trasmissione.",
     });
   });
@@ -1393,7 +1401,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       flagOpposizione: false,
     });
 
-    expect(res).toEqual({ error: "Fattura non trovata." });
+    expect(res).toEqual({ success: false, error: "Fattura non trovata." });
   });
 
   it("blocca la correzione se la fattura è già stata trasmessa a TS", async () => {
@@ -1411,6 +1419,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     });
 
     expect(res).toEqual({
+      success: false,
       error: "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.",
     });
   });

@@ -386,6 +386,8 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
             style={{
               width: PAGE_W,
               height: PAGE_H,
+              // Nota (SMELL-02): CSS `zoom` è supportato da tutti i browser moderni (incluso Firefox da v126).
+              // A differenza di transform: scale(), adatta automaticamente le dimensioni di layout e lo scroll del contenitore.
               zoom,
               flexShrink: 0,
             }}

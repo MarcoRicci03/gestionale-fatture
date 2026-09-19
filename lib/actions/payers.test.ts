@@ -255,6 +255,7 @@ describe("lib/actions/payers — hardDeletePayer transazionale e gestione vincol
     const res = await hardDeletePayer(10);
 
     expect(res).toEqual({
+      success: false,
       error: expect.stringContaining("ci sono 2 fattura/e collegata/e"),
     });
     expect(mockPaganteDelete).not.toHaveBeenCalled();
@@ -269,6 +270,7 @@ describe("lib/actions/payers — hardDeletePayer transazionale e gestione vincol
     const res = await hardDeletePayer(10);
 
     expect(res).toEqual({
+      success: false,
       error: expect.stringContaining("1 paziente/i collegato/i non è/sono ancora archiviato/i"),
     });
     expect(mockPaganteDelete).not.toHaveBeenCalled();
@@ -289,6 +291,7 @@ describe("lib/actions/payers — hardDeletePayer transazionale e gestione vincol
     const res = await hardDeletePayer(10);
 
     expect(res).toEqual({
+      success: false,
       error:
         "Impossibile eliminare: sono presenti record (fatture o pazienti) collegati a questo pagante",
     });

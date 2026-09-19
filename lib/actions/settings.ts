@@ -8,8 +8,9 @@ import { pdfSettingsSchema } from "@/lib/validations/pdf-settings";
 import type { PdfSettingsInput } from "@/lib/pdf/types";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import type { ActionResult } from "@/lib/types/actions";
 
-export type PdfSettingsActionState = { success: true } | { success: false; error: string };
+export type PdfSettingsActionState = ActionResult;
 
 export async function updatePdfSettings(
   data: unknown

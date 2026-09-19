@@ -14,8 +14,9 @@ import {
 } from "@/lib/validations/user";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import type { ActionResult } from "@/lib/types/actions";
 
-export type UserActionState = { success: true } | { error: string };
+export type UserActionState = ActionResult;
 
 // Senza questo limite, una sessione admin compromessa potrebbe resettare in
 // loop la password di ogni utente. Soglia più larga di changePassword perché
@@ -33,14 +34,14 @@ export async function createUser(
 
   const parsed = userCreateSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const { username, nome, cognome, password, isAdmin, abilitato } = parsed.data;
 
   const existing = await prisma.utente.findUnique({ where: { username } });
   if (existing) {
-    return { error: "Username già in uso" };
+    return { success: false, error: "Username già in uso" };
   }
 
   let createdUserId: number;
@@ -63,10 +64,10 @@ export async function createUser(
     createdUserId = created.id;
   } catch (error) {
     if (isUniqueViolationOnField(error, "username")) {
-      return { error: "Username già in uso" };
+      return { success: false, error: "Username già in uso" };
     }
     console.error("createUser error", error);
-    return { error: "Errore durante la creazione dell'utente" };
+    return { success: false, error: "Errore durante la creazione dell'utente" };
   }
 
   await logAudit({
@@ -89,19 +90,19 @@ export async function updateUser(
   const session = await requireAdmin();
 
   if (session.id === id) {
-    return { error: "Non puoi modificare il tuo account da qui" };
+    return { success: false, error: "Non puoi modificare il tuo account da qui" };
   }
 
   const parsed = userUpdateSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const { username, nome, cognome, isAdmin, abilitato } = parsed.data;
 
   const existing = await prisma.utente.findUnique({ where: { username } });
   if (existing && existing.id !== id) {
-    return { error: "Username già in uso" };
+    return { success: false, error: "Username già in uso" };
   }
 
   // Se questo aggiornamento toglierebbe a `id` lo stato di admin abilitato,
@@ -115,7 +116,7 @@ export async function updateUser(
       where: { isAdmin: true, abilitato: true, NOT: { id } },
     });
     if (adminAttivi === 0) {
-      return { error: "Deve restare almeno un amministratore abilitato" };
+      return { success: false, error: "Deve restare almeno un amministratore abilitato" };
     }
   }
 
@@ -132,10 +133,10 @@ export async function updateUser(
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "username")) {
-      return { error: "Username già in uso" };
+      return { success: false, error: "Username già in uso" };
     }
     console.error("updateUser error", error);
-    return { error: "Errore durante l'aggiornamento dell'utente" };
+    return { success: false, error: "Errore durante l'aggiornamento dell'utente" };
   }
 
   await logAudit({
@@ -158,20 +159,21 @@ export async function resetUserPassword(
   const session = await requireAdmin();
 
   if (session.id === id) {
-    return { error: "Non puoi resettare la tua password da qui" };
+    return { success: false, error: "Non puoi resettare la tua password da qui" };
   }
 
   const rateLimit = resetPasswordLimiter.consume(String(session.id));
   if (!rateLimit.allowed) {
     const retryAfterMinutes = Math.ceil((rateLimit.retryAfterSeconds ?? 0) / 60);
     return {
+      success: false,
       error: `Troppi reset password consecutivi. Riprova tra ${retryAfterMinutes} minuti.`,
     };
   }
 
   const parsed = resetPasswordSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   try {
@@ -189,7 +191,7 @@ export async function resetUserPassword(
     });
   } catch (error) {
     console.error("resetUserPassword error", error);
-    return { error: "Errore durante il reset della password" };
+    return { success: false, error: "Errore durante il reset della password" };
   }
 
   await logAudit({
@@ -211,7 +213,7 @@ export async function toggleUserEnabled(
   const session = await requireAdmin();
 
   if (session.id === id) {
-    return { error: "Non puoi disabilitare il tuo account" };
+    return { success: false, error: "Non puoi disabilitare il tuo account" };
   }
 
   // Stessa guardia di updateUser: se si sta disabilitando `id` e nessun
@@ -224,7 +226,7 @@ export async function toggleUserEnabled(
       where: { isAdmin: true, abilitato: true, NOT: { id } },
     });
     if (adminAttivi === 0) {
-      return { error: "Deve restare almeno un amministratore abilitato" };
+      return { success: false, error: "Deve restare almeno un amministratore abilitato" };
     }
   }
 
@@ -235,7 +237,7 @@ export async function toggleUserEnabled(
     });
   } catch (error) {
     console.error("toggleUserEnabled error", error);
-    return { error: "Errore durante l'aggiornamento dello stato" };
+    return { success: false, error: "Errore durante l'aggiornamento dello stato" };
   }
 
   await logAudit({

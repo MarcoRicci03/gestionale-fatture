@@ -99,6 +99,7 @@ describe("lib/actions/patients — hardDeletePatient transazionale e gestione vi
     const res = await hardDeletePatient(5);
 
     expect(res).toEqual({
+      success: false,
       error: expect.stringContaining("ci sono 3 fattura/e collegata/e"),
     });
     expect(mockPazienteDelete).not.toHaveBeenCalled();
@@ -111,6 +112,7 @@ describe("lib/actions/patients — hardDeletePatient transazionale e gestione vi
     const res = await hardDeletePatient(5);
 
     expect(res).toEqual({
+      success: false,
       error: "Paziente non trovato tra gli archiviati",
     });
     expect(mockPazienteDelete).not.toHaveBeenCalled();
@@ -134,6 +136,7 @@ describe("lib/actions/patients — hardDeletePatient transazionale e gestione vi
     const res = await hardDeletePatient(5);
 
     expect(res).toEqual({
+      success: false,
       error:
         "Impossibile eliminare: sono presenti record (fatture) collegati a questo paziente",
     });
