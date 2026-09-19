@@ -40,7 +40,11 @@ export async function login(
   if (!username || !password) {
     return { error: "Inserire username e password" };
   }
-  if (username.length > 50 || password.length > 100) {
+  if (
+    username.length > 50 ||
+    password.length > 72 ||
+    Buffer.byteLength(password, "utf8") > 72
+  ) {
     return { error: "Input non valido" };
   }
 

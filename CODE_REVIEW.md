@@ -28,7 +28,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | ID | Gravità | Categoria | Titolo Sintetico | Stato | Dettagli Risoluzione / Note |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | [`SEC-01`](#sec-01) | **Critico** | Sicurezza e Vulnerabilità | Denial of Service & Container Crash-Loop tramite Healthcheck Starvation | ✅ RISOLTO | Branch `fix/healthcheck-dos-starvation` (commit `af85c7b`) |
-| [`SEC-02`](#sec-02) | **Alto** | Sicurezza e Vulnerabilità | Troncamento silenzioso a 72 byte di bcryptjs e potenziale Lockout da disallineamento schemi password | ⏳ DA RISOLVERE | - |
+| [`SEC-02`](#sec-02) | **Alto** | Sicurezza e Vulnerabilità | Troncamento silenzioso a 72 byte di bcryptjs e potenziale Lockout da disallineamento schemi password | ✅ RISOLTO | Branch `fix/password-bcrypt-72byte-limit` |
 | [`SEC-03`](#sec-03) | **Medio** | Sicurezza e Vulnerabilità | Spoofing IP ed evasione lockout tramite primo elemento di `X-Forwarded-For` | ⏳ DA RISOLVERE | - |
 | [`SEC-04`](#sec-04) | **Medio** | Sicurezza e Vulnerabilità | Memory Leak potenziale per assenza di tetto massimo in `createRateLimiter` | ⏳ DA RISOLVERE | - |
 | [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ⏳ DA RISOLVERE | - |
@@ -106,7 +106,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SEC-02`
 - **Gravità:** `Alto`
 - **Categoria:** Sicurezza e Vulnerabilità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/password-bcrypt-72byte-limit`
 - **Posizione:** [`lib/validations/user.ts:18-23`](file:///home/marcor/Projects/gestionale-fatture/lib/validations/user.ts#L18-L23), [`lib/actions/auth.ts:43-45`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/auth.ts#L43-L45) e [`lib/auth/password.ts:1-13`](file:///home/marcor/Projects/gestionale-fatture/lib/auth/password.ts#L1-L13)
 - **Descrizione:**
   1. `passwordSchema` impone un vincolo di lunghezza minima `.min(12)` e il controllo sui pattern deboli, ma **non definisce alcun limite superiore `.max()`**.
