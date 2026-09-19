@@ -68,7 +68,7 @@ describe("archivePayer verifica lo stato di partenza (LOG-04)", () => {
   });
 
   it("restituisce un errore esplicito se il pagante non era tra gli attivi", () => {
-    expect(body).toMatch(/if\s*\(\s*!payer\s*\)\s*\{[\s\S]*?return\s*\{\s*error:/);
+    expect(body).toMatch(/if\s*\(\s*!payer\s*\)\s*\{[\s\S]*?return\s*\{[\s\S]*?error:/);
   });
 
   it("non scrive l'audit se il controllo sullo stato di partenza fallisce", () => {

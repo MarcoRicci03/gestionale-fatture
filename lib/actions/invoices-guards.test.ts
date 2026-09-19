@@ -75,7 +75,7 @@ describe("updateInvoice TS desync protection", () => {
 
     const result = await updateInvoice(10, validFormData);
 
-    expect(result).toEqual({ error: FATTURA_GIA_INVIATA_TS_ERROR });
+    expect(result).toEqual({ success: false, error: FATTURA_GIA_INVIATA_TS_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe("updateInvoice TS desync protection", () => {
 
     const result = await updateInvoice(10, validFormData);
 
-    expect(result).toEqual({ error: FATTURA_GIA_INVIATA_TS_ERROR });
+    expect(result).toEqual({ success: false, error: FATTURA_GIA_INVIATA_TS_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -123,7 +123,7 @@ describe("updateInvoice TS desync protection", () => {
 
     const result = await updateInvoice(10, validFormData);
 
-    expect(result).toEqual({ error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
+    expect(result).toEqual({ success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
@@ -143,7 +143,7 @@ describe("refreshInvoiceAnagrafica TS desync protection", () => {
 
     const result = await refreshInvoiceAnagrafica(10);
 
-    expect(result).toEqual({ error: ANAGRAFICA_FATTURA_TS_ERROR });
+    expect(result).toEqual({ success: false, error: ANAGRAFICA_FATTURA_TS_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -157,7 +157,7 @@ describe("refreshInvoiceAnagrafica TS desync protection", () => {
 
     const result = await refreshInvoiceAnagrafica(10);
 
-    expect(result).toEqual({ error: ANAGRAFICA_FATTURA_TS_ERROR });
+    expect(result).toEqual({ success: false, error: ANAGRAFICA_FATTURA_TS_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
@@ -171,7 +171,7 @@ describe("refreshInvoiceAnagrafica TS desync protection", () => {
 
     const result = await refreshInvoiceAnagrafica(10);
 
-    expect(result).toEqual({ error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
+    expect(result).toEqual({ success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
@@ -191,7 +191,7 @@ describe("deleteInvoice TS protection", () => {
 
     const result = await deleteInvoice(10);
 
-    expect(result).toEqual({ error: FATTURA_ANNULLATA_TS_DELETE_ERROR });
+    expect(result).toEqual({ success: false, error: FATTURA_ANNULLATA_TS_DELETE_ERROR });
   });
 
   it("blocca l'eliminazione se la fattura è in stato IN_TRASMISSIONE", async () => {
@@ -205,6 +205,7 @@ describe("deleteInvoice TS protection", () => {
     const result = await deleteInvoice(10);
 
     expect(result).toEqual({
+      success: false,
       error:
         "La fattura è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
     });

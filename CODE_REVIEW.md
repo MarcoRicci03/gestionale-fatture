@@ -38,7 +38,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ⏳ DA RISOLVERE | - |
 | [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ⏳ DA RISOLVERE | - |
-| [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ⏳ DA RISOLVERE | - |
+| [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ✅ RISOLTO | Branch `refactor/arch03-action-result-smell02` |
 | [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ✅ RISOLTO | Branch `perf/memoize-x509-cert-perf01` |
 | [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ✅ RISOLTO | Branch `perf/propagation-n-plus-one-perf02` |
@@ -48,7 +48,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`ERR-02`](#err-02) | **Medio** | Error Handling e Robustezza | Race Condition (TOCTOU) su cancellazione definitiva Pagante/Paziente | ✅ RISOLTO | Branch `fix/hard-delete-toctou-err02` |
 | [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
-| [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ⏳ DA RISOLVERE | - |
+| [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ✅ RISOLTO | Branch `refactor/arch03-action-result-smell02` |
 | [`SMELL-03`](#smell-03) | **Basso** | Code Smells e Naming Conventions | Valore sentinella fittizio `id: 0` in `getPdfSettings` (Rilievo QUA-03) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`SMELL-04`](#smell-04) | **Basso** | Code Smells e Naming Conventions | Riferimenti a documentazione non presente nel repository (Rilievo DOC-01) | ✅ RISOLTO | Branch `fix/sec05-smell04-key-rotation-docs` |
 | [`SMELL-05`](#smell-05) | **Suggerimento** | Code Smells e Naming Conventions | Posizionamento incoerente di `getPayersForSelect` in `patients.ts` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
@@ -360,30 +360,18 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ARCH-03`
 - **Gravità:** `Medio`
 - **Categoria:** Architettura, Manutenibilità e Modularità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `refactor/arch03-action-result-smell02`
 - **Posizione:** [`lib/actions/invoices.ts:44`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/invoices.ts#L44), [`lib/actions/settings.ts:12`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/settings.ts#L12), [`lib/actions/sistema-ts.ts:37-40`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts#L37-L40), [`lib/actions/auth.ts:21-23`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/auth.ts#L21-L23)
-- **Descrizione:** Ogni modulo di mutazione definisce la propria variante di stato dell'azione con convenzioni differenti:
+- **Descrizione:** Ogni modulo di mutazione definiva la propria variante di stato dell'azione con convenzioni differenti:
   - `InvoiceActionState`: `{ success: true } | { error: string }`
   - `PdfSettingsActionState`: `{ success: true } | { success: false; error: string }`
   - `SistemaTsActionState`: `{ success: true; ... } | { error: string; fallback?: boolean }`
   - `LoginState`: `{ error?: string }`
-  Questa asimmetria impedisce l'adozione di un pattern comune lato UI per la gestione dei toast, la disabilitazione degli stati di caricamento e la gestione unificata dei messaggi di errore nei form.
-- **Soluzione consigliata:**
-  Adottare un tipo discriminated union standard in tutto il progetto:
-  ```typescript
-  // lib/types/actions.ts
-  export type ActionSuccess<T = void> = T extends void
-    ? { success: true; message?: string }
-    : { success: true; data: T; message?: string };
-
-  export type ActionFailure = {
-    success: false;
-    error: string;
-    fieldErrors?: Record<string, string[]>;
-  };
-
-  export type ActionResult<T = void> = ActionSuccess<T> | ActionFailure;
-  ```
+  Questa asimmetria impediva l'adozione di un pattern comune lato UI per la gestione dei toast, la disabilitazione degli stati di caricamento e la gestione unificata dei messaggi di errore nei form.
+- **Risoluzione:**
+  - Creato modulo dedicato [`lib/types/actions.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/types/actions.ts) con discriminated union `ActionResult<T>`, `ActionSuccess<T>`, `ActionFailure`, e helper type-safe `actionSuccess`, `actionFailure`.
+  - Aggiornati i contratti di ritorno delle Server Actions in `lib/actions/invoices.ts`, `patients.ts`, `payers.ts`, `settings.ts`, `account.ts`, `users.ts`, `auth.ts`, `sistema-ts.ts` per restituire sempre `{ success: false, error: ... }` in caso di errore, garantendo discriminazione pulita su `result.success` e compatibilità retroattiva con il pattern `"error" in result`.
+  - Implementata suite di test unitari in [`lib/types/actions.test.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/types/actions.test.ts) e aggiornate le asserzioni di errore nei test esistenti.
 
 ---
 
@@ -649,13 +637,15 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SMELL-02`
 - **Gravità:** `Basso`
 - **Categoria:** Code Smells e Naming Conventions
-- **Stato:** ⏳ DA RISOLVERE
-- **Posizione:** [`components/settings/pdf-editor.tsx:396`](file:///home/marcor/Projects/gestionale-fatture/components/settings/pdf-editor.tsx#L396)
-- **Descrizione:** Il ridimensionamento dinamico del foglio di lavoro A4 nell'editor grafico è implementato applicando direttamente la proprietà CSS inline `zoom`:
+- **Stato:** ✅ RISOLTO — Branch `refactor/arch03-action-result-smell02`
+- **Posizione:** [`components/settings/pdf-editor.tsx:389`](file:///home/marcor/Projects/gestionale-fatture/components/settings/pdf-editor.tsx#L389)
+- **Descrizione:** Il ridimensionamento dinamico del foglio di lavoro A4 nell'editor grafico è implementato applicando la proprietà CSS `zoom`:
   `style={{ width: PAGE_W, height: PAGE_H, zoom, flexShrink: 0 }}`
-  La proprietà `zoom` non fa parte dello standard W3C CSS: sebbene supportata da Chrome e Safari, produce anomalie di rendering o mancato supporto su Firefox.
-- **Soluzione consigliata:**
-  Adottare la trasformazione CSS standard `transform: scale(zoom)` abbinata a `transformOrigin: "top left"`.
+  La proprietà `zoom` era storicamente considerata non-standard e non supportata da Firefox.
+- **Risoluzione:**
+  - Verificata la compatibilità cross-browser ufficiale: la proprietà CSS `zoom` è stata ufficialmente standardizzata e introdotta anche in Firefox a partire dalla release 126 (maggio 2024), garantendo piena copertura su tutti i browser moderni (Chrome, Firefox, Safari, Edge).
+  - A differenza di `transform: scale()`, la proprietà `zoom` scala le effettive dimensioni geometriche nel layout flow, permettendo al contenitore con barre di scorrimento di adattarsi perfettamente senza la necessità di calcoli manuali di bounding box o wrapper addizionali per il canvas.
+  - Aggiunto commento tecnico esplicativo in [`components/settings/pdf-editor.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/settings/pdf-editor.tsx#L389) per motivare la scelta architetturale.
 
 ---
 

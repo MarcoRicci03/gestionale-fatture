@@ -19,6 +19,7 @@ import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { redactUsernameForAudit } from "@/lib/audit/redact-username";
 
 export type LoginState = {
+  success?: boolean;
   error?: string;
 };
 
@@ -38,14 +39,14 @@ export async function login(
   const password = formData.get("password")?.toString() ?? "";
 
   if (!username || !password) {
-    return { error: "Inserire username e password" };
+    return { success: false, error: "Inserire username e password" };
   }
   if (
     username.length > 50 ||
     password.length > 72 ||
     Buffer.byteLength(password, "utf8") > 72
   ) {
-    return { error: "Input non valido" };
+    return { success: false, error: "Input non valido" };
   }
 
   const ip = await getClientIp();
@@ -53,6 +54,7 @@ export async function login(
   const rateLimit = checkLoginRateLimit(username, ip);
   if (!rateLimit.allowed) {
     return {
+      success: false,
       error: `Troppi tentativi falliti. Riprova tra ${rateLimit.retryAfterMinutes} minuti.`,
     };
   }
@@ -76,7 +78,7 @@ export async function login(
         usernameTentato: redactUsernameForAudit(username),
       },
     });
-    return { error: "Credenziali non valide" };
+    return { success: false, error: "Credenziali non valide" };
   }
 
   if (!user.abilitato) {
@@ -90,7 +92,7 @@ export async function login(
       ip,
       meta: { motivo: "utente_disabilitato" },
     });
-    return { error: "Credenziali non valide" };
+    return { success: false, error: "Credenziali non valide" };
   }
 
   const isValid = await verifyPassword(password, user.passwordHash);
@@ -104,7 +106,7 @@ export async function login(
       ip,
       meta: { motivo: "password_errata" },
     });
-    return { error: "Credenziali non valide" };
+    return { success: false, error: "Credenziali non valide" };
   }
 
   recordSuccessfulLogin(username, ip);

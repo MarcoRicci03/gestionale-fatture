@@ -179,6 +179,7 @@ describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => 
     const result = await annullaFatturaTs(43);
 
     expect(result).toEqual({
+      success: false,
       error:
         "Non è possibile annullare sul Sistema TS una fattura che non è mai stata trasmessa (stato 'Da Inviare').",
     });
@@ -197,6 +198,7 @@ describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => 
     const result = await annullaFatturaTs(44);
 
     expect(result).toEqual({
+      success: false,
       error: "La fattura risulta già annullata sul Sistema TS.",
     });
     expect(mockInviaFile).not.toHaveBeenCalled();

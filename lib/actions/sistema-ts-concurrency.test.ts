@@ -205,6 +205,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     const result = await inviaLottoFatture([101, 102]);
 
     expect(result).toEqual({
+      success: false,
       error:
         "Una o più fatture selezionate sono già in fase di trasmissione o non sono più nello stato 'Da Inviare'. Riprova tra poco.",
     });
@@ -223,6 +224,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     const result = await inviaLottoFatture([101, 102]);
 
     expect(result).toEqual({
+      success: false,
       error:
         "Una o più fatture selezionate sono già in fase di trasmissione o non sono più nello stato 'Da Inviare'. Riprova tra poco.",
     });
@@ -238,6 +240,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     const result = await inviaLottoFatture([101, 102]);
 
     expect(result).toEqual({
+      success: false,
       error:
         "Una o più fatture selezionate sono già in fase di trasmissione o non sono più nello stato 'Da Inviare'. Riprova tra poco.",
     });
@@ -261,6 +264,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     const result = await inviaLottoFatture([101]);
 
     expect(result).toEqual({
+      success: false,
       error: "Errore S017: File già presente",
     });
 
@@ -325,6 +329,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     const result = await annullaFatturaTs(200);
 
     expect(result).toEqual({
+      success: false,
       error:
         "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
     });
@@ -363,6 +368,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     );
 
     expect(res2).toEqual({
+      success: false,
       error:
         "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
     });

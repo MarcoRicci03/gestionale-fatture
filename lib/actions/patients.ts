@@ -9,8 +9,9 @@ import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePatient } from "@/lib/archive/guards";
 import { isForeignKeyViolation } from "@/lib/prisma-errors";
+import type { ActionResult } from "@/lib/types/actions";
 
-export type PatientActionState = { success: true } | { error: string };
+export type PatientActionState = ActionResult;
 
 function revalidatePatientViews() {
   revalidatePath("/patients");
@@ -25,7 +26,7 @@ export async function createPatient(
 
   const parsed = patientSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   if (parsed.data.id_Pagante) {
@@ -37,7 +38,7 @@ export async function createPatient(
       },
     });
     if (!payer) {
-      return { error: "Pagante selezionato non valido" };
+      return { success: false, error: "Pagante selezionato non valido" };
     }
   }
 
@@ -54,7 +55,7 @@ export async function createPatient(
     createdPatientId = created.id;
   } catch (error) {
     console.error("createPatient error", error);
-    return { error: "Errore durante la creazione del paziente" };
+    return { success: false, error: "Errore durante la creazione del paziente" };
   }
 
   await logAudit({
@@ -77,7 +78,7 @@ export async function updatePatient(
 
   const parsed = patientSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   if (parsed.data.id_Pagante) {
@@ -89,7 +90,7 @@ export async function updatePatient(
       },
     });
     if (!payer) {
-      return { error: "Pagante selezionato non valido" };
+      return { success: false, error: "Pagante selezionato non valido" };
     }
   }
 
@@ -104,7 +105,7 @@ export async function updatePatient(
     });
   } catch (error) {
     console.error("updatePatient error", error);
-    return { error: "Errore durante l'aggiornamento del paziente" };
+    return { success: false, error: "Errore durante l'aggiornamento del paziente" };
   }
 
   await logAudit({
@@ -134,11 +135,11 @@ export async function archivePatient(id: number): Promise<PatientActionState> {
       data: { archiviato: true, archiviatoInCascata: false },
     });
     if (updated.count === 0) {
-      return { error: "Paziente non trovato tra gli attivi" };
+      return { success: false, error: "Paziente non trovato tra gli attivi" };
     }
   } catch (error) {
     console.error("archivePatient error", error);
-    return { error: "Errore durante l'archiviazione del paziente" };
+    return { success: false, error: "Errore durante l'archiviazione del paziente" };
   }
 
   await logAudit({
@@ -166,11 +167,11 @@ export async function restorePatient(id: number): Promise<PatientActionState> {
       data: { archiviato: false, archiviatoInCascata: false },
     });
     if (updated.count === 0) {
-      return { error: "Paziente non trovato tra gli archiviati" };
+      return { success: false, error: "Paziente non trovato tra gli archiviati" };
     }
   } catch (error) {
     console.error("restorePatient error", error);
-    return { error: "Errore durante il ripristino del paziente" };
+    return { success: false, error: "Errore durante il ripristino del paziente" };
   }
 
   await logAudit({
@@ -217,6 +218,7 @@ export async function hardDeletePatient(
   } catch (error) {
     if (isForeignKeyViolation(error)) {
       return {
+        success: false,
         error:
           "Impossibile eliminare: sono presenti record (fatture) collegati a questo paziente",
       };
@@ -226,11 +228,11 @@ export async function hardDeletePatient(
         error.message === "Paziente non trovato tra gli archiviati" ||
         error.message.startsWith("Impossibile eliminare:")
       ) {
-        return { error: error.message };
+        return { success: false, error: error.message };
       }
     }
     console.error("hardDeletePatient error", error);
-    return { error: "Errore durante l'eliminazione definitiva del paziente" };
+    return { success: false, error: "Errore durante l'eliminazione definitiva del paziente" };
   }
 
   await logAudit({

@@ -10,8 +10,9 @@ import { changePasswordSchema } from "@/lib/validations/user";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import type { ActionResult } from "@/lib/types/actions";
 
-export type AccountActionState = { success: true } | { error: string };
+export type AccountActionState = ActionResult;
 
 // Senza questo limite, chi ottiene una sessione (es. un cookie rubato) può
 // tentare in loop la password attuale per confermarla/riusarla altrove,
@@ -34,13 +35,14 @@ export async function changePassword(
   if (!rateLimit.allowed) {
     const retryAfterMinutes = Math.ceil((rateLimit.retryAfterSeconds ?? 0) / 60);
     return {
+      success: false,
       error: `Troppi tentativi di cambio password. Riprova tra ${retryAfterMinutes} minuti.`,
     };
   }
 
   const parsed = changePasswordSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const { currentPassword, newPassword } = parsed.data;
@@ -49,12 +51,12 @@ export async function changePassword(
     where: { id: session.id },
   });
   if (!user) {
-    return { error: "Utente non trovato" };
+    return { success: false, error: "Utente non trovato" };
   }
 
   const isValid = await verifyPassword(currentPassword, user.passwordHash);
   if (!isValid) {
-    return { error: "Password attuale errata" };
+    return { success: false, error: "Password attuale errata" };
   }
 
   let updatedTokenVersion: number;
@@ -76,7 +78,7 @@ export async function changePassword(
     updatedTokenVersion = updated.tokenVersion;
   } catch (error) {
     console.error("changePassword error", error);
-    return { error: "Errore durante il cambio password" };
+    return { success: false, error: "Errore durante il cambio password" };
   }
 
   await logAudit({
@@ -103,7 +105,7 @@ export async function updateProfile(
 
   const parsed = profileUpdateSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const {
@@ -137,7 +139,7 @@ export async function updateProfile(
     });
   } catch (error) {
     console.error("updateProfile error", error);
-    return { error: "Errore durante l'aggiornamento del profilo" };
+    return { success: false, error: "Errore durante l'aggiornamento del profilo" };
   }
 
   await logAudit({

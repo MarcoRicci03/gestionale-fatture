@@ -36,7 +36,7 @@ import type {
 
 export type SistemaTsActionState =
   | { success: true; protocollo?: string; message?: string }
-  | { error: string; fallback?: boolean };
+  | { success: false; error: string; fallback?: boolean };
 
 /**
  * Salva o aggiorna le credenziali e impostazioni del Sistema TS per l'utente corrente.
@@ -48,7 +48,7 @@ export async function saveSistemaTsSettings(
 
   const parsed = sistemaTsSettingsSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message || "Dati non validi" };
+    return { success: false, error: parsed.error.issues[0]?.message || "Dati non validi" };
   }
 
   const data = parsed.data;
@@ -67,10 +67,10 @@ export async function saveSistemaTsSettings(
   }
 
   if (!passwordEncrypted) {
-    return { error: "La password del Sistema TS è obbligatoria." };
+    return { success: false, error: "La password del Sistema TS è obbligatoria." };
   }
   if (!pincodeEncrypted) {
-    return { error: "Il PinCode del Sistema TS è obbligatorio." };
+    return { success: false, error: "Il PinCode del Sistema TS è obbligatorio." };
   }
 
   try {
@@ -109,7 +109,7 @@ export async function saveSistemaTsSettings(
     return { success: true, message: "Impostazioni Sistema TS salvate con successo." };
   } catch (error) {
     console.error("saveSistemaTsSettings error", error);
-    return { error: "Errore durante il salvataggio delle impostazioni Sistema TS." };
+    return { success: false, error: "Errore durante il salvataggio delle impostazioni Sistema TS." };
   }
 }
 
@@ -177,13 +177,14 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
 
   const uniqueIds = Array.from(new Set(invoiceIds));
   if (!uniqueIds || uniqueIds.length === 0) {
-    return { error: "Nessuna fattura selezionata per l'invio." };
+    return { success: false, error: "Nessuna fattura selezionata per l'invio." };
   }
 
   const rateLimit = sistemaTsTransmissionLimiter.consume(String(userId));
   if (!rateLimit.allowed) {
     const retryAfter = rateLimit.retryAfterSeconds ?? 1;
     return {
+      success: false,
       error: `Troppe richieste di trasmissione inviate. Per proteggere la connessione con il Sistema TS, attendi ${retryAfter} secondi prima di riprovare.`,
     };
   }
@@ -192,7 +193,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
   try {
     clientInfo = await getClientForUser(userId);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 
   const { client, proprietario, user } = clientInfo;
@@ -263,13 +264,13 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
     });
   } catch (error) {
     if (error instanceof ConcurrencyLockError) {
-      return { error: error.message };
+      return { success: false, error: error.message };
     }
     throw error;
   }
 
   if (invoices.length === 0) {
-    return { error: "Nessuna fattura idonea trovata tra quelle selezionate." };
+    return { success: false, error: "Nessuna fattura idonea trovata tra quelle selezionate." };
   }
 
   const candidateIds = invoices.map((i) => i.id);
@@ -297,6 +298,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
           },
         });
         return {
+          success: false,
           error: `Fattura n. ${inv.n_fattura}/${inv.anno}: Codice Fiscale Pagante ('${cf || "mancante"}') non valido: ${cfValidation.error}`,
         };
       }
@@ -319,6 +321,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
         },
       });
       return {
+        success: false,
         error: `Fattura n. ${inv.n_fattura}/${inv.anno}: ${importoValidation.error}`,
       };
     }
@@ -339,6 +342,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
         },
       });
       return {
+        success: false,
         error: `Fattura n. ${inv.n_fattura}/${inv.anno}: La data di incasso (${formatDateDisplay(dataEffettiva)}) è futura rispetto alla data odierna. Non è possibile trasmetterla prima di tale data (vincolo ministeriale DM 19/10/2020, errore Sogei S036).`,
       };
     }
@@ -395,6 +399,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
       });
 
       return {
+        success: false,
         error:
           res.errorMessage ||
           res.descrizioneEsito ||
@@ -474,7 +479,7 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error("inviaLottoFatture error", error);
-    return { error: `Errore durante la preparazione o trasmissione del lotto: ${msg}` };
+    return { success: false, error: `Errore durante la preparazione o trasmissione del lotto: ${msg}` };
   }
 }
 
@@ -501,13 +506,14 @@ export async function sincronizzaEsitoTrasmissione(
   });
 
   if (!trasmissione) {
-    return { error: "Trasmissione non trovata." };
+    return { success: false, error: "Trasmissione non trovata." };
   }
 
   const rateLimit = sistemaTsSyncLimiter.consume(String(userId));
   if (!rateLimit.allowed) {
     const retryAfter = rateLimit.retryAfterSeconds ?? 1;
     return {
+      success: false,
       error: `Troppe richieste di verifica esito ravvicinate. Attendi ${retryAfter} secondi prima di interrogare nuovamente il Sistema TS.`,
     };
   }
@@ -516,7 +522,7 @@ export async function sincronizzaEsitoTrasmissione(
   try {
     clientInfo = await getClientForUser(userId);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 
   const { client } = clientInfo;
@@ -525,7 +531,7 @@ export async function sincronizzaEsitoTrasmissione(
     const esitoRes = await client.interrogaEsito(trasmissione.protocollo);
 
     if (!esitoRes.success) {
-      return { error: esitoRes.errorMessage || "Interrogazione esito non riuscita." };
+      return { success: false, error: esitoRes.errorMessage || "Interrogazione esito non riuscita." };
     }
 
     let pdfBytes: Buffer | undefined;
@@ -701,7 +707,7 @@ export async function sincronizzaEsitoTrasmissione(
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("sincronizzaEsitoTrasmissione error", error);
-    return { error: `Errore durante la sincronizzazione dell'esito: ${msg}` };
+    return { success: false, error: `Errore durante la sincronizzazione dell'esito: ${msg}` };
   }
 }
 
@@ -734,29 +740,33 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
   });
 
   if (!invoice) {
-    return { error: "Fattura non trovata." };
+    return { success: false, error: "Fattura non trovata." };
   }
 
   if (invoice.stato_ts === "IN_TRASMISSIONE") {
     return {
+      success: false,
       error: "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
     };
   }
 
   if (invoice.stato_ts === "DA_INVIARE") {
     return {
+      success: false,
       error: "Non è possibile annullare sul Sistema TS una fattura che non è mai stata trasmessa (stato 'Da Inviare').",
     };
   }
 
   if (invoice.stato_ts === "ANNULLATA_TS") {
     return {
+      success: false,
       error: "La fattura risulta già annullata sul Sistema TS.",
     };
   }
 
   if (invoice.stato_ts !== "INVIATA" && invoice.stato_ts !== "DA_CANCELLARE_SU_TS") {
     return {
+      success: false,
       error: "Solo le fatture inviate o in attesa di cancellazione possono essere annullate sul Sistema TS.",
     };
   }
@@ -765,6 +775,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
   if (!rateLimit.allowed) {
     const retryAfter = rateLimit.retryAfterSeconds ?? 1;
     return {
+      success: false,
       error: `Troppe richieste di trasmissione inviate. Per proteggere la connessione con il Sistema TS, attendi ${retryAfter} secondi prima di riprovare.`,
     };
   }
@@ -785,6 +796,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
 
   if (!lockResult || lockResult.count === 0) {
     return {
+      success: false,
       error: "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
     };
   }
@@ -799,7 +811,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
         stato_ts: invoice.stato_ts,
       },
     });
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 
   const { client, proprietario, user } = clientInfo;
@@ -905,6 +917,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
       revalidatePath("/sistema-ts");
 
       return {
+        success: false,
         error:
           res.errorMessage ||
           "Impossibile contattare Sistema TS al momento. La fattura è stata impostata come 'DA CANCELLARE SU TS' e potrà essere ritrasmessa dalla schermata Sistema TS.",
@@ -925,6 +938,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
     revalidatePath("/sistema-ts");
 
     return {
+      success: false,
       error:
         `Errore di connessione (${msg}). La fattura è stata contrassegnata come 'DA CANCELLARE SU TS'.`,
       fallback: true,
@@ -946,13 +960,14 @@ export async function ripristinaFatturaPerReinvio(
   });
 
   if (!invoice) {
-    return { error: "Fattura non trovata." };
+    return { success: false, error: "Fattura non trovata." };
   }
 
   // Non è consentito riportare la fattura in DA_INVIARE se non è stata prima annullata con successo su Sistema TS
   // o se non è rimasta bloccata in trasmissione
   if (invoice.stato_ts !== "ANNULLATA_TS" && invoice.stato_ts !== "IN_TRASMISSIONE") {
     return {
+      success: false,
       error:
         "Non è possibile cambiare lo stato della fattura in 'Da Inviare' se non è stata prima annullata sul Sistema TS o bloccata in trasmissione.",
     };
@@ -991,7 +1006,7 @@ export async function ripristinaFatturaPerReinvio(
 
 export type RicevutaPdfActionResult =
   | { success: true; base64: string; fileName: string }
-  | { error: string };
+  | { success: false; error: string };
 
 /**
  * Restituisce i byte Base64 del file PDF ricevuta memorizzato per una trasmissione.
@@ -1007,7 +1022,7 @@ export async function getRicevutaPdfBase64(
   });
 
   if (!trasmissione || !trasmissione.pdfRicevuta) {
-    return { error: "Ricevuta PDF non trovata per questa trasmissione." };
+    return { success: false, error: "Ricevuta PDF non trovata per questa trasmissione." };
   }
 
   return {
@@ -1029,6 +1044,7 @@ export async function correggiFatturaTs(
   const parsed = correggiFatturaTsSchema.safeParse(input);
   if (!parsed.success) {
     return {
+      success: false,
       error: parsed.error.issues[0]?.message ?? "Dati forniti non validi.",
     };
   }
@@ -1050,7 +1066,7 @@ export async function correggiFatturaTs(
   });
 
   if (!invoice) {
-    return { error: "Fattura non trovata." };
+    return { success: false, error: "Fattura non trovata." };
   }
 
   if (
@@ -1059,6 +1075,7 @@ export async function correggiFatturaTs(
     invoice.stato_ts === "DA_CANCELLARE_SU_TS"
   ) {
     return {
+      success: false,
       error:
         "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.",
     };
@@ -1069,6 +1086,7 @@ export async function correggiFatturaTs(
   if (!flagOpposizione) {
     if (!targetCf) {
       return {
+        success: false,
         error:
           "È necessario inserire un Codice Fiscale valido oppure selezionare l'opposizione alla trasmissione.",
       };
@@ -1076,6 +1094,7 @@ export async function correggiFatturaTs(
     const cfCheck = validateCodiceFiscale(targetCf);
     if (!cfCheck.valid) {
       return {
+        success: false,
         error: cfCheck.error ?? "Codice Fiscale non valido.",
       };
     }
@@ -1093,6 +1112,7 @@ export async function correggiFatturaTs(
     });
     if (existingPayer) {
       return {
+        success: false,
         error: `Il Codice Fiscale ${targetCf} è già associato ad un altro cliente (${existingPayer.cognome} ${existingPayer.nome}).`,
       };
     }
@@ -1109,6 +1129,7 @@ export async function correggiFatturaTs(
     });
     if (existingBollo) {
       return {
+        success: false,
         error: `Il codice marca da bollo ${bolloCodice} è già utilizzato per la fattura n. ${existingBollo.n_fattura}/${existingBollo.anno}.`,
       };
     }
@@ -1180,13 +1201,13 @@ export async function correggiFatturaTs(
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "bolloCodice")) {
-      return { error: "Codice marca da bollo già utilizzato." };
+      return { success: false, error: "Codice marca da bollo già utilizzato." };
     }
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente per un altro cliente." };
+      return { success: false, error: "Codice Fiscale già presente per un altro cliente." };
     }
     console.error("correggiFatturaTs error", error);
-    return { error: "Errore durante il salvataggio delle modifiche." };
+    return { success: false, error: "Errore durante il salvataggio delle modifiche." };
   }
 
   await logAudit({

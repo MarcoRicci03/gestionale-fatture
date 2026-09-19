@@ -11,8 +11,9 @@ import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { Prisma } from "@prisma/client";
+import type { ActionResult } from "@/lib/types/actions";
 
-export type PayerActionState = { success: true } | { error: string };
+export type PayerActionState = ActionResult;
 
 function revalidatePayerViews() {
   revalidatePath("/payers");
@@ -56,7 +57,7 @@ export async function createPayer(
 
   const parsed = payerSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const duplicateError = await checkPayerUniqueTaxIds(
@@ -65,7 +66,7 @@ export async function createPayer(
     parsed.data.piva
   );
   if (duplicateError) {
-    return { error: duplicateError };
+    return { success: false, error: duplicateError };
   }
 
   let createdPayerId: number;
@@ -85,13 +86,13 @@ export async function createPayer(
     createdPayerId = created.id;
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente" };
+      return { success: false, error: "Codice Fiscale già presente" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente" };
+      return { success: false, error: "Partita IVA già presente" };
     }
     console.error("createPayer error", error);
-    return { error: "Errore durante la creazione del pagante" };
+    return { success: false, error: "Errore durante la creazione del pagante" };
   }
 
   await logAudit({
@@ -114,7 +115,7 @@ export async function updatePayer(
 
   const parsed = payerSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const duplicateError = await checkPayerUniqueTaxIds(
@@ -124,7 +125,7 @@ export async function updatePayer(
     id
   );
   if (duplicateError) {
-    return { error: duplicateError };
+    return { success: false, error: duplicateError };
   }
 
   try {
@@ -180,13 +181,13 @@ export async function updatePayer(
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente" };
+      return { success: false, error: "Codice Fiscale già presente" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente" };
+      return { success: false, error: "Partita IVA già presente" };
     }
     console.error("updatePayer error", error);
-    return { error: "Errore durante l'aggiornamento del pagante" };
+    return { success: false, error: "Errore durante l'aggiornamento del pagante" };
   }
 
   await logAudit({
@@ -216,7 +217,7 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
     where: { id, id_Utente: userId, archiviato: false },
   });
   if (!payer) {
-    return { error: "Pagante non trovato tra gli attivi" };
+    return { success: false, error: "Pagante non trovato tra gli attivi" };
   }
 
   let pazientiArchiviati = 0;
@@ -240,7 +241,7 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
     });
   } catch (error) {
     console.error("archivePayer error", error);
-    return { error: "Errore durante l'archiviazione del pagante" };
+    return { success: false, error: "Errore durante l'archiviazione del pagante" };
   }
 
   await logAudit({
@@ -263,7 +264,7 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
     where: { id, id_Utente: userId, archiviato: true },
   });
   if (!payer) {
-    return { error: "Pagante non trovato tra gli archiviati" };
+    return { success: false, error: "Pagante non trovato tra gli archiviati" };
   }
 
   const activePayers = await prisma.pagante.findMany({
@@ -283,6 +284,7 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
       ? `${conflictingPayer.nome} ${conflictingPayer.cognome}`
       : `#${conflict.conflictingId}`;
     return {
+      success: false,
       error: `Impossibile ripristinare: esiste già un pagante attivo con lo stesso ${fieldLabel} (${name}). Modifica o archivia quel pagante prima di ripristinare.`,
     };
   }
@@ -315,13 +317,13 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente su un pagante attivo" };
+      return { success: false, error: "Codice Fiscale già presente su un pagante attivo" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente su un pagante attivo" };
+      return { success: false, error: "Partita IVA già presente su un pagante attivo" };
     }
     console.error("restorePayer error", error);
-    return { error: "Errore durante il ripristino del pagante" };
+    return { success: false, error: "Errore durante il ripristino del pagante" };
   }
 
   await logAudit({
@@ -388,6 +390,7 @@ export async function hardDeletePayer(id: number): Promise<PayerActionState> {
   } catch (error) {
     if (isForeignKeyViolation(error)) {
       return {
+        success: false,
         error:
           "Impossibile eliminare: sono presenti record (fatture o pazienti) collegati a questo pagante",
       };
@@ -397,11 +400,11 @@ export async function hardDeletePayer(id: number): Promise<PayerActionState> {
         error.message === "Pagante non trovato tra gli archiviati" ||
         error.message.startsWith("Impossibile eliminare:")
       ) {
-        return { error: error.message };
+        return { success: false, error: error.message };
       }
     }
     console.error("hardDeletePayer error", error);
-    return { error: "Errore durante l'eliminazione definitiva del pagante" };
+    return { success: false, error: "Errore durante l'eliminazione definitiva del pagante" };
   }
 
   await logAudit({
