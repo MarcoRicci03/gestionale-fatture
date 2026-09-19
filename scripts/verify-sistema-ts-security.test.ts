@@ -312,7 +312,8 @@ describe("Layer 3: Invarianti di Sicurezza, Anti-PII e Cifratura Sistema TS", ()
       const encrypted = encryptCredential(plain);
 
       expect(encrypted).not.toBe(plain);
-      expect(encrypted.split(":")).toHaveLength(3); // iv:authTag:ciphertext
+      expect(encrypted.split(":")).toHaveLength(4); // v1:iv:authTag:ciphertext
+      expect(encrypted.startsWith("v1:")).toBe(true);
 
       const decrypted = decryptCredential(encrypted);
       expect(decrypted).toBe(plain);

@@ -1,20 +1,49 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { decryptCredential, encryptCredential } from "./vault";
+import crypto from "node:crypto";
+import {
+  decryptCredential,
+  encryptCredential,
+  needsReencryption,
+  CURRENT_KEY_VERSION,
+} from "./vault";
 
-describe("vault — cifratura AES-256-GCM a riposo", () => {
+describe("vault — cifratura AES-256-GCM a riposo con key versioning e rotation (SEC-05)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("cifra e decifra correttamente una stringa", () => {
+  it("cifra e decifra correttamente una stringa con prefisso di versione v1", () => {
     const secretText = "PinCode12345678!";
     const encrypted = encryptCredential(secretText);
 
     expect(encrypted).not.toBe(secretText);
-    expect(encrypted.split(":")).toHaveLength(3);
+    const parts = encrypted.split(":");
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe(CURRENT_KEY_VERSION);
 
     const decrypted = decryptCredential(encrypted);
     expect(decrypted).toBe(secretText);
+  });
+
+  it("decifra correttamente stringhe in formato legacy a 3 parti (iv:authTag:ciphertext)", () => {
+    // Simuliamo un record cifrato prima dell'introduzione di v1
+    const iv = crypto.randomBytes(12);
+    const devSecret = "fallback-dev-secret-sistema-ts-never-use-in-production";
+    const key = crypto.createHash("sha256").update(devSecret).digest();
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+    const plaintext = "legacy-password-123";
+    const encrypted = Buffer.concat([
+      cipher.update(plaintext, "utf8"),
+      cipher.final(),
+    ]);
+    const authTag = cipher.getAuthTag();
+
+    const legacyCiphertext = `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+    expect(legacyCiphertext.split(":")).toHaveLength(3);
+
+    // Decifratura retrocompatibile
+    expect(decryptCredential(legacyCiphertext)).toBe(plaintext);
   });
 
   it("gestisce stringhe vuote", () => {
@@ -26,11 +55,19 @@ describe("vault — cifratura AES-256-GCM a riposo", () => {
     const valid = encryptCredential("segreto");
     const parts = valid.split(":");
     // Manomettiamo il ciphertext invertendo i bit del primo byte per garantire la corruzione
-    const firstByte = parts[2].slice(0, 2);
+    const firstByte = parts[3].slice(0, 2);
     const flipped = (parseInt(firstByte, 16) ^ 0xff).toString(16).padStart(2, "0");
-    const corrupted = `${parts[0]}:${parts[1]}:${flipped}${parts[2].slice(2)}`;
+    const corrupted = `${parts[0]}:${parts[1]}:${parts[2]}:${flipped}${parts[3].slice(2)}`;
 
     expect(() => decryptCredential(corrupted)).toThrow();
+  });
+
+  it("lancia errore se la versione non è supportata", () => {
+    const valid = encryptCredential("segreto");
+    const parts = valid.split(":");
+    const unsupported = `v99:${parts[1]}:${parts[2]}:${parts[3]}`;
+
+    expect(() => decryptCredential(unsupported)).toThrowError(/Versione chiave non supportata: v99/);
   });
 
   it("in produzione lancia errore se TS_ENCRYPTION_SECRET non è definita", () => {
@@ -72,17 +109,49 @@ describe("vault — cifratura AES-256-GCM a riposo", () => {
     expect(decryptCredential(encrypted)).toBe("mia-password");
   });
 
-  it("non usa JWT_SECRET come chiave di fallback quando TS_ENCRYPTION_SECRET è impostata", () => {
-    vi.stubEnv(
-      "TS_ENCRYPTION_SECRET",
-      "chiave-di-cifratura-dedicata-ts-32-caratteri-minimi"
-    );
-    vi.stubEnv("JWT_SECRET", "chiave-jwt-diversa-32-caratteri-minimi-token");
+  it("supporta la rotazione della chiave tramite TS_ENCRYPTION_FALLBACK_SECRETS", () => {
+    const oldKey = "chiave-vecchia-di-almeno-32-caratteri-sicura-123";
+    const newKey = "chiave-nuova-di-almeno-32-caratteri-sicura-456";
 
-    const encrypted = encryptCredential("test-indipendenza-jwt");
+    // 1. Cifra con la vecchia chiave
+    vi.stubEnv("TS_ENCRYPTION_SECRET", oldKey);
+    const encryptedWithOldKey = encryptCredential("credenziale-da-ruotare");
 
-    // Ruotiamo JWT_SECRET: la decifratura deve funzionare ancora perché la chiave TS è indipendente!
-    vi.stubEnv("JWT_SECRET", "nuova-chiave-jwt-ruotata-dopo-compromissione-sessioni");
-    expect(decryptCredential(encrypted)).toBe("test-indipendenza-jwt");
+    // 2. Ruota la chiave: imposta newKey come primaria, oldKey come fallback
+    vi.stubEnv("TS_ENCRYPTION_SECRET", newKey);
+    vi.stubEnv("TS_ENCRYPTION_FALLBACK_SECRETS", oldKey);
+
+    // 3. Decifra: la primaria fallisce, ma il fallback consente di decifrare
+    const decrypted = decryptCredential(encryptedWithOldKey);
+    expect(decrypted).toBe("credenziale-da-ruotare");
+  });
+
+  it("needsReencryption identifica record legacy o cifrati con chiavi ruotate", () => {
+    const oldKey = "chiave-vecchia-di-almeno-32-caratteri-sicura-123";
+    const newKey = "chiave-nuova-di-almeno-32-caratteri-sicura-456";
+
+    vi.stubEnv("TS_ENCRYPTION_SECRET", oldKey);
+    const encryptedWithOldKey = encryptCredential("test-reencrypt");
+
+    // Attualmente cifrato con oldKey: per oldKey non serve reencryption
+    expect(needsReencryption(encryptedWithOldKey)).toBe(false);
+
+    // Ruotiamo la chiave
+    vi.stubEnv("TS_ENCRYPTION_SECRET", newKey);
+    vi.stubEnv("TS_ENCRYPTION_FALLBACK_SECRETS", oldKey);
+
+    // Con la nuova chiave, il record cifrato con oldKey richiede reencryption
+    expect(needsReencryption(encryptedWithOldKey)).toBe(true);
+
+    // Un nuovo ciphertext prodotto con newKey non richiede reencryption
+    const encryptedWithNewKey = encryptCredential("test-nuovo");
+    expect(needsReencryption(encryptedWithNewKey)).toBe(false);
+
+    // Un formato legacy a 3 parti richiede sempre reencryption
+    const legacyFormat = "010203:040506:070809";
+    expect(needsReencryption(legacyFormat)).toBe(true);
+
+    // Stringa vuota
+    expect(needsReencryption("")).toBe(false);
   });
 });

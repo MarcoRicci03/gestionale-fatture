@@ -1,5 +1,5 @@
 // Elimina periodicamente le righe di audit_logs più vecchie della retention
-// configurata (SEC-12, vedi PIANO_FIX_AUDIT_LOG_RETENTION.md). Pensato per
+// configurata (SEC-12). Pensato per
 // girare come entrypoint del container "audit-log-retention" in
 // docker-compose.prod.yml.
 //

@@ -9,7 +9,7 @@ import type { Pagante, Paziente } from "@prisma/client";
 
 // Regressione: una fattura emessa deve continuare a mostrare i dati di
 // pagante/paziente COM'ERANO al momento dell'emissione, non quelli attuali
-// (vedi docs/superpowers/specs/2026-07-22-invoice-snapshot-anagrafica-design.md).
+// (principio di immutabilità dell'anagrafica storica al momento dell'emissione).
 
 const PAGANTE: Pagante = {
   id: 1,

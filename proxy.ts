@@ -24,8 +24,7 @@ export async function proxy(request: NextRequest) {
   // Nonce per-richiesta sulla CSP (SEC-08): solo in produzione, come le
   // altre righe di CONTENT_SECURITY_POLICY prima spostate qui da
   // next.config.ts — in sviluppo Turbopack inietta script eval-based e un
-  // websocket di HMR che una CSP stretta bloccherebbe (vedi
-  // PIANO_FIX_CSP_NONCE.md). Va impostato sia sulla request riscritta
+  // websocket di HMR che una CSP stretta bloccherebbe. Va impostato sia sulla request riscritta
   // (requestHeaders) sia sulla response: Next legge il nonce dall'header
   // CSP della request per applicarlo automaticamente ai propri script
   // (bootstrap dell'hydration, bundle di pagina) durante il rendering.

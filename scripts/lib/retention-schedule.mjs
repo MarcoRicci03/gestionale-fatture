@@ -6,7 +6,7 @@
 // {targetWeekday, targetHour:00:00} in ora LOCALE del processo. Il container
 // di produzione fissa TZ=Europe/Rome (Dockerfile), quindi getDay()/getHours()
 // restituiscono già l'ora italiana, DST inclusa — nessuna libreria di fusi
-// orari necessaria (vedi PIANO_FIX_AUDIT_LOG_RETENTION.md).
+// orari necessaria.
 export function msUntilNextRun(now, targetWeekday, targetHour) {
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetHour, 0, 0, 0);
   const daysUntil = (targetWeekday - now.getDay() + 7) % 7;

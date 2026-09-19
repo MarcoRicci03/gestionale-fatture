@@ -31,7 +31,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`SEC-02`](#sec-02) | **Alto** | Sicurezza e Vulnerabilità | Troncamento silenzioso a 72 byte di bcryptjs e potenziale Lockout da disallineamento schemi password | ✅ RISOLTO | Branch `fix/password-bcrypt-72byte-limit` |
 | [`SEC-03`](#sec-03) | **Medio** | Sicurezza e Vulnerabilità | Spoofing IP ed evasione lockout tramite primo elemento di `X-Forwarded-For` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
 | [`SEC-04`](#sec-04) | **Medio** | Sicurezza e Vulnerabilità | Memory Leak potenziale per assenza di tetto massimo in `createRateLimiter` | ✅ RISOLTO | Branch `fix/sec03-sec04-ip-spoofing-rate-limiter` |
-| [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ⏳ DA RISOLVERE | - |
+| [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ✅ RISOLTO | Branch `fix/sec05-smell04-key-rotation-docs` |
 | [`DRY-01`](#dry-01) | **Alto** | Duplicazione e Principi DRY | Duplicazione strutturale estesa tra `patients-manager.tsx` e `payers-manager.tsx` | ✅ RISOLTO | Branch `refactor/dry01-dry02-managers-duplication` |
 | [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ✅ RISOLTO | Branch `refactor/dry01-dry02-managers-duplication` |
 | [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
@@ -50,7 +50,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ⏳ DA RISOLVERE | - |
 | [`SMELL-03`](#smell-03) | **Basso** | Code Smells e Naming Conventions | Valore sentinella fittizio `id: 0` in `getPdfSettings` (Rilievo QUA-03) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
-| [`SMELL-04`](#smell-04) | **Basso** | Code Smells e Naming Conventions | Riferimenti a documentazione non presente nel repository (Rilievo DOC-01) | ⏳ DA RISOLVERE | - |
+| [`SMELL-04`](#smell-04) | **Basso** | Code Smells e Naming Conventions | Riferimenti a documentazione non presente nel repository (Rilievo DOC-01) | ✅ RISOLTO | Branch `fix/sec05-smell04-key-rotation-docs` |
 | [`SMELL-05`](#smell-05) | **Suggerimento** | Code Smells e Naming Conventions | Posizionamento incoerente di `getPayersForSelect` in `patients.ts` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 
 ---
@@ -196,7 +196,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SEC-05`
 - **Gravità:** `Basso`
 - **Categoria:** Sicurezza e Vulnerabilità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `fix/sec05-smell04-key-rotation-docs`)
 - **Posizione:** [`lib/sistemats/vault.ts:58-103`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/vault.ts#L58-L103)
 - **Descrizione:** Le credenziali di Sistema TS (Password e PinCode) vengono cifrate con AES-256-GCM nel formato stringa `iv:authTag:ciphertext`. Non è previsto un prefisso di versione della chiave crittografica (`keyId` o `v1`). In caso di rotazione periodica della variabile d'ambiente `TS_ENCRYPTION_SECRET` (ad esempio in seguito a sospetta compromissione o audit di sicurezza), tutti i dati precedentemente memorizzati sul DB falliranno immediatamente la decifratura con eccezione non recuperabile, senza possibilità di migrazione automatizzata a doppio round.
 - **Soluzione consigliata:**
@@ -677,7 +677,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SMELL-04`
 - **Gravità:** `Basso`
 - **Categoria:** Code Smells e Naming Conventions
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `fix/sec05-smell04-key-rotation-docs`)
 - **Posizione:** [`lib/security/csp.ts:5`](file:///home/marcor/Projects/gestionale-fatture/lib/security/csp.ts#L5), [`proxy.ts:28`](file:///home/marcor/Projects/gestionale-fatture/proxy.ts#L28), [`scripts/audit-log-retention.mjs:2`](file:///home/marcor/Projects/gestionale-fatture/scripts/audit-log-retention.mjs#L2)
 - **Descrizione:** Nel codice sorgente e negli script sono presenti commenti che rimandano a documenti architetturali (`PIANO_FIX_CSP_NONCE.md`, `PIANO_FIX_AUDIT_LOG_RETENTION.md`) non presenti nel repository poiché esclusi dalla regola `docs/` in `.gitignore`. Questo genera debito documentale e disorienta gli sviluppatori che consultano i commenti.
 - **Soluzione consigliata:**

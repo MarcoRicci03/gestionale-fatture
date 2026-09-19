@@ -6,7 +6,7 @@ const isProduction = process.env.NODE_ENV === "production";
 // per poter togliere 'unsafe-inline' da script-src, e headers() qui sotto
 // viene valutato una sola volta al build/route-registration, senza accesso
 // alla request corrente. È generata in proxy.ts (buildCspHeader in
-// lib/security/csp.ts), solo in produzione — vedi PIANO_FIX_CSP_NONCE.md.
+// lib/security/csp.ts), solo in produzione.
 const securityHeaders = [
   // Ridondante con "frame-ancestors 'none'" sopra: X-Frame-Options resta
   // rispettato da client più vecchi che non implementano CSP3.
