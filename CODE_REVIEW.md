@@ -36,7 +36,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ✅ RISOLTO | Branch `refactor/dry01-dry02-managers-duplication` |
 | [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
-| [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ⏳ DA RISOLVERE | - |
+| [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ✅ RISOLTO | Branch `refactor/arch01-sistema-ts-manager-decomposition` |
 | [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ⏳ DA RISOLVERE | - |
 | [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ✅ RISOLTO | Branch `refactor/arch03-action-result-smell02` |
 | [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
@@ -313,23 +313,27 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ARCH-01`
 - **Gravità:** `Alto`
 - **Categoria:** Architettura, Manutenibilità e Modularità
-- **Stato:** ⏳ DA RISOLVERE
-- **Posizione:** [`components/sistema-ts/sistema-ts-manager.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/sistema-ts-manager.tsx) (2.243 righe, 105 KB)
-- **Descrizione:** Il componente `SistemaTsManager` rappresenta un classico "God Component" che concentra un carico di responsabilità eccessivo in un unico file client:
+- **Stato:** ✅ RISOLTO (Branch `refactor/arch01-sistema-ts-manager-decomposition`)
+- **Posizione:** [`components/sistema-ts/sistema-ts-manager.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/sistema-ts-manager.tsx) (decomposto da 2.243 righe a ~330 righe)
+- **Descrizione:** Il componente `SistemaTsManager` rappresentava un classico "God Component" che concentrava un carico di responsabilità eccessivo in un unico file client:
   - Gestione filtri, ordinamento e selezione per il lotto fatture.
   - Gestione filtri, ricerca testuale per protocollo/paziente ed espansione righe per lo storico trasmissioni.
   - Dialog modale di conferma invio batch con riepilogo importi e conteggio anomalie.
   - Dialog modale di annullamento trasmissione con form a 3 campi vincolanti (numero, data, intestatario).
   - Dialog modale per l'ispezione degli errori CSV Sogei (con toggle tra vista tabellare analitica e testo RAW).
   - Dialog di correzione rapida e propagazione dati fiscali.
-  Questo accumulo genera un bundle client sovradimensionato, rende la manutenzione ad altissimo rischio di regressioni e impedisce test di integrazione mirati sui singoli flussi utente.
-- **Soluzione consigliata:**
-  Decomporre il file in moduli focalizzati:
-  1. `components/sistema-ts/tabs/lotti-table.tsx`
-  2. `components/sistema-ts/tabs/storico-table.tsx`
-  3. `components/sistema-ts/dialogs/annulla-ts-dialog.tsx`
-  4. `components/sistema-ts/dialogs/csv-report-dialog.tsx`
-  5. `components/sistema-ts/hooks/use-sistema-ts-filters.ts`
+  Questo accumulo generava un bundle client sovradimensionato, rendeva la manutenzione ad altissimo rischio di regressioni e impediva test di integrazione mirati sui singoli flussi utente.
+- **Risoluzione:**
+  Decomposto in moduli focalizzati e riutilizzabili:
+  1. [`components/sistema-ts/types.ts`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/types.ts): Tipi condivisi e helper di formattazione (`formatCurrency`, `formatDate`).
+  2. [`components/sistema-ts/hooks/use-sistema-ts-lotti.ts`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/hooks/use-sistema-ts-lotti.ts): Logica di stato, partizionamento filtri, calcolo readiness, aggregati lotti e selezione.
+  3. [`components/sistema-ts/hooks/use-sistema-ts-storico.ts`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/hooks/use-sistema-ts-storico.ts): Logica di filtro, ricerca testuale ed espansione righe nello storico.
+  4. [`components/sistema-ts/dialogs/batch-confirm-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/dialogs/batch-confirm-dialog.tsx): Modale di conferma invio lotti con checklist di conformità e warning normativo.
+  5. [`components/sistema-ts/dialogs/cancel-invoice-ts-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/dialogs/cancel-invoice-ts-dialog.tsx): Modale di annullamento singola fattura con validazione a 3 campi vincolanti.
+  6. [`components/sistema-ts/dialogs/csv-report-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/dialogs/csv-report-dialog.tsx): Modale di ispezione errori CSV Sogei (guida vs testo raw).
+  7. [`components/sistema-ts/tabs/lotti-tab.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/tabs/lotti-tab.tsx): Tab "Fatture da Inviare / Lotti" con filtri, pillole readiness, tabella desktop (`hidden lg:block`), card mobile (`lg:hidden`) e sticky batch action bar.
+  8. [`components/sistema-ts/tabs/storico-tab.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/tabs/storico-tab.tsx): Tab "Storico Trasmissioni" con filtri, card trasmissioni, righe espandibili con tabella desktop (`hidden md:block`) e card mobile (`md:hidden`).
+  9. [`components/sistema-ts/sistema-ts-manager.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/sistema-ts-manager.tsx): Orchestratore leggero di ~330 righe (riduzione dell'85% di codice nel componente principale).
 
 ---
 
