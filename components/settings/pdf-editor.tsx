@@ -36,7 +36,7 @@ import type {
 } from "@/lib/pdf/types";
 
 type PdfEditorProps = {
-  initialSettings: ImpostazioniPdf;
+  initialSettings: PdfLayout;
   userId: number;
 };
 
@@ -53,7 +53,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
-  const onPdfLayoutNavigate = useCallback((nextSettings: ImpostazioniPdf) => {
+  const onPdfLayoutNavigate = useCallback((nextSettings: PdfLayout) => {
     setSelectedIds((prev) => {
       const validIds = new Set<string>();
       prev.forEach((id) => {
@@ -305,18 +305,11 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   }, [settings]);
 
   const handleReset = useCallback(() => {
-    const now = new Date();
-    pushSettings({
-      ...LAYOUT_DEFAULT,
-      id: settings.id,
-      id_Utente: userId,
-      createdAt: now,
-      updatedAt: now,
-    });
+    pushSettings(LAYOUT_DEFAULT);
     setSelectedIds(new Set());
     stopEditing();
     setResetOpen(false);
-  }, [settings.id, userId, pushSettings, stopEditing]);
+  }, [pushSettings, stopEditing]);
 
   return (
     <div className="relative flex flex-col gap-4">

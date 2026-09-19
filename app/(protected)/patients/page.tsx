@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import {
   getPatients,
-  getPayersForSelect,
   getArchivedPatients,
 } from "@/lib/data/patients";
+import { getPayersForSelect } from "@/lib/data/payers";
 import { PatientsManager } from "@/components/patients/patients-manager";
 import { parsePatientListQuery } from "@/lib/validations/patient-list-query";
 

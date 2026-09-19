@@ -161,3 +161,12 @@ export async function getArchivedPayers(
 
   return { payers: payersWithStats, totalCount, page: clampedPage };
 }
+
+export async function getPayersForSelect() {
+  const userId = await requireUserId();
+  return prisma.pagante.findMany({
+    where: { id_Utente: userId, archiviato: false },
+    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
+  });
+}
+

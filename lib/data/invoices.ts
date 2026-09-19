@@ -6,6 +6,7 @@ import {
   PATIENT_OPTION_SELECT,
 } from "@/lib/data/invoice-contact-options-select";
 import { buildInvoiceWhere, lastValidPage } from "@/lib/invoices/list-query";
+import { serializeInvoiceNumbers } from "@/lib/invoices/serialize";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 import type { Prisma } from "@prisma/client";
@@ -61,12 +62,7 @@ export async function getInvoices(
 
 
   return {
-    invoices: effectiveInvoices.map((invoice) => ({
-      ...invoice,
-      prezzo_totale: invoice.prezzo_totale.toNumber(),
-      bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
-      mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-    })),
+    invoices: effectiveInvoices.map(serializeInvoiceNumbers),
     totalCount,
     page: clampedPage,
   };
@@ -111,12 +107,7 @@ export async function getInvoiceById(id: number) {
     },
   });
   if (!invoice) return null;
-  return {
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  };
+  return serializeInvoiceNumbers(invoice);
 }
 
 export async function getNextInvoiceNumberForUserYear(
@@ -250,10 +241,5 @@ export async function getLatestInvoices(limit: number) {
     orderBy: [{ data: "desc" }, { id: "desc" }],
     take: limit,
   });
-  return invoices.map((invoice) => ({
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    bollo: invoice.bollo ? invoice.bollo.toNumber() : 0,
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  }));
+  return invoices.map(serializeInvoiceNumbers);
 }

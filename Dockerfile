@@ -98,5 +98,5 @@ USER nextjs
 
 EXPOSE 3000
 
-# Esegue prima le migrazioni su Postgres, poi avvia Next.js
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Esegue prima le migrazioni su Postgres, poi avvia Next.js (con exec per propagare SIGTERM al processo Node, ARCH-04)
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node server.js"]

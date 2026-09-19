@@ -34,12 +34,12 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`SEC-05`](#sec-05) | **Basso** | Sicurezza e Vulnerabilità | Assenza di versioning della chiave di cifratura delle credenziali TS (Key Rotation Risk) | ⏳ DA RISOLVERE | - |
 | [`DRY-01`](#dry-01) | **Alto** | Duplicazione e Principi DRY | Duplicazione strutturale estesa tra `patients-manager.tsx` e `payers-manager.tsx` | ⏳ DA RISOLVERE | - |
 | [`DRY-02`](#dry-02) | **Medio** | Duplicazione e Principi DRY | Duplicazione completa del componente `PayerDetailDialog` | ⏳ DA RISOLVERE | - |
-| [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ⏳ DA RISOLVERE | - |
-| [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ⏳ DA RISOLVERE | - |
+| [`DRY-03`](#dry-03) | **Medio** | Duplicazione e Principi DRY | Serializzazione ripetuta dei campi Decimal di Prisma | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
+| [`DRY-04`](#dry-04) | **Basso** | Duplicazione e Principi DRY | Query duplicata e incoerente tra `getPdfSettings` e `getPdfSettingsForUser` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`ARCH-01`](#arch-01) | **Alto** | Architettura, Manutenibilità e Modularità | Monolite Client Component: `sistema-ts-manager.tsx` (2.243 righe di codice) | ⏳ DA RISOLVERE | - |
 | [`ARCH-02`](#arch-02) | **Alto** | Architettura, Manutenibilità e Modularità | Accoppiamento e complessità monolitica in `lib/actions/sistema-ts.ts` | ⏳ DA RISOLVERE | - |
 | [`ARCH-03`](#arch-03) | **Medio** | Architettura, Manutenibilità e Modularità | Disallineamento nei contratti di ritorno delle Server Actions (`ActionState`) | ⏳ DA RISOLVERE | - |
-| [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ⏳ DA RISOLVERE | - |
+| [`ARCH-04`](#arch-04) | **Basso** | Architettura, Manutenibilità e Modularità | Docker CMD non esegue il replacement del processo (Assenza di `exec`) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`PERF-01`](#perf-01) | **Alto** | Performance ed Efficienza | I/O sincrono e parsing X.509 ripetuto su ogni documento nel loop di trasmissione TS | ✅ RISOLTO | Branch `perf/memoize-x509-cert-perf01` |
 | [`PERF-02`](#perf-02) | **Medio** | Performance ed Efficienza | Pattern N+1 Query nella propagazione dell'anagrafica alle bozze di fattura | ✅ RISOLTO | Branch `perf/propagation-n-plus-one-perf02` |
 | [`PERF-03`](#perf-03) | **Medio** | Performance ed Efficienza | Caricamento non paginato di tutti i paganti attivi nella vista archiviati | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
@@ -49,9 +49,9 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 | [`ERR-03`](#err-03) | **Basso** | Error Handling e Robustezza | Rischio di Date-Drift nel calcolo della retention mensile in `audit-log-retention.mjs` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`SMELL-01`](#smell-01) | **Medio** | Code Smells e Naming Conventions | Rottura del comando `npm run lint` per mancata esclusione di `postgres_dev_data` | ✅ RISOLTO | Branch `perf/perf03-perf04-err03-smell01` |
 | [`SMELL-02`](#smell-02) | **Basso** | Code Smells e Naming Conventions | Utilizzo della proprietà CSS non standard `zoom` nel Canvas PDF Editor | ⏳ DA RISOLVERE | - |
-| [`SMELL-03`](#smell-03) | **Basso** | Code Smells e Naming Conventions | Valore sentinella fittizio `id: 0` in `getPdfSettings` (Rilievo QUA-03) | ⏳ DA RISOLVERE | - |
+| [`SMELL-03`](#smell-03) | **Basso** | Code Smells e Naming Conventions | Valore sentinella fittizio `id: 0` in `getPdfSettings` (Rilievo QUA-03) | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 | [`SMELL-04`](#smell-04) | **Basso** | Code Smells e Naming Conventions | Riferimenti a documentazione non presente nel repository (Rilievo DOC-01) | ⏳ DA RISOLVERE | - |
-| [`SMELL-05`](#smell-05) | **Suggerimento** | Code Smells e Naming Conventions | Posizionamento incoerente di `getPayersForSelect` in `patients.ts` | ⏳ DA RISOLVERE | - |
+| [`SMELL-05`](#smell-05) | **Suggerimento** | Code Smells e Naming Conventions | Posizionamento incoerente di `getPayersForSelect` in `patients.ts` | ✅ RISOLTO | Branch `fix/arch04-dry03-dry04-smell03-smell05` |
 
 ---
 
@@ -265,7 +265,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `DRY-03`
 - **Gravità:** `Medio`
 - **Categoria:** Duplicazione e Principi DRY
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/arch04-dry03-dry04-smell03-smell05`
 - **Posizione:** [`lib/data/invoices.ts:64-69, 114-119, 252-257`](file:///home/marcor/Projects/gestionale-fatture/lib/data/invoices.ts#L64-L69) e [`app/api/invoices/export/route.ts:93-97`](file:///home/marcor/Projects/gestionale-fatture/app/api/invoices/export/route.ts#L93-L97)
 - **Descrizione:** In 4 punti diversi del codebase viene ripetuto lo stesso mapping per convertire gli oggetti `Decimal` di Prisma nei corrispondenti `number` nativi JavaScript per prevenire errori di serializzazione Server-Client:
   ```typescript
@@ -298,7 +298,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `DRY-04`
 - **Gravità:** `Basso`
 - **Categoria:** Duplicazione e Principi DRY
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/arch04-dry03-dry04-smell03-smell05`
 - **Posizione:** [`lib/data/settings.ts:17-35`](file:///home/marcor/Projects/gestionale-fatture/lib/data/settings.ts#L17-L35) e [`lib/data/settings.ts:75-88`](file:///home/marcor/Projects/gestionale-fatture/lib/data/settings.ts#L75-L88)
 - **Descrizione:** Entrambe le funzioni interrogano la tabella `impostazioniPdf` per lo stesso utente. `getPdfSettingsForUser` sfrutta la cache React (`cache()`) e restituisce `PdfLayout`, mentre `getPdfSettings` esegue una query diretta non memorizzata e restituisce `ImpostazioniPdf` con campi sintetici di default.
 - **Soluzione consigliata:**
@@ -392,7 +392,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `ARCH-04`
 - **Gravità:** `Basso`
 - **Categoria:** Architettura, Manutenibilità e Modularità
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/arch04-dry03-dry04-smell03-smell05`
 - **Posizione:** [`Dockerfile:102`](file:///home/marcor/Projects/gestionale-fatture/Dockerfile#L102)
 - **Descrizione:** La direttiva finale del container di produzione è:
   `CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]`
@@ -664,7 +664,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SMELL-03`
 - **Gravità:** `Basso`
 - **Categoria:** Code Smells e Naming Conventions
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/arch04-dry03-dry04-smell03-smell05`
 - **Posizione:** [`lib/data/settings.ts:27`](file:///home/marcor/Projects/gestionale-fatture/lib/data/settings.ts#L27)
 - **Descrizione:** Quando un utente non ha ancora salvato una configurazione PDF personalizzata, `getPdfSettings()` restituisce un oggetto conforme a `ImpostazioniPdf` popolando arbitrariamente `id: 0`. Un valore intero arbitrario che simula una chiave primaria inesistente sul database costituisce un code smell ("falso positivo di persistenza") che può indurre in errore chiamanti futuri (`if (settings.id)`).
 - **Soluzione consigliata:**
@@ -690,7 +690,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `SMELL-05`
 - **Gravità:** `Suggerimento`
 - **Categoria:** Code Smells e Naming Conventions
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `fix/arch04-dry03-dry04-smell03-smell05`
 - **Posizione:** [`lib/data/patients.ts:60-66`](file:///home/marcor/Projects/gestionale-fatture/lib/data/patients.ts#L60-L66)
 - **Descrizione:** La funzione `getPayersForSelect` interroga la tabella `paganti` (`prisma.pagante.findMany(...)`), ma è posizionata all'interno del modulo `lib/data/patients.ts`. In base ai principi di modularità e domain-driven design, tutte le query su un'entità specifica dovrebbero risiedere nel modulo dati di competenza.
 - **Soluzione consigliata:**

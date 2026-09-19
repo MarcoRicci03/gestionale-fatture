@@ -29,3 +29,11 @@ describe("DEP-05: audit-log-retention dichiara la propria stanza build", () => {
     expect(retentionService).toMatch(/build:\s*\n\s*context:\s*\.\s*\n\s*dockerfile:\s*Dockerfile/);
   });
 });
+
+describe("ARCH-04: Docker CMD usa exec per il graceful shutdown", () => {
+  it("esegue node server.js con exec per rimpiazzare il processo shell (PID 1)", () => {
+    const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf-8");
+    expect(dockerfile).toMatch(/CMD\s*\["sh",\s*"-c",\s*"npx prisma migrate deploy && exec node server\.js"\]/);
+  });
+});
+

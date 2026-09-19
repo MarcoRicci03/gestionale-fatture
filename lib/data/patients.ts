@@ -57,13 +57,8 @@ export async function getPatientsForSelect() {
   });
 }
 
-export async function getPayersForSelect() {
-  const userId = await requireUserId();
-  return prisma.pagante.findMany({
-    where: { id_Utente: userId, archiviato: false },
-    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
-  });
-}
+// Spostato in lib/data/payers.ts (SMELL-05), re-export mantenuto per retrocompatibilità.
+export { getPayersForSelect } from "@/lib/data/payers";
 
 export type ArchivedPatientRow = Awaited<
   ReturnType<typeof getArchivedPatients>

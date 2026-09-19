@@ -23,8 +23,9 @@ export const STATO_TS_LABELS: Record<StatoTs, string> = {
 // null: id_Pagante/id_Paziente su Pagamento sono FK obbligatorie (non
 // opzionali), quindi con `include` sono sempre risolte — stessa forma di
 // InvoiceWithRelations in lib/pdf/types.ts.
-export type ExportableInvoice = Omit<Pagamento, "prezzo_totale"> & {
+export type ExportableInvoice = Omit<Pagamento, "prezzo_totale" | "bollo"> & {
   prezzo_totale: number;
+  bollo?: number | null;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante: Pagante;
   paziente: Paziente;

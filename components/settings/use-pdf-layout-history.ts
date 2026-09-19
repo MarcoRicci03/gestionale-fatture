@@ -1,18 +1,18 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { ImpostazioniPdf } from "@/lib/pdf/types";
+import type { PdfLayout } from "@/lib/pdf/types";
 
 const MAX_HISTORY_LENGTH = 50;
 
 type UsePdfLayoutHistoryOptions = {
-  initialSettings: ImpostazioniPdf;
-  onNavigate?: (nextSettings: ImpostazioniPdf) => void;
+  initialSettings: PdfLayout;
+  onNavigate?: (nextSettings: PdfLayout) => void;
 };
 
 export function usePdfLayoutHistory({ initialSettings, onNavigate }: UsePdfLayoutHistoryOptions) {
   const [editorState, setEditorState] = useState<{
-    history: ImpostazioniPdf[];
+    history: PdfLayout[];
     index: number;
   }>({
     history: [initialSettings],
@@ -21,12 +21,12 @@ export function usePdfLayoutHistory({ initialSettings, onNavigate }: UsePdfLayou
   const settings = editorState.history[editorState.index];
 
   const pushSettings = useCallback(
-    (next: ImpostazioniPdf | ((prev: ImpostazioniPdf) => ImpostazioniPdf)) => {
+    (next: PdfLayout | ((prev: PdfLayout) => PdfLayout)) => {
       setEditorState((state) => {
         const current = state.history[state.index];
         const resolved =
           typeof next === "function"
-            ? (next as (prev: ImpostazioniPdf) => ImpostazioniPdf)(current)
+            ? (next as (prev: PdfLayout) => PdfLayout)(current)
             : next;
         if (resolved === current) return state;
         let nextHistory = [...state.history.slice(0, state.index + 1), resolved];
