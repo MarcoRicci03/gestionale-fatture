@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
-import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { isUniqueViolationOnField, isForeignKeyViolation } from "@/lib/prisma-errors";
 import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
@@ -338,46 +338,66 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
 export async function hardDeletePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
-  const payer = await prisma.pagante.findFirst({
-    where: { id, id_Utente: userId, archiviato: true },
-  });
-  if (!payer) {
-    return { error: "Pagante non trovato tra gli archiviati" };
-  }
-
-  const [fatture, pazientiNonArchiviati, pazientiArchiviatiCollegati] =
-    await Promise.all([
-      prisma.pagamento.count({
-        where: {
-          id_Utente: userId,
-          OR: [{ id_Pagante: id }, { paziente: { id_Pagante: id } }],
-        },
-      }),
-      prisma.paziente.count({
-        where: { id_Utente: userId, id_Pagante: id, archiviato: false },
-      }),
-      prisma.paziente.count({
-        where: { id_Utente: userId, id_Pagante: id, archiviato: true },
-      }),
-    ]);
-
-  if (!canHardDeletePayer({ fatture, pazientiNonArchiviati })) {
-    if (fatture > 0) {
-      return {
-        error: `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`,
-      };
-    }
-    return {
-      error: `Impossibile eliminare: ${pazientiNonArchiviati} paziente/i collegato/i non è/sono ancora archiviato/i. Archivia prima quei pazienti.`,
-    };
-  }
+  let pazientiArchiviatiCollegati = 0;
 
   try {
-    // Il cascade DB su pazienti.id_Pagante colpisce solo pazienti già
-    // archiviati e senza fatture (garantito dai conteggi sopra), mai un
-    // record che l'utente non ha esplicitamente archiviato.
-    await prisma.pagante.delete({ where: { id, id_Utente: userId } });
+    await prisma.$transaction(async (tx) => {
+      const payer = await tx.pagante.findFirst({
+        where: { id, id_Utente: userId, archiviato: true },
+      });
+      if (!payer) {
+        throw new Error("Pagante non trovato tra gli archiviati");
+      }
+
+      const [fatture, pazientiNonArchiviati, archiviatiCollegati] =
+        await Promise.all([
+          tx.pagamento.count({
+            where: {
+              id_Utente: userId,
+              OR: [{ id_Pagante: id }, { paziente: { id_Pagante: id } }],
+            },
+          }),
+          tx.paziente.count({
+            where: { id_Utente: userId, id_Pagante: id, archiviato: false },
+          }),
+          tx.paziente.count({
+            where: { id_Utente: userId, id_Pagante: id, archiviato: true },
+          }),
+        ]);
+
+      if (!canHardDeletePayer({ fatture, pazientiNonArchiviati })) {
+        if (fatture > 0) {
+          throw new Error(
+            `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`
+          );
+        }
+        throw new Error(
+          `Impossibile eliminare: ${pazientiNonArchiviati} paziente/i collegato/i non è/sono ancora archiviato/i. Archivia prima quei pazienti.`
+        );
+      }
+
+      pazientiArchiviatiCollegati = archiviatiCollegati;
+
+      // Il cascade DB su pazienti.id_Pagante colpisce solo pazienti già
+      // archiviati e senza fatture (garantito dai conteggi sopra), mai un
+      // record che l'utente non ha esplicitamente archiviato.
+      await tx.pagante.delete({ where: { id, id_Utente: userId } });
+    });
   } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      return {
+        error:
+          "Impossibile eliminare: sono presenti record (fatture o pazienti) collegati a questo pagante",
+      };
+    }
+    if (error instanceof Error) {
+      if (
+        error.message === "Pagante non trovato tra gli archiviati" ||
+        error.message.startsWith("Impossibile eliminare:")
+      ) {
+        return { error: error.message };
+      }
+    }
     console.error("hardDeletePayer error", error);
     return { error: "Errore durante l'eliminazione definitiva del pagante" };
   }
