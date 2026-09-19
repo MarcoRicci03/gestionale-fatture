@@ -173,6 +173,48 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
       })
     );
   });
+
+  it("propaga i nuovi dati a bozze multiple concorrenzialmente (PERF-02)", async () => {
+    const draft1 = {
+      id: 51,
+      id_Utente: 1,
+      id_Pagante: 10,
+      stato_ts: "DA_INVIARE",
+      snapshotAnagrafica: {
+        pagante: { nome: "Vecchio", cognome: "Rossi", cf: "RSSVCC70A01H501U" },
+        paziente: { nome: "Figlio", cognome: "Rossi" },
+      },
+      pagante: { nome: "Mario", cognome: "Rossi" },
+      paziente: { nome: "Figlio", cognome: "Rossi" },
+    };
+    const draft2 = {
+      id: 52,
+      id_Utente: 1,
+      id_Pagante: 10,
+      stato_ts: "DA_INVIARE",
+      snapshotAnagrafica: {
+        pagante: { nome: "Vecchio", cognome: "Rossi", cf: "RSSVCC70A01H501U" },
+        paziente: { nome: "Figlio2", cognome: "Rossi" },
+      },
+      pagante: { nome: "Mario", cognome: "Rossi" },
+      paziente: { nome: "Figlio2", cognome: "Rossi" },
+    };
+
+    mockPagamentoFindMany.mockResolvedValueOnce([draft1, draft2]);
+
+    const res = await updatePayer(10, {
+      ...validData,
+      propagaFattureInAttesa: true,
+    });
+
+    expect(res).toEqual({ success: true });
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 51 } })
+    );
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 52 } })
+    );
+  });
 });
 
 describe("lib/actions/payers — hardDeletePayer transazionale e gestione vincoli", () => {

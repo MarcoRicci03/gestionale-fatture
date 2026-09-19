@@ -453,7 +453,7 @@ I problemi identificati sono classificati rigorosamente in ordine decrescente di
 - **Identificativo:** `PERF-02`
 - **Gravità:** `Medio`
 - **Categoria:** Performance ed Efficienza
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO — Branch `perf/propagation-n-plus-one-perf02`
 - **Posizione:** [`lib/actions/payers.ts:155-176`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/payers.ts#L155-L176) e [`lib/actions/sistema-ts.ts:1161-1176`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts#L1161-L1176)
 - **Descrizione:** Quando l'utente aggiorna i dati di un pagante (o corregge un Codice Fiscale da Sistema TS) con l'opzione `propagaFattureInAttesa: true`, il codice esegue un `findMany` per recuperare tutte le bozze `DA_INVIARE`, e poi itera con un ciclo sequenziale `for (const draft of drafts)` eseguendo un singolo statement `await tx.pagamento.update(...)` per ciascuna fattura all'interno della transazione interattiva. Se il cliente ha decine di prestazioni in sospeso, la transazione rimane aperta a lungo in attesa di multipli round-trip di rete verso PostgreSQL, aumentando il rischio di lock contention.
 - **Soluzione consigliata:**

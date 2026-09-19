@@ -152,28 +152,30 @@ export async function updatePayer(
           include: { pagante: true, paziente: true },
         });
 
-        for (const draft of drafts) {
-          const snap = resolveAnagrafica(draft);
-          const newSnap = {
-            ...snap,
-            pagante: {
-              ...snap.pagante,
-              nome: parsed.data.nome,
-              cognome: parsed.data.cognome,
-              via: parsed.data.via,
-              citta: parsed.data.citta,
-              cap: parsed.data.cap,
-              cf: parsed.data.cf ?? null,
-              piva: parsed.data.piva ?? null,
-            },
-          };
-          await tx.pagamento.update({
-            where: { id: draft.id },
-            data: {
-              snapshotAnagrafica: newSnap as unknown as Prisma.InputJsonValue,
-            },
-          });
-        }
+        await Promise.all(
+          drafts.map((draft) => {
+            const snap = resolveAnagrafica(draft);
+            const newSnap = {
+              ...snap,
+              pagante: {
+                ...snap.pagante,
+                nome: parsed.data.nome,
+                cognome: parsed.data.cognome,
+                via: parsed.data.via,
+                citta: parsed.data.citta,
+                cap: parsed.data.cap,
+                cf: parsed.data.cf ?? null,
+                piva: parsed.data.piva ?? null,
+              },
+            };
+            return tx.pagamento.update({
+              where: { id: draft.id },
+              data: {
+                snapshotAnagrafica: newSnap as unknown as Prisma.InputJsonValue,
+              },
+            });
+          })
+        );
       }
     });
   } catch (error) {

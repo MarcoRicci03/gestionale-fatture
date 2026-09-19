@@ -1158,22 +1158,24 @@ export async function correggiFatturaTs(
           include: { pagante: true, paziente: true },
         });
 
-        for (const draft of otherDrafts) {
-          const draftSnap = resolveAnagrafica(draft);
-          const newDraftSnap = {
-            ...draftSnap,
-            pagante: {
-              ...draftSnap.pagante,
-              cf: targetCf,
-            },
-          };
-          await tx.pagamento.update({
-            where: { id: draft.id },
-            data: {
-              snapshotAnagrafica: newDraftSnap as unknown as Prisma.InputJsonValue,
-            },
-          });
-        }
+        await Promise.all(
+          otherDrafts.map((draft) => {
+            const draftSnap = resolveAnagrafica(draft);
+            const newDraftSnap = {
+              ...draftSnap,
+              pagante: {
+                ...draftSnap.pagante,
+                cf: targetCf,
+              },
+            };
+            return tx.pagamento.update({
+              where: { id: draft.id },
+              data: {
+                snapshotAnagrafica: newDraftSnap as unknown as Prisma.InputJsonValue,
+              },
+            });
+          })
+        );
       }
     });
   } catch (error) {

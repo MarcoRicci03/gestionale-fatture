@@ -1540,6 +1540,70 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     );
   });
 
+  it("propaga il nuovo CF a bozze multiple concorrenzialmente (PERF-02)", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+    mockPaganteFindFirst.mockResolvedValueOnce(null);
+
+    const otherDraft1 = {
+      id: 11,
+      id_Utente: 1,
+      id_Pagante: 100,
+      id_Paziente: 200,
+      stato_ts: "DA_INVIARE",
+      snapshotAnagrafica: {
+        pagante: { nome: "Mario", cognome: "Rossi", via: "Via Roma 1", citta: "Roma", cap: "00100", cf: "WRONG_CF", piva: null },
+        paziente: { nome: "Luigi", cognome: "Rossi" },
+      },
+      pagante: baseInvoice.pagante,
+      paziente: baseInvoice.paziente,
+    };
+    const otherDraft2 = {
+      id: 12,
+      id_Utente: 1,
+      id_Pagante: 100,
+      id_Paziente: 200,
+      stato_ts: "DA_INVIARE",
+      snapshotAnagrafica: {
+        pagante: { nome: "Mario", cognome: "Rossi", via: "Via Roma 1", citta: "Roma", cap: "00100", cf: "WRONG_CF", piva: null },
+        paziente: { nome: "Luigi", cognome: "Rossi" },
+      },
+      pagante: baseInvoice.pagante,
+      paziente: baseInvoice.paziente,
+    };
+
+    mockPagamentoFindMany.mockResolvedValueOnce([otherDraft1, otherDraft2]);
+
+    const res = await correggiFatturaTs({
+      invoiceId: 10,
+      paganteCf: "RSSMRA80A01H501U",
+      aggiornaAnagrafica: true,
+      propagaFattureInAttesa: true,
+      flagOpposizione: false,
+    });
+
+    expect(res).toHaveProperty("success", true);
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 11 },
+        data: expect.objectContaining({
+          snapshotAnagrafica: expect.objectContaining({
+            pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
+          }),
+        }),
+      })
+    );
+    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 12 },
+        data: expect.objectContaining({
+          snapshotAnagrafica: expect.objectContaining({
+            pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
+          }),
+        }),
+      })
+    );
+  });
+
   it("NON propaga il nuovo CF alle altre fatture quando la spunta è disattivata", async () => {
     mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
     mockPaganteFindFirst.mockResolvedValueOnce(null);
