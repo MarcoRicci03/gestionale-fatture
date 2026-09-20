@@ -23,8 +23,8 @@ I problemi sono classificati per categoria e ordinati per livello di gravità (*
 | ID | Gravità | Categoria | Titolo Sintetico | Stato | Posizione |
 | :--- | :--- | :--- | :--- | :---: | :--- |
 | [`ERR-04`](#err-04) | **Medio** | Error Handling e Concorrenza | Race Condition (TOCTOU) su cancellazione fisica fattura concorrente a trasmissione TS | ✅ RISOLTO | Branch `fix/err04-invoice-delete-toctou` |
-| [`SMELL-06`](#smell-06) | **Medio** | Code Smells e React Anti-Pattern | Violazione regole React Hooks: `setState` sincrono dentro `useEffect` (Cascading Renders) | ⏳ DA RISOLVERE | [`components/sistema-ts/`](./components/sistema-ts/) |
-| [`SMELL-07`](#smell-07) | **Basso** | Code Smells e React Anti-Pattern | Caratteri apostrofo non sottoposti ad escape nel JSX (`react/no-unescaped-entities`) | ⏳ DA RISOLVERE | [`components/sistema-ts/fix-invoice-ts-dialog.tsx`](./components/sistema-ts/fix-invoice-ts-dialog.tsx) |
+| [`SMELL-06`](#smell-06) | **Medio** | Code Smells e React Anti-Pattern | Violazione regole React Hooks: `setState` sincrono dentro `useEffect` (Cascading Renders) | ✅ RISOLTO | Branch `fix/smell06-react-hooks-setstate` |
+| [`SMELL-07`](#smell-07) | **Basso** | Code Smells e React Anti-Pattern | Caratteri apostrofo non sottoposti ad escape nel JSX (`react/no-unescaped-entities`) | ✅ RISOLTO | Branch `fix/smell06-react-hooks-setstate` |
 | [`SMELL-08`](#smell-08) | **Basso** | Code Smells e React Anti-Pattern | Funzioni pure interne ad hook omesse dalle dipendenze di `useMemo` (`exhaustive-deps`) | ⏳ DA RISOLVERE | [`components/sistema-ts/hooks/use-sistema-ts-lotti.ts`](./components/sistema-ts/hooks/use-sistema-ts-lotti.ts) |
 | [`ARCH-05`](#arch-05) | **Basso** | Architettura e Tipizzazione | Disallineamento nel pattern discriminated union in `deleteInvoice` | ✅ RISOLTO | Branch `fix/err04-invoice-delete-toctou` |
 | [`DATA-01`](#data-01) | **Basso** | Validazione Dati | Parsing date senza validazione del calendario reale in `FixInvoiceTsDialog` | ⏳ DA RISOLVERE | [`components/sistema-ts/fix-invoice-ts-dialog.tsx:83`](./components/sistema-ts/fix-invoice-ts-dialog.tsx#L83) |
@@ -79,7 +79,7 @@ I problemi sono classificati per categoria e ordinati per livello di gravità (*
 - **Identificativo:** `SMELL-06`
 - **Gravità:** `Medio`
 - **Categoria:** Code Smells e React Anti-Pattern
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `fix/smell06-react-hooks-setstate`)
 - **Posizione:**
   - [`components/sistema-ts/dialogs/cancel-invoice-ts-dialog.tsx:36-42`](./components/sistema-ts/dialogs/cancel-invoice-ts-dialog.tsx#L36-L42)
   - [`components/sistema-ts/fix-invoice-ts-dialog.tsx:55-67`](./components/sistema-ts/fix-invoice-ts-dialog.tsx#L55-L67)
@@ -102,7 +102,7 @@ I problemi sono classificati per categoria e ordinati per livello di gravità (*
 - **Identificativo:** `SMELL-07`
 - **Gravità:** `Basso`
 - **Categoria:** Code Smells e React Anti-Pattern
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `fix/smell06-react-hooks-setstate`)
 - **Posizione:** [`components/sistema-ts/fix-invoice-ts-dialog.tsx:238, 289`](./components/sistema-ts/fix-invoice-ts-dialog.tsx#L238)
 - **Descrizione:**
   Nel markup JSX del dialog di correzione rapida sono presenti caratteri apostrofo `'` inseriti come testo letterale:
