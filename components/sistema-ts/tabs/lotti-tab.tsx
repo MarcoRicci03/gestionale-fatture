@@ -10,6 +10,8 @@ import {
   RotateCcw,
   Ban,
   ShieldCheck,
+  Check,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -382,19 +384,19 @@ export function LottiTab({
                       </TableCell>
                       <TableCell>
                         {f.pagamento_tracciato ? (
-                          <span
-                            title={f.mod_pag ? `Modalità: ${f.mod_pag}` : undefined}
-                            className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400"
-                          >
-                            Sì
-                          </span>
+                          <Tooltip content={f.mod_pag ? `Tracciato (${f.mod_pag})` : "Pagamento tracciato"}>
+                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400 cursor-default">
+                              <Check className="h-3.5 w-3.5" />
+                              <span className="sr-only">Tracciato</span>
+                            </span>
+                          </Tooltip>
                         ) : (
-                          <span
-                            title={f.mod_pag ? `Modalità: ${f.mod_pag}` : undefined}
-                            className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400"
-                          >
-                            No
-                          </span>
+                          <Tooltip content={f.mod_pag ? `Non tracciato (${f.mod_pag})` : "Non tracciato (Contanti)"}>
+                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20 cursor-default">
+                              <X className="h-3.5 w-3.5" />
+                              <span className="sr-only">Non tracciato</span>
+                            </span>
+                          </Tooltip>
                         )}
                       </TableCell>
                       <TableCell>
