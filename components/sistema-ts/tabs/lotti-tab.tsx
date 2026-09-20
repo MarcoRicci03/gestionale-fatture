@@ -9,7 +9,6 @@ import {
   Filter,
   RotateCcw,
   Ban,
-  ShieldCheck,
   Check,
   X,
 } from "lucide-react";

@@ -72,7 +72,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { Prisma } from "@prisma/client";
-import { updatePayer, createPayer, hardDeletePayer } from "./payers";
+import { updatePayer, hardDeletePayer } from "./payers";
 
 describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
   beforeEach(() => {
