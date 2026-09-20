@@ -104,41 +104,43 @@ export function UsersManager({ users }: UsersManagerProps) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <Tooltip content="Reset password">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setResettingUser(user)}
-                          aria-label="Reset password"
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip content="Reset password">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setResettingUser(user)}
+                            aria-label="Reset password"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Modifica utente">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(user)}
+                            aria-label="Modifica utente"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Tooltip>
+                        <form
+                          action={async () => {
+                            await toggleUserEnabled(user.id, !user.abilitato);
+                          }}
                         >
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip content="Modifica utente">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(user)}
-                          aria-label="Modifica utente"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Tooltip>
-                      <form
-                        action={async () => {
-                          await toggleUserEnabled(user.id, !user.abilitato);
-                        }}
-                      >
-                        <Button
-                          type="submit"
-                          variant="ghost"
-                          size="sm"
-                          className={user.abilitato ? "text-destructive" : "text-green-600"}
-                        >
-                          {user.abilitato ? "Disabilita" : "Abilita"}
-                        </Button>
-                      </form>
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            className={user.abilitato ? "text-destructive" : "text-green-600"}
+                          >
+                            {user.abilitato ? "Disabilita" : "Abilita"}
+                          </Button>
+                        </form>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
