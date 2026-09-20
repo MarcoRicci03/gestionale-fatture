@@ -127,7 +127,7 @@ export function StoricoTab({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       {/* Barra Filtri e Ricerca Storico */}
       <div className="shrink-0 rounded-lg border border-border bg-card p-4">
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-end">
@@ -386,7 +386,7 @@ export function StoricoTab({
                       <>
                         {/* Desktop Table (hidden md:block) */}
                         <div className="hidden md:block overflow-x-auto rounded-md border border-border bg-muted/20">
-                          <Table className="w-full">
+                          <Table className="w-full min-w-[850px]">
                             <TableHeader>
                               <TableRow className="text-xs">
                                 <TableHead className="w-24 shrink-0">N. Fattura</TableHead>

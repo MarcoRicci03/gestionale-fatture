@@ -16,7 +16,7 @@ export default async function ProtectedLayout({
       <DevBanner />
       <div className="flex min-h-0 flex-1">
         <Sidebar session={session} />
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <MobileHeader session={session} />
           {/*
             flex-col + min-h-0 + overflow-y-auto: lo scroll di pagina si sposta
@@ -29,7 +29,7 @@ export default async function ProtectedLayout({
             (flex-1 min-h-0) e scrollare SOLO al proprio interno, lasciando
             main inerte (nulla da scrollare lì) — vedi i rispettivi Manager.
           */}
-          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 lg:p-8">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-6 lg:p-8">
             {session.mustChangePassword && <TemporaryPasswordNotice />}
             {children}
           </main>

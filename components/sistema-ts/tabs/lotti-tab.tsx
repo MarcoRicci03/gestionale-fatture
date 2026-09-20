@@ -80,7 +80,7 @@ export function LottiTab({
   } = lotti;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">
       {/* Filtri */}
       <div className="shrink-0 rounded-lg border border-border bg-card p-4">
         <div className="grid gap-4 sm:grid-cols-4 items-end">
@@ -248,10 +248,10 @@ export function LottiTab({
           </p>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">
           {/* Vista Desktop Table (hidden lg:block) */}
-          <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
-            <Table>
+          <div className="hidden flex-1 min-h-56 overflow-x-auto overflow-y-auto rounded-lg border border-border bg-card lg:block">
+            <Table className="w-full min-w-[950px]">
               <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
                   <TableHead className="w-12">

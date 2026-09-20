@@ -184,7 +184,7 @@ export function SistemaTsManager({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-6">
       {/* Intestazione pagina */}
       <div className="flex shrink-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
