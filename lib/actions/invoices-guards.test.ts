@@ -39,7 +39,7 @@ vi.mock("@/lib/prisma", () => ({
     auditLog: {
       create: (...args: unknown[]) => mockAuditLogCreate(...args),
     },
-    $transaction: (fn: any) => mockTransaction(fn),
+    $transaction: (fn: (tx: unknown) => Promise<unknown>) => mockTransaction(fn),
   },
 }));
 

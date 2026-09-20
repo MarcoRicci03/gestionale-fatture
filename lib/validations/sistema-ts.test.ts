@@ -227,7 +227,7 @@ describe("sistemaTsSettingsSchema validation", () => {
     });
 
     it("applica il default 'N2.2' per naturaIvaDefault se non specificata", () => {
-      const { naturaIvaDefault: _, ...withoutNatura } = baseValidInput;
+      const withoutNatura = { ...baseValidInput, naturaIvaDefault: undefined };
       const result = sistemaTsSettingsSchema.safeParse(withoutNatura);
       expect(result.success).toBe(true);
       if (result.success) {

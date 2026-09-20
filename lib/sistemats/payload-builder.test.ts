@@ -3,7 +3,6 @@ import {
   buildVociSpesa,
   resolveNaturaIvaBollo,
   validateImportoSpesa,
-  SISTEMATS_IMPORTO_MIN,
   SISTEMATS_IMPORTO_MAX,
 } from "./payload-builder";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";

@@ -29,7 +29,6 @@ import { PdfEditorBlockPropertiesPanel } from "@/components/settings/pdf-editor-
 import { PAGE_W, PAGE_H, clamp } from "@/lib/pdf/canvas-geometry";
 import type {
   Blocco,
-  ImpostazioniPdf,
   PdfLayout,
   PdfSettingsInput,
   TipoBlocco,
@@ -44,7 +43,7 @@ function makeId() {
   return crypto.randomUUID();
 }
 
-export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
+export function PdfEditor({ initialSettings }: PdfEditorProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

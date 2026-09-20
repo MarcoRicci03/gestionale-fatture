@@ -6,7 +6,6 @@ import {
   userCreateSchema,
   resetPasswordSchema,
   changePasswordSchema,
-  MAX_PASSWORD_BYTES,
 } from "../lib/validations/user";
 import { isCommonWeakPassword } from "../lib/auth/common-passwords";
 import { hashPassword } from "../lib/auth/password";

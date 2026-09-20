@@ -12,7 +12,6 @@ type UseInvoiceSelectionOptions = {
 export function useInvoiceSelection({
   invoices,
   filters,
-  page,
 }: UseInvoiceSelectionOptions) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const selectAllRef = useRef<HTMLInputElement>(null);
