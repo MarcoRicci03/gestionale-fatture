@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FixInvoiceTsDialog } from "./fix-invoice-ts-dialog";
 import type { FatturaTsListItem } from "@/lib/data/sistema-ts";
@@ -222,5 +222,75 @@ describe("FixInvoiceTsDialog", () => {
         })
       );
     });
+  });
+
+  it("mostra errore di validazione e disabilita il submit se la data non esiste nel calendario reale", () => {
+    const invoiceWithValidCf = {
+      ...baseInvoice,
+      paganteCf: "RSSMRA80A01H501U",
+      cfValido: true,
+      cfErrore: undefined,
+    };
+
+    render(
+      <FixInvoiceTsDialog
+        invoice={invoiceWithValidCf}
+        open={true}
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    );
+
+    const submitBtn = screen.getByRole("button", { name: /Salva correzioni/i });
+    expect(submitBtn).not.toBeDisabled();
+
+    // Simula digitazione di data non valida nel browser nativo (badInput: true)
+    const inputDate = screen.getByLabelText(/Data di effettivo incasso/i);
+    Object.defineProperty(inputDate, "validity", {
+      get: () => ({ badInput: true }),
+      configurable: true,
+    });
+    fireEvent.change(inputDate, { target: { value: "" } });
+
+    expect(screen.getByText("Data non valida nel calendario reale")).toBeInTheDocument();
+    expect(submitBtn).toBeDisabled();
+
+    // Ripristina una data valida (30 Aprile 2026)
+    Object.defineProperty(inputDate, "validity", {
+      get: () => ({ badInput: false }),
+      configurable: true,
+    });
+    fireEvent.change(inputDate, { target: { value: "2026-04-30" } });
+
+    expect(screen.queryByText("Data non valida nel calendario reale")).not.toBeInTheDocument();
+    expect(submitBtn).not.toBeDisabled();
+  });
+
+  it("mostra errore di validazione se la data di incasso viene lasciata vuota", () => {
+    const invoiceWithValidCf = {
+      ...baseInvoice,
+      paganteCf: "RSSMRA80A01H501U",
+      cfValido: true,
+      cfErrore: undefined,
+    };
+
+    render(
+      <FixInvoiceTsDialog
+        invoice={invoiceWithValidCf}
+        open={true}
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    );
+
+    const submitBtn = screen.getByRole("button", { name: /Salva correzioni/i });
+    expect(submitBtn).not.toBeDisabled();
+
+    // Svuota la data
+    const inputDate = screen.getByLabelText(/Data di effettivo incasso/i);
+    fireEvent.change(inputDate, { target: { value: "" } });
+
+    expect(screen.getByText("Data di incasso obbligatoria")).toBeInTheDocument();
+    expect(submitBtn).toBeDisabled();
   });
 });

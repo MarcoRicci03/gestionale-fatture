@@ -1,8 +1,27 @@
+/**
+ * Verifica che una stringa in formato AAAA-MM-GG corrisponda a un giorno reale
+ * del calendario gregoriano (evita rollover silenziosi di JS, es. 2026-04-31 -> 2026-05-01).
+ */
+export function isValidCalendarDateString(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const date = new Date(y, m - 1, d, 12, 0, 0);
+  return (
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  );
+}
+
 // Le date sono costruite a mezzogiorno in ora locale DEL PROCESSO. Il fuso è
 // pinnato a Europe/Rome (Dockerfile ENV TZ + prefisso TZ sugli script npm)
 // così client e server concordano; il mezzogiorno dà comunque margine
 // contro lo scivolamento di giorno ai confini del fuso.
 export function parseDateInput(value: string): Date {
+  if (!isValidCalendarDateString(value)) {
+    throw new Error(`Data non valida sul calendario: ${value}`);
+  }
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0);
 }
