@@ -45,3 +45,10 @@ export function isForeignKeyViolation(error: unknown): boolean {
     error.code === "P2003"
   );
 }
+
+export function isRecordNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2025"
+  );
+}

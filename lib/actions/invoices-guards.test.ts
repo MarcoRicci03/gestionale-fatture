@@ -12,15 +12,34 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
+import { Prisma } from "@prisma/client";
+
 const mockFindFirst = vi.fn();
 const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
+const mockAuditLogCreate = vi.fn();
+const mockTransaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
+  callback({
+    pagamento: {
+      delete: mockDelete,
+    },
+    auditLog: {
+      create: mockAuditLogCreate,
+    },
+  })
+);
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     pagamento: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
+      delete: (...args: unknown[]) => mockDelete(...args),
     },
+    auditLog: {
+      create: (...args: unknown[]) => mockAuditLogCreate(...args),
+    },
+    $transaction: (fn: any) => mockTransaction(fn),
   },
 }));
 
@@ -208,6 +227,58 @@ describe("deleteInvoice TS protection", () => {
       success: false,
       error:
         "La fattura è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
+    });
+  });
+
+  it("esegue la cancellazione atomica verificando stato_ts: 'DA_INVIARE'", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: 10,
+      n_fattura: 1,
+      anno: 2026,
+      stato_ts: "DA_INVIARE",
+      data: new Date("2026-01-15"),
+      prezzo_totale: 100,
+      id_Pagante: 1,
+      id_Paziente: 1,
+    });
+    mockDelete.mockResolvedValueOnce({});
+
+    const result = await deleteInvoice(10);
+
+    expect(result).toEqual({ success: true });
+    expect(mockDelete).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        id_Utente: 1,
+        stato_ts: "DA_INVIARE",
+      },
+    });
+  });
+
+  it("gestisce la race condition (P2025) se la fattura cambia stato concorrentemente prima del delete", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: 10,
+      n_fattura: 1,
+      anno: 2026,
+      stato_ts: "DA_INVIARE",
+      data: new Date("2026-01-15"),
+      prezzo_totale: 100,
+      id_Pagante: 1,
+      id_Paziente: 1,
+    });
+    mockDelete.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Record not found", {
+        code: "P2025",
+        clientVersion: "5.x",
+      })
+    );
+
+    const result = await deleteInvoice(10);
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "La fattura è stata modificata o è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
     });
   });
 });

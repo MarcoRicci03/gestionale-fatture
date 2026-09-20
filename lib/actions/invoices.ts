@@ -8,7 +8,7 @@ import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { getPdfSettingsForUser } from "@/lib/data/settings";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
-import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import {
   getNextInvoiceNumberForUserYear,
   getChronologyNeighbors,
@@ -503,7 +503,7 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
 
   if (invoice.stato_ts === "INVIATA" || invoice.stato_ts === "DA_CANCELLARE_SU_TS") {
     const cancelResult = await annullaFatturaTs(id);
-    if ("error" in cancelResult) {
+    if (!cancelResult.success) {
       return { success: false, error: cancelResult.error };
     }
     revalidatePath("/invoices");
@@ -522,7 +522,15 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
     // fattura che l'unica copia dei suoi dati. logAuditOrThrow (a differenza
     // di logAudit) propaga l'errore invece di inghiottirlo.
     await prisma.$transaction(async (tx) => {
-      await tx.pagamento.delete({ where: { id, id_Utente: userId } });
+      // ERR-04: vincola atomicamente stato_ts: "DA_INVIARE" nella delete per prevenire race condition (TOCTOU)
+      // nel caso in cui un invio batch concorrente porti la fattura in IN_TRASMISSIONE dopo il controllo iniziale.
+      await tx.pagamento.delete({
+        where: {
+          id,
+          id_Utente: userId,
+          stato_ts: "DA_INVIARE",
+        },
+      });
       await logAuditOrThrow(
         {
           azione: AUDIT_ACTIONS.INVOICE_DELETE,
@@ -543,6 +551,13 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
       );
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return {
+        success: false,
+        error:
+          "La fattura è stata modificata o è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
+      };
+    }
     console.error("deleteInvoice error", error);
     return { success: false, error: "Errore durante l'eliminazione della fattura" };
   }
