@@ -341,7 +341,7 @@ export function LottiTab({
                           </span>
                         ) : (
                           <Tooltip content={f.cfErrore || "Codice Fiscale non valido"}>
-                            <span className="font-mono text-xs font-semibold text-destructive inline-flex items-center gap-1 cursor-help">
+                            <span className="font-mono text-xs font-semibold text-destructive inline-flex items-center gap-1 cursor-default">
                               <AlertTriangle className="h-3 w-3 shrink-0" />
                               {f.paganteCf || "MANCANTE"}
                             </span>
