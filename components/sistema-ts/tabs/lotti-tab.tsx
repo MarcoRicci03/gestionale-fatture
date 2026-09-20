@@ -381,12 +381,18 @@ export function LottiTab({
                       </TableCell>
                       <TableCell>
                         {f.pagamento_tracciato ? (
-                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400">
-                            Sì ({f.mod_pag})
+                          <span
+                            title={f.mod_pag ? `Modalità: ${f.mod_pag}` : undefined}
+                            className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400"
+                          >
+                            Sì
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
-                            No (Contanti)
+                          <span
+                            title={f.mod_pag ? `Modalità: ${f.mod_pag}` : undefined}
+                            className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400"
+                          >
+                            No
                           </span>
                         )}
                       </TableCell>
