@@ -10,6 +10,8 @@ import {
   RotateCcw,
   Ban,
   ShieldCheck,
+  Check,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -80,7 +82,7 @@ export function LottiTab({
   } = lotti;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">
       {/* Filtri */}
       <div className="shrink-0 rounded-lg border border-border bg-card p-4">
         <div className="grid gap-4 sm:grid-cols-4 items-end">
@@ -248,10 +250,10 @@ export function LottiTab({
           </p>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">
           {/* Vista Desktop Table (hidden lg:block) */}
-          <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
-            <Table>
+          <div className="hidden flex-1 min-h-56 overflow-x-auto overflow-y-auto rounded-lg border border-border bg-card lg:block">
+            <Table className="w-full min-w-[950px]">
               <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
                   <TableHead className="w-12">
@@ -340,15 +342,12 @@ export function LottiTab({
                             {f.paganteCf}
                           </span>
                         ) : (
-                          <div className="flex flex-col">
-                            <span className="font-mono text-xs font-semibold text-destructive">
+                          <Tooltip content={f.cfErrore || "Codice Fiscale non valido"}>
+                            <span className="font-mono text-xs font-semibold text-destructive inline-flex items-center gap-1 cursor-default">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
                               {f.paganteCf || "MANCANTE"}
                             </span>
-                            <span className="text-[11px] text-destructive flex items-center gap-1 mt-0.5">
-                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                              {f.cfErrore || "Codice Fiscale errato"}
-                            </span>
-                          </div>
+                          </Tooltip>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
@@ -363,16 +362,20 @@ export function LottiTab({
                       <TableCell>
                         {f.richiedeBollo ? (
                           <div className="text-xs">
-                            <span className="font-medium">{formatCurrency(f.bollo)}</span>
                             {f.bolloMancante ? (
-                              <div className="text-[11px] text-destructive font-semibold flex items-center gap-1 mt-0.5">
-                                <AlertTriangle className="h-3 w-3 shrink-0" />
-                                Codice assente
-                              </div>
+                              <Tooltip content="Codice bollo assente">
+                                <span className="font-semibold text-destructive inline-flex items-center gap-1 cursor-default">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  {formatCurrency(f.bollo)}
+                                </span>
+                              </Tooltip>
                             ) : (
-                              <div className="text-[11px] text-muted-foreground font-mono">
-                                {f.bolloCodice}
-                              </div>
+                              <>
+                                <span className="font-medium">{formatCurrency(f.bollo)}</span>
+                                <div className="text-[11px] text-muted-foreground font-mono">
+                                  {f.bolloCodice}
+                                </div>
+                              </>
                             )}
                           </div>
                         ) : (
@@ -381,13 +384,19 @@ export function LottiTab({
                       </TableCell>
                       <TableCell>
                         {f.pagamento_tracciato ? (
-                          <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400">
-                            Sì ({f.mod_pag})
-                          </span>
+                          <Tooltip content={f.mod_pag ? `Tracciato (${f.mod_pag})` : "Pagamento tracciato"}>
+                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400 cursor-default">
+                              <Check className="h-3.5 w-3.5" />
+                              <span className="sr-only">Tracciato</span>
+                            </span>
+                          </Tooltip>
                         ) : (
-                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
-                            No (Contanti)
-                          </span>
+                          <Tooltip content={f.mod_pag ? `Non tracciato (${f.mod_pag})` : "Non tracciato (Contanti)"}>
+                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20 cursor-default">
+                              <X className="h-3.5 w-3.5" />
+                              <span className="sr-only">Non tracciato</span>
+                            </span>
+                          </Tooltip>
                         )}
                       </TableCell>
                       <TableCell>
