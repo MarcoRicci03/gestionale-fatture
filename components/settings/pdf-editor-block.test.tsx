@@ -74,6 +74,27 @@ describe("Block", () => {
     expect(screen.getByText("50 EUR")).toBeInTheDocument();
   });
 
+  it("renderizza le righe di anteprima del blocco mesi con layout a 2 colonne flex (flex: 1 e flexShrink: 0)", () => {
+    renderBlock({
+      isPreview: true,
+      blocco: makeBlocco({
+        tipo: "mesi",
+        testo: undefined,
+        meseConfig: {
+          titolo: "Dettaglio mesi",
+          descrizioneTemplate: "Seduta di logoterapia molto lunga per il mese di {{riga.meseLabel}}",
+          valoreTemplate: "{{riga.prezzo}}",
+          mostraTotale: true,
+        },
+      }),
+    });
+    expect(screen.getByText("Dettaglio mesi")).toBeInTheDocument();
+    const descs = screen.getAllByText(/Seduta di logoterapia/);
+    expect(descs.length).toBe(2);
+    expect(descs[0].parentElement).toHaveStyle({ minWidth: "0px" });
+    expect(descs[0].parentElement?.style.flex).toContain("1");
+  });
+
   it("non renderizza nulla in modalità anteprima se il blocco non è visibile", () => {
     const { container } = renderBlock({
       isPreview: true,

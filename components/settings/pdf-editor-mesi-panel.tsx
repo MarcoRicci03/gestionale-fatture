@@ -117,11 +117,11 @@ export function PdfEditorMesiPanel({
             <p className="font-bold">{meseConfig.titolo}</p>
           )}
           {previewRows.map((row, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-2">
-              <span>
+            <div key={idx} className="flex items-start justify-between gap-4">
+              <span className="flex-1 min-w-0">
                 <PreviewSegments text={row.descrizione} />
               </span>
-              <span>
+              <span className="shrink-0 text-right whitespace-nowrap">
                 <PreviewSegments text={row.valore} />
               </span>
             </div>

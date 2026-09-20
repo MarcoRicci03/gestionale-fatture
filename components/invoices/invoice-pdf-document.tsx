@@ -148,26 +148,31 @@ export function InvoicePDFDocument({
                       style={{
                         flexDirection: "row",
                         justifyContent: "space-between",
+                        alignItems: "flex-start",
                       }}
                     >
-                      <Text style={textStyle}>
-                        {renderTextSegments(
-                          row.descrizione,
-                          `d-${rowIndex}`,
-                          settings.fontFamily,
-                          blocco.fontWeight === "bold",
-                          textStyle.color
-                        )}
-                      </Text>
-                      <Text style={{ ...textStyle, textAlign: "right" }}>
-                        {renderTextSegments(
-                          row.valore,
-                          `v-${rowIndex}`,
-                          settings.fontFamily,
-                          blocco.fontWeight === "bold",
-                          textStyle.color
-                        )}
-                      </Text>
+                      <View style={{ flex: 1, paddingRight: 16 }}>
+                        <Text style={textStyle}>
+                          {renderTextSegments(
+                            row.descrizione,
+                            `d-${rowIndex}`,
+                            settings.fontFamily,
+                            blocco.fontWeight === "bold",
+                            textStyle.color
+                          )}
+                        </Text>
+                      </View>
+                      <View style={{ flexShrink: 0 }}>
+                        <Text style={{ ...textStyle, textAlign: "right" }}>
+                          {renderTextSegments(
+                            row.valore,
+                            `v-${rowIndex}`,
+                            settings.fontFamily,
+                            blocco.fontWeight === "bold",
+                            textStyle.color
+                          )}
+                        </Text>
+                      </View>
                     </View>
                   ))}
                 </View>
