@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { isDataPagamentoFutura } from "@/lib/utils/date";
 import type { FatturaTsListItem } from "@/lib/data/sistema-ts";
@@ -20,18 +20,24 @@ export function useSistemaTsLotti({
   initialFilters,
 }: UseSistemaTsLottiProps) {
   const router = useRouter();
+  const [prevFilters, setPrevFilters] = useState(initialFilters);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [dateFrom, setDateFrom] = useState(initialFilters.dateFrom ?? "");
   const [dateTo, setDateTo] = useState(initialFilters.dateTo ?? "");
   const [statoFilter, setStatoFilter] = useState(initialFilters.stato ?? "DA_INVIARE");
   const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>("pronte");
 
-  useEffect(() => {
+  if (
+    initialFilters.dateFrom !== prevFilters.dateFrom ||
+    initialFilters.dateTo !== prevFilters.dateTo ||
+    initialFilters.stato !== prevFilters.stato
+  ) {
+    setPrevFilters(initialFilters);
     setDateFrom(initialFilters.dateFrom ?? "");
     setDateTo(initialFilters.dateTo ?? "");
     setStatoFilter(initialFilters.stato ?? "DA_INVIARE");
     setSelectedIds(new Set());
-  }, [initialFilters.dateFrom, initialFilters.dateTo, initialFilters.stato]);
+  }
 
   const isInvoiceFuture = (f: FatturaTsListItem) =>
     typeof f.isDataFutura === "boolean"
