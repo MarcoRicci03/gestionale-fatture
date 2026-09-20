@@ -340,15 +340,12 @@ export function LottiTab({
                             {f.paganteCf}
                           </span>
                         ) : (
-                          <div className="flex flex-col">
-                            <span className="font-mono text-xs font-semibold text-destructive">
+                          <Tooltip content={f.cfErrore || "Codice Fiscale non valido"}>
+                            <span className="font-mono text-xs font-semibold text-destructive inline-flex items-center gap-1 cursor-help">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
                               {f.paganteCf || "MANCANTE"}
                             </span>
-                            <span className="text-[11px] text-destructive flex items-center gap-1 mt-0.5">
-                              <AlertTriangle className="h-3 w-3 shrink-0" />
-                              {f.cfErrore || "Codice Fiscale errato"}
-                            </span>
-                          </div>
+                          </Tooltip>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
