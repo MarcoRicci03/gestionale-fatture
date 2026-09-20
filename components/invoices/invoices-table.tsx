@@ -58,7 +58,7 @@ export function InvoicesTable({
                 aria-label="Seleziona tutte le fatture visibili"
               />
             </TableHead>
-            <TableHead>N. Fattura</TableHead>
+            <TableHead>N.</TableHead>
             <TableHead>Data</TableHead>
             <TableHead>Pagante</TableHead>
             <TableHead>Paziente</TableHead>
