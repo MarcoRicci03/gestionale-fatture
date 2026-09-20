@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskDateInput, isDataPagamentoFutura } from "./date";
+import { maskDateInput, isDataPagamentoFutura, isValidCalendarDateString, parseDateInput } from "./date";
 
 describe("maskDateInput", () => {
   it("aggiunge lo slash automaticamente dopo 2 cifre del giorno", () => {
@@ -67,4 +67,52 @@ describe("isDataPagamentoFutura", () => {
     expect(isDataPagamentoFutura(undefined, new Date("2026-09-25"), referenceNow)).toBe(true);
   });
 });
+
+describe("isValidCalendarDateString", () => {
+  it("valida correttamente date reali del calendario", () => {
+    expect(isValidCalendarDateString("2026-01-31")).toBe(true);
+    expect(isValidCalendarDateString("2026-04-30")).toBe(true);
+    expect(isValidCalendarDateString("2026-02-28")).toBe(true);
+    // Anno bisestile
+    expect(isValidCalendarDateString("2024-02-29")).toBe(true);
+  });
+
+  it("rifiuta date inesistenti (overflow di calendario)", () => {
+    // 31 Aprile non esiste (aprile ha 30 giorni)
+    expect(isValidCalendarDateString("2026-04-31")).toBe(false);
+    // 31 Giugno non esiste (giugno ha 30 giorni)
+    expect(isValidCalendarDateString("2026-06-31")).toBe(false);
+    // 29 Febbraio in anno non bisestile
+    expect(isValidCalendarDateString("2026-02-29")).toBe(false);
+    // 31 Febbraio
+    expect(isValidCalendarDateString("2026-02-31")).toBe(false);
+    // Giorno o mese 0 o fuori range
+    expect(isValidCalendarDateString("2026-00-15")).toBe(false);
+    expect(isValidCalendarDateString("2026-13-01")).toBe(false);
+    expect(isValidCalendarDateString("2026-01-00")).toBe(false);
+    expect(isValidCalendarDateString("2026-01-32")).toBe(false);
+  });
+
+  it("rifiuta stringhe non conformi al formato AAAA-MM-GG", () => {
+    expect(isValidCalendarDateString("")).toBe(false);
+    expect(isValidCalendarDateString("31/04/2026")).toBe(false);
+    expect(isValidCalendarDateString("2026-4-1")).toBe(false);
+    expect(isValidCalendarDateString("invalid-date")).toBe(false);
+  });
+});
+
+describe("parseDateInput", () => {
+  it("effettua il parsing di date valide", () => {
+    const d = parseDateInput("2026-04-30");
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(3); // 0-indexed: 3 = aprile
+    expect(d.getDate()).toBe(30);
+  });
+
+  it("lancia eccezione su date inesistenti sul calendario", () => {
+    expect(() => parseDateInput("2026-04-31")).toThrow("Data non valida sul calendario: 2026-04-31");
+    expect(() => parseDateInput("2026-02-29")).toThrow("Data non valida sul calendario: 2026-02-29");
+  });
+});
+
 

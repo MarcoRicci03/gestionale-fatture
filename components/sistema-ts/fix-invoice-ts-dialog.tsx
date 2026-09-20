@@ -19,7 +19,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
-import { formatDateInput } from "@/lib/utils/date";
+import { formatDateInput, isValidCalendarDateString } from "@/lib/utils/date";
 import { correggiFatturaTs } from "@/lib/actions/sistema-ts";
 import type { FatturaTsListItem } from "@/lib/data/sistema-ts";
 
@@ -54,6 +54,7 @@ function FixInvoiceTsForm({
   const [flagOpposizione, setFlagOpposizione] = useState(invoice.flag_opposizione ?? false);
   const effectiveDate = invoice.data_pagamento ?? invoice.data;
   const [dataPagamento, setDataPagamento] = useState(formatDateInput(effectiveDate));
+  const [isBadInput, setIsBadInput] = useState(false);
   const [pagamentoTracciato, setPagamentoTracciato] = useState(invoice.pagamento_tracciato ?? true);
   const [bolloCodice, setBolloCodice] = useState(invoice.bolloCodice ?? "");
 
@@ -66,16 +67,35 @@ function FixInvoiceTsForm({
     return validateCodiceFiscale(trimmed);
   }, [cf]);
 
-  // Real-time payment date check against future date [S036]
-  const isDateFuture = useMemo(() => {
-    if (!dataPagamento) return false;
+  // Real-time payment date check against calendar validity & future date [S036]
+  const paymentDateValidation = useMemo(() => {
+    if (isBadInput) {
+      return {
+        valid: false,
+        isFuture: false,
+        error: "Data non valida nel calendario reale",
+      };
+    }
+    if (!dataPagamento) {
+      return {
+        valid: false,
+        isFuture: false,
+        error: "Data di incasso obbligatoria",
+      };
+    }
+    if (!isValidCalendarDateString(dataPagamento)) {
+      return {
+        valid: false,
+        isFuture: false,
+        error: "Data non valida nel calendario reale",
+      };
+    }
+    const [y, m, d] = dataPagamento.split("-").map(Number);
+    const selected = new Date(y, m - 1, d, 12, 0, 0);
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    const [y, m, d] = dataPagamento.split("-").map(Number);
-    if (!y || !m || !d) return false;
-    const selected = new Date(y, m - 1, d, 12, 0, 0);
-    return selected > today;
-  }, [dataPagamento]);
+    return { valid: true, isFuture: selected > today, error: null };
+  }, [dataPagamento, isBadInput]);
 
   // Bollo validation
   const requiresBollo = invoice.prezzo_totale > 77.47;
@@ -86,9 +106,10 @@ function FixInvoiceTsForm({
   }, [requiresBollo, bolloCodice]);
 
   const canSubmit = useMemo(() => {
+    if (!paymentDateValidation.valid) return false;
     if (flagOpposizione) return true;
     return cfValidation.valid;
-  }, [flagOpposizione, cfValidation.valid]);
+  }, [paymentDateValidation.valid, flagOpposizione, cfValidation.valid]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,13 +291,22 @@ function FixInvoiceTsForm({
             id="dataPagamento"
             type="date"
             value={dataPagamento}
-            onChange={(e) => setDataPagamento(e.target.value)}
+            onChange={(e) => {
+              setDataPagamento(e.target.value);
+              setIsBadInput(Boolean(e.target.validity?.badInput));
+            }}
             disabled={isPending}
           />
           <p className="text-xs text-muted-foreground">
             Principio di cassa: data in cui il pagamento è stato effettivamente percepito.
           </p>
-          {isDateFuture && (
+          {paymentDateValidation.error && (
+            <p className="text-xs text-destructive font-medium flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {paymentDateValidation.error}
+            </p>
+          )}
+          {paymentDateValidation.isFuture && (
             <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
               <Clock className="h-3.5 w-3.5 shrink-0" />
               Data futura: non potrà essere inviata prima di tale data.

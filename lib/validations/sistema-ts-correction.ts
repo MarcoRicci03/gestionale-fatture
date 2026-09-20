@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CF_REGEX } from "@/lib/constants/fiscal";
 import { BOLLO_CODICE_REGEX } from "@/lib/constants/bollo";
-import { parseDateInput } from "@/lib/utils/date";
+import { parseDateInput, isValidCalendarDateString } from "@/lib/utils/date";
 
 export const correggiFatturaTsSchema = z.object({
   invoiceId: z.number().int().positive("ID fattura non valido"),
@@ -23,6 +23,7 @@ export const correggiFatturaTsSchema = z.object({
       z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida (formato atteso: AAAA-MM-GG)")
+        .refine(isValidCalendarDateString, "Data non valida nel calendario reale")
         .transform((val) => parseDateInput(val)),
       z.date(),
     ])
