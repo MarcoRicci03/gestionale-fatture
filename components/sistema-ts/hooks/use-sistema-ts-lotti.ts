@@ -15,6 +15,24 @@ export type UseSistemaTsLottiProps = {
   };
 };
 
+export function isInvoiceFuture(f: FatturaTsListItem): boolean {
+  return typeof f.isDataFutura === "boolean"
+    ? f.isDataFutura
+    : isDataPagamentoFutura(f.data_pagamento, f.data);
+}
+
+export function isInvoiceWithAnomalies(f: FatturaTsListItem): boolean {
+  return typeof f.haAnomalie === "boolean"
+    ? f.haAnomalie
+    : !f.cfValido || !f.importoValido;
+}
+
+export function isInvoiceReady(f: FatturaTsListItem): boolean {
+  return typeof f.isProntaPerInvio === "boolean"
+    ? f.isProntaPerInvio
+    : f.stato_ts === "DA_INVIARE" && !isInvoiceFuture(f) && !isInvoiceWithAnomalies(f);
+}
+
 export function useSistemaTsLotti({
   fatture,
   initialFilters,
@@ -38,21 +56,6 @@ export function useSistemaTsLotti({
     setStatoFilter(initialFilters.stato ?? "DA_INVIARE");
     setSelectedIds(new Set());
   }
-
-  const isInvoiceFuture = (f: FatturaTsListItem) =>
-    typeof f.isDataFutura === "boolean"
-      ? f.isDataFutura
-      : isDataPagamentoFutura(f.data_pagamento, f.data);
-
-  const isInvoiceWithAnomalies = (f: FatturaTsListItem) =>
-    typeof f.haAnomalie === "boolean"
-      ? f.haAnomalie
-      : !f.cfValido || !f.importoValido;
-
-  const isInvoiceReady = (f: FatturaTsListItem) =>
-    typeof f.isProntaPerInvio === "boolean"
-      ? f.isProntaPerInvio
-      : f.stato_ts === "DA_INVIARE" && !isInvoiceFuture(f) && !isInvoiceWithAnomalies(f);
 
   // Conteggi e partizionamento per le pillole quando lo stato è DA_INVIARE
   const daInviareFatture = useMemo(
