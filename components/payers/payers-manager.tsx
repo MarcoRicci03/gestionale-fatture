@@ -231,26 +231,28 @@ export function PayersManager({
                       <TableCell>{payer.cap}</TableCell>
                       <TableCell>{payer.cf ?? "-"}</TableCell>
                       <TableCell>{payer.piva ?? "-"}</TableCell>
-                      <TableCell className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenView(payer)}
-                          title="Visualizza dettagli pagante"
-                          aria-label="Visualizza dettagli pagante"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(payer)}
-                          title="Modifica pagante"
-                          aria-label="Modifica pagante"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(payer)}
+                            title="Visualizza dettagli pagante"
+                            aria-label="Visualizza dettagli pagante"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(payer)}
+                            title="Modifica pagante"
+                            aria-label="Modifica pagante"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -385,15 +387,17 @@ export function PayersManager({
                         <p className="text-destructive">{hardDeleteBlockReason(payer)}</p>
                       )}
                     </TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <RestorePayerButton
-                        id={payer.id}
-                        pazientiArchiviati={payer.pazientiArchiviati}
-                      />
-                      <HardDeletePayerButton
-                        id={payer.id}
-                        disabledReason={hardDeleteBlockReason(payer)}
-                      />
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <RestorePayerButton
+                          id={payer.id}
+                          pazientiArchiviati={payer.pazientiArchiviati}
+                        />
+                        <HardDeletePayerButton
+                          id={payer.id}
+                          disabledReason={hardDeleteBlockReason(payer)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

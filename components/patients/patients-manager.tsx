@@ -235,26 +235,28 @@ export function PatientsManager({
                           ? `${patient.pagante.cognome} ${patient.pagante.nome}`
                           : "-"}
                       </TableCell>
-                      <TableCell className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenView(patient)}
-                          title="Visualizza dettagli paziente"
-                          aria-label="Visualizza dettagli paziente"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(patient)}
-                          title="Modifica paziente"
-                          aria-label="Modifica paziente"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <ArchivePatientButton id={patient.id} />
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenView(patient)}
+                            title="Visualizza dettagli paziente"
+                            aria-label="Visualizza dettagli paziente"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenEdit(patient)}
+                            title="Modifica paziente"
+                            aria-label="Modifica paziente"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <ArchivePatientButton id={patient.id} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -387,12 +389,14 @@ export function PatientsManager({
                         </p>
                       )}
                     </TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <RestorePatientButton id={patient.id} />
-                      <HardDeletePatientButton
-                        id={patient.id}
-                        disabledReason={hardDeleteBlockReason(patient)}
-                      />
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <RestorePatientButton id={patient.id} />
+                        <HardDeletePatientButton
+                          id={patient.id}
+                          disabledReason={hardDeleteBlockReason(patient)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

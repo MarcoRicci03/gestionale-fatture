@@ -161,14 +161,16 @@ export function InvoicesTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="flex justify-end gap-1">
-                <InvoiceRowActions
-                  invoice={invoice}
-                  onView={onView}
-                  onRefreshPdf={onOpenRefreshPdf}
-                  onRefreshAnagrafica={onOpenRefreshAnagrafica}
-                  onEdit={onEdit}
-                />
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <InvoiceRowActions
+                    invoice={invoice}
+                    onView={onView}
+                    onRefreshPdf={onOpenRefreshPdf}
+                    onRefreshAnagrafica={onOpenRefreshAnagrafica}
+                    onEdit={onEdit}
+                  />
+                </div>
               </TableCell>
             </TableRow>
           ))}
