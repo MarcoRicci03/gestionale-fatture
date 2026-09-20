@@ -25,7 +25,7 @@ I problemi sono classificati per categoria e ordinati per livello di gravità (*
 | [`ERR-04`](#err-04) | **Medio** | Error Handling e Concorrenza | Race Condition (TOCTOU) su cancellazione fisica fattura concorrente a trasmissione TS | ✅ RISOLTO | Branch `fix/err04-invoice-delete-toctou` |
 | [`SMELL-06`](#smell-06) | **Medio** | Code Smells e React Anti-Pattern | Violazione regole React Hooks: `setState` sincrono dentro `useEffect` (Cascading Renders) | ✅ RISOLTO | Branch `fix/smell06-react-hooks-setstate` |
 | [`SMELL-07`](#smell-07) | **Basso** | Code Smells e React Anti-Pattern | Caratteri apostrofo non sottoposti ad escape nel JSX (`react/no-unescaped-entities`) | ✅ RISOLTO | Branch `fix/smell06-react-hooks-setstate` |
-| [`SMELL-08`](#smell-08) | **Basso** | Code Smells e React Anti-Pattern | Funzioni pure interne ad hook omesse dalle dipendenze di `useMemo` (`exhaustive-deps`) | ⏳ DA RISOLVERE | [`components/sistema-ts/hooks/use-sistema-ts-lotti.ts`](./components/sistema-ts/hooks/use-sistema-ts-lotti.ts) |
+| [`SMELL-08`](#smell-08) | **Basso** | Code Smells e React Anti-Pattern | Funzioni pure interne ad hook omesse dalle dipendenze di `useMemo` (`exhaustive-deps`) | ✅ RISOLTO | Branch `fix/smell08-lotti-exhaustive-deps` |
 | [`ARCH-05`](#arch-05) | **Basso** | Architettura e Tipizzazione | Disallineamento nel pattern discriminated union in `deleteInvoice` | ✅ RISOLTO | Branch `fix/err04-invoice-delete-toctou` |
 | [`DATA-01`](#data-01) | **Basso** | Validazione Dati | Parsing date senza validazione del calendario reale in `FixInvoiceTsDialog` | ⏳ DA RISOLVERE | [`components/sistema-ts/fix-invoice-ts-dialog.tsx:83`](./components/sistema-ts/fix-invoice-ts-dialog.tsx#L83) |
 | [`SMELL-09`](#smell-09) | **Suggerimento** | Code Smells e Naming Conventions | Import e parametri non utilizzati (`@typescript-eslint/no-unused-vars`) | ⏳ DA RISOLVERE | Vari file di componenti e test |
@@ -119,7 +119,7 @@ I problemi sono classificati per categoria e ordinati per livello di gravità (*
 - **Identificativo:** `SMELL-08`
 - **Gravità:** `Basso`
 - **Categoria:** Code Smells e React Anti-Pattern
-- **Stato:** ⏳ DA RISOLVERE
+- **Stato:** ✅ RISOLTO (Branch `fix/smell08-lotti-exhaustive-deps`)
 - **Posizione:** [`components/sistema-ts/hooks/use-sistema-ts-lotti.ts:36-50, 59, 94`](./components/sistema-ts/hooks/use-sistema-ts-lotti.ts#L36-L50)
 - **Descrizione:**
   Le funzioni `isInvoiceFuture`, `isInvoiceWithAnomalies` e `isInvoiceReady` sono dichiarate all'interno del corpo dell'hook `useSistemaTsLotti`. Vengono utilizzate all'interno di `useMemo` (righe 59 e 94) senza essere incluse nell'array delle dipendenze, scatenando warning di `react-hooks/exhaustive-deps`. Inoltre, non dipendendo da alcuno stato o prop dell'hook (ricevono solo l'oggetto `f: FatturaTsListItem`), vengono ricreate inutilmente ad ogni render del componente.
