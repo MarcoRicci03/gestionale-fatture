@@ -360,16 +360,20 @@ export function LottiTab({
                       <TableCell>
                         {f.richiedeBollo ? (
                           <div className="text-xs">
-                            <span className="font-medium">{formatCurrency(f.bollo)}</span>
                             {f.bolloMancante ? (
-                              <div className="text-[11px] text-destructive font-semibold flex items-center gap-1 mt-0.5">
-                                <AlertTriangle className="h-3 w-3 shrink-0" />
-                                Codice assente
-                              </div>
+                              <Tooltip content="Codice bollo assente">
+                                <span className="font-semibold text-destructive inline-flex items-center gap-1 cursor-default">
+                                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                                  {formatCurrency(f.bollo)}
+                                </span>
+                              </Tooltip>
                             ) : (
-                              <div className="text-[11px] text-muted-foreground font-mono">
-                                {f.bolloCodice}
-                              </div>
+                              <>
+                                <span className="font-medium">{formatCurrency(f.bollo)}</span>
+                                <div className="text-[11px] text-muted-foreground font-mono">
+                                  {f.bolloCodice}
+                                </div>
+                              </>
                             )}
                           </div>
                         ) : (
