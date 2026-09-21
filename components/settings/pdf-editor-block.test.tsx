@@ -93,6 +93,8 @@ describe("Block", () => {
     expect(descs.length).toBe(2);
     expect(descs[0].parentElement).toHaveStyle({ minWidth: "0px" });
     expect(descs[0].parentElement?.style.flex).toContain("1");
+    const totale = screen.getByText("Totale");
+    expect(totale.closest("div")).toHaveStyle({ marginTop: "10px" });
   });
 
   it("non renderizza nulla in modalità anteprima se il blocco non è visibile", () => {

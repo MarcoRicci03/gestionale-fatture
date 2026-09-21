@@ -142,39 +142,64 @@ export function InvoicePDFDocument({
                       {blocco.meseConfig.titolo}
                     </Text>
                   )}
-                  {rows.map((row, rowIndex) => (
-                    <View
-                      key={rowIndex}
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <View style={{ flex: 1, paddingRight: 16 }}>
-                        <Text style={textStyle}>
-                          {renderTextSegments(
-                            row.descrizione,
-                            `d-${rowIndex}`,
-                            settings.fontFamily,
-                            blocco.fontWeight === "bold",
-                            textStyle.color
-                          )}
-                        </Text>
+                  {rows.map((row, rowIndex) => {
+                    const isTotalRow =
+                      blocco.meseConfig?.mostraTotale &&
+                      rowIndex === rows.length - 1;
+                    return (
+                      <View
+                        key={rowIndex}
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          marginTop: isTotalRow ? 10 : rowIndex > 0 ? 3 : 0,
+                        }}
+                      >
+                        <View style={{ flex: 1, paddingRight: 16 }}>
+                          <Text
+                            style={{
+                              ...textStyle,
+                              fontFamily: isTotalRow
+                                ? getFontFamily(settings.fontFamily, {
+                                    bold: true,
+                                  })
+                                : textStyle.fontFamily,
+                            }}
+                          >
+                            {renderTextSegments(
+                              row.descrizione,
+                              `d-${rowIndex}`,
+                              settings.fontFamily,
+                              isTotalRow || blocco.fontWeight === "bold",
+                              textStyle.color
+                            )}
+                          </Text>
+                        </View>
+                        <View style={{ flexShrink: 0 }}>
+                          <Text
+                            style={{
+                              ...textStyle,
+                              textAlign: "right",
+                              fontFamily: isTotalRow
+                                ? getFontFamily(settings.fontFamily, {
+                                    bold: true,
+                                  })
+                                : textStyle.fontFamily,
+                            }}
+                          >
+                            {renderTextSegments(
+                              row.valore,
+                              `v-${rowIndex}`,
+                              settings.fontFamily,
+                              isTotalRow || blocco.fontWeight === "bold",
+                              textStyle.color
+                            )}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={{ flexShrink: 0 }}>
-                        <Text style={{ ...textStyle, textAlign: "right" }}>
-                          {renderTextSegments(
-                            row.valore,
-                            `v-${rowIndex}`,
-                            settings.fontFamily,
-                            blocco.fontWeight === "bold",
-                            textStyle.color
-                          )}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               );
             }

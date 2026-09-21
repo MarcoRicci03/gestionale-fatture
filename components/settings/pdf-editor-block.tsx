@@ -299,24 +299,31 @@ export function Block({
             <div style={{ fontWeight: 700 }}>{blocco.meseConfig.titolo}</div>
           )}
           {mesiPreviewRows ? (
-            mesiPreviewRows.map((row, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  gap: 16,
-                }}
-              >
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  {renderFormattedSegments(row.descrizione, `d-${idx}`)}
-                </span>
-                <span style={{ flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
-                  {renderFormattedSegments(row.valore, `v-${idx}`)}
-                </span>
-              </div>
-            ))
+            mesiPreviewRows.map((row, idx) => {
+              const isTotal =
+                blocco.meseConfig?.mostraTotale &&
+                idx === mesiPreviewRows.length - 1;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 16,
+                    marginTop: isTotal ? 10 : idx > 0 ? 3 : 0,
+                    fontWeight: isTotal ? 700 : undefined,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    {renderFormattedSegments(row.descrizione, `d-${idx}`)}
+                  </span>
+                  <span style={{ flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {renderFormattedSegments(row.valore, `v-${idx}`)}
+                  </span>
+                </div>
+              );
+            })
           ) : (
             <>
               <div
@@ -342,6 +349,7 @@ export function Block({
                     alignItems: "flex-start",
                     gap: 16,
                     fontWeight: 700,
+                    marginTop: 10,
                   }}
                 >
                   <span style={{ flex: 1, minWidth: 0 }}>
