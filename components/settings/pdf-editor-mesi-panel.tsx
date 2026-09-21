@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { buildMockInvoice, renderMesiRows } from "@/lib/pdf/placeholders";
 import { parseInlineFormatting } from "@/lib/pdf/formatting";
 import { RichTemplateField, RIGA_MESE_GROUP } from "@/components/settings/pdf-editor-rich-template-field";
+import { cn } from "@/lib/utils";
 import type { MeseConfig } from "@/lib/pdf/types";
 
 function PreviewSegments({ text }: { text: string }) {
@@ -116,16 +117,26 @@ export function PdfEditorMesiPanel({
           {meseConfig.titolo && (
             <p className="font-bold">{meseConfig.titolo}</p>
           )}
-          {previewRows.map((row, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-2">
-              <span>
-                <PreviewSegments text={row.descrizione} />
-              </span>
-              <span>
-                <PreviewSegments text={row.valore} />
-              </span>
-            </div>
-          ))}
+          {previewRows.map((row, idx) => {
+            const isTotal =
+              meseConfig.mostraTotale && idx === previewRows.length - 1;
+            return (
+              <div
+                key={idx}
+                className={cn(
+                  "flex items-start justify-between gap-4",
+                  isTotal && "mt-2 pt-1 font-bold"
+                )}
+              >
+                <span className="flex-1 min-w-0">
+                  <PreviewSegments text={row.descrizione} />
+                </span>
+                <span className="shrink-0 text-right whitespace-nowrap">
+                  <PreviewSegments text={row.valore} />
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

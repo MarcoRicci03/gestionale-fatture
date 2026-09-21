@@ -48,6 +48,30 @@ describe("isInternalHealthcheck", () => {
     expect(isInternalHealthcheck(wrongHeaderValue)).toBe(false);
   });
 
+  it("rispetta INTERNAL_HEALTHCHECK_SECRET quando configurato in env", () => {
+    const originalEnv = process.env.INTERNAL_HEALTHCHECK_SECRET;
+    try {
+      process.env.INTERNAL_HEALTHCHECK_SECRET = "custom-token-secret-123";
+      const wrongHeaders = new Headers({
+        host: "127.0.0.1:3000",
+        [INTERNAL_HEALTHCHECK_HEADER]: "1",
+      });
+      expect(isInternalHealthcheck(wrongHeaders)).toBe(false);
+
+      const rightHeaders = new Headers({
+        host: "127.0.0.1:3000",
+        [INTERNAL_HEALTHCHECK_HEADER]: "custom-token-secret-123",
+      });
+      expect(isInternalHealthcheck(rightHeaders)).toBe(true);
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.INTERNAL_HEALTHCHECK_SECRET;
+      } else {
+        process.env.INTERNAL_HEALTHCHECK_SECRET = originalEnv;
+      }
+    }
+  });
+
   it("rifiuta richieste con Host esterno anche se presentano l'header interno", () => {
     const externalHost = new Headers({
       host: "gestionale.example.com",

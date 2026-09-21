@@ -299,27 +299,65 @@ export function Block({
             <div style={{ fontWeight: 700 }}>{blocco.meseConfig.titolo}</div>
           )}
           {mesiPreviewRows ? (
-            mesiPreviewRows.map((row, idx) => (
-              <div
-                key={idx}
-                style={{ display: "flex", justifyContent: "space-between", gap: 8 }}
-              >
-                <span>{renderFormattedSegments(row.descrizione, `d-${idx}`)}</span>
-                <span>{renderFormattedSegments(row.valore, `v-${idx}`)}</span>
-              </div>
-            ))
+            mesiPreviewRows.map((row, idx) => {
+              const isTotal =
+                blocco.meseConfig?.mostraTotale &&
+                idx === mesiPreviewRows.length - 1;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 16,
+                    marginTop: isTotal ? 10 : idx > 0 ? 3 : 0,
+                    fontWeight: isTotal ? 700 : undefined,
+                  }}
+                >
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    {renderFormattedSegments(row.descrizione, `d-${idx}`)}
+                  </span>
+                  <span style={{ flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {renderFormattedSegments(row.valore, `v-${idx}`)}
+                  </span>
+                </div>
+              );
+            })
           ) : (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <div>{renderRichStatic(blocco.meseConfig?.descrizioneTemplate ?? "", "mesi-d")}</div>
-                <div>{renderRichStatic(blocco.meseConfig?.valoreTemplate ?? "", "mesi-v")}</div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 16,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {renderRichStatic(blocco.meseConfig?.descrizioneTemplate ?? "", "mesi-d")}
+                </div>
+                <div style={{ flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
+                  {renderRichStatic(blocco.meseConfig?.valoreTemplate ?? "", "mesi-v")}
+                </div>
               </div>
               {blocco.meseConfig?.mostraTotale && (
                 <div
-                  style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700 }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 16,
+                    fontWeight: 700,
+                    marginTop: 10,
+                  }}
                 >
-                  <span>{blocco.meseConfig.totaleLabel ?? "Totale"}</span>
-                  <div>{renderRichStatic("{{fattura.prezzoTotale}}", "mesi-tot")}</div>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    {blocco.meseConfig.totaleLabel ?? "Totale"}
+                  </span>
+                  <div style={{ flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
+                    {renderRichStatic("{{fattura.prezzoTotale}}", "mesi-tot")}
+                  </div>
                 </div>
               )}
             </>
