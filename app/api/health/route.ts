@@ -50,7 +50,8 @@ export function isInternalHealthcheck(headersList: { get(name: string): string |
   }
 
   const internalHeader = headersList.get(INTERNAL_HEALTHCHECK_HEADER);
-  if (internalHeader !== "1") {
+  const expectedSecret = process.env.INTERNAL_HEALTHCHECK_SECRET || "1";
+  if (!internalHeader || internalHeader !== expectedSecret) {
     return false;
   }
 
