@@ -37,7 +37,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | ID | Gravità | Categoria | Titolo Sintetico / Nome Problema | File di Riferimento | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | [`SEC-06`](#sec-06) | **Alto** | Sicurezza | Convalida CSRF fragile tramite trust incondizionato di `X-Forwarded-Host` | `lib/security/same-origin.ts` | ✅ RISOLTO |
-| [`SEC-07`](#sec-07) | **Alto** | Sicurezza | Condizione di corsa (TOCTOU) su declassamento o disabilitazione ultimo admin | `lib/actions/users.ts` |
+| [`SEC-07`](#sec-07) | **Alto** | Sicurezza | Condizione di corsa (TOCTOU) su declassamento o disabilitazione ultimo admin | `lib/actions/users.ts` | ✅ RISOLTO |
 | [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` |
 | [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` |
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` |
@@ -119,7 +119,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="sec-07"></a>
 ### [Alto] [SEC-07] Condizione di corsa (TOCTOU) su declassamento o disabilitazione dell'ultimo amministratore attivo
-- **Posizione:** [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L114-L121), [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L224-L231)
+- **Stato:** ✅ RISOLTO (Risolto avvolgendo il conteggio e l'aggiornamento in `prisma.$transaction` con lock deterministico `SELECT id FROM "utenti" WHERE "isAdmin" = true AND "abilitato" = true ORDER BY id FOR UPDATE` in `updateUser` e `toggleUserEnabled`, con test dedicato in `scripts/verify-last-admin-guard.test.ts`).
+- **Posizione:** [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L108-L150), [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L225-L260)
 - **Descrizione:**
   Nelle Server Actions `updateUser` e `toggleUserEnabled`, per impedire che il gestionale rimanga senza alcun utente con ruolo amministrativo, viene effettuata una verifica preventiva del conteggio degli altri amministratori abilitati:
   ```ts

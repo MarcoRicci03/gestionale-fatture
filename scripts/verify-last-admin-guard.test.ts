@@ -56,3 +56,14 @@ it("entrambe le guardie bloccano quando adminAttivi === 0", () => {
     expect(body).toMatch(/Deve restare almeno un amministratore abilitato/);
   }
 });
+
+it("entrambe le guardie utilizzano una transazione con lock FOR UPDATE deterministico (SEC-07)", () => {
+  for (const fn of ["updateUser", "toggleUserEnabled"]) {
+    const body = extractFunctionBody(source, fn);
+    expect(body).toMatch(/\$transaction/);
+    expect(body).toMatch(
+      /SELECT\s+id\s+FROM\s+"utenti"\s+WHERE\s+"isAdmin"\s*=\s*true\s+AND\s+"abilitato"\s*=\s*true\s+ORDER\s+BY\s+id\s+FOR\s+UPDATE/
+    );
+  }
+});
+
