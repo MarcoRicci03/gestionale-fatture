@@ -41,7 +41,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` / `auth.ts` | ✅ RISOLTO |
 | [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` | ✅ RISOLTO |
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` | ✅ RISOLTO |
-| [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` |
+| [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` | ✅ RISOLTO |
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` |
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` |
 | [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` |
@@ -267,7 +267,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="dry-05"></a>
 ### [Medio] [DRY-05] Quintuplice duplicazione della logica di ripristino stato (Rollback) in `transmission.service.ts`
-- **Posizione:** [`lib/sistemats/services/transmission.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/transmission.service.ts#L143-L280)
+- **Stato:** ✅ RISOLTO (Risolto estraendo la funzione helper modulare `rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp?)` in `lib/sistemats/services/transmission.service.ts`, sostituendo i 5 blocchi di query duplicati e garantendo l'applicazione coerente del timestamp di lock, protetto da test statici e unitari in `scripts/verify-transmission-rollback-dry.test.ts`).
+- **Posizione:** [`lib/sistemats/services/transmission.service.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/services/transmission.service.ts#L35-L55)
 - **Descrizione:**
   All'interno del metodo `inviaFattureTS`, per garantire che un blocco temporaneo di fatture in stato `IN_TRASMISSIONE` venga correttamente rilasciato in caso di errore, la seguente query Prisma viene riscritta per esteso in **cinque punti diversi**:
   - Validazione Codice Fiscale fallita (righe 143–153);

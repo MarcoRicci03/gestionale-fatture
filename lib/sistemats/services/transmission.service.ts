@@ -29,6 +29,31 @@ export type TransmissionResult =
       error: string;
     };
 
+/**
+ * DRY-05: Centralizza il ripristino dello stato delle fatture da IN_TRASMISSIONE a DA_INVIARE,
+ * rilasciando il lock temporaneo in caso di errori di validazione, scarto Sogei o eccezioni runtime.
+ */
+export async function rollbackStatoTrasmissione(
+  candidateIds: number[],
+  userId: number,
+  lockTimestamp?: Date
+): Promise<void> {
+  if (candidateIds.length === 0) return;
+
+  await prisma.pagamento.updateMany({
+    where: {
+      id: { in: candidateIds },
+      id_Utente: userId,
+      stato_ts: "IN_TRASMISSIONE",
+      ...(lockTimestamp ? { data_invio_ts: lockTimestamp } : {}),
+    },
+    data: {
+      stato_ts: "DA_INVIARE",
+      data_invio_ts: null,
+    },
+  });
+}
+
 export async function inviaLottoFattureService(params: {
   userId: number;
   invoiceIds: number[];
@@ -136,18 +161,7 @@ export async function inviaLottoFattureService(params: {
       const cfValidation = validateCodiceFiscale(cf);
       if (!cfValidation.valid) {
         // Rollback delle fatture bloccate se la validazione fallisce
-        await prisma.pagamento.updateMany({
-          where: {
-            id: { in: candidateIds },
-            id_Utente: userId,
-            stato_ts: "IN_TRASMISSIONE",
-            data_invio_ts: lockTimestamp,
-          },
-          data: {
-            stato_ts: "DA_INVIARE",
-            data_invio_ts: null,
-          },
-        });
+        await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
         return {
           success: false,
           error: `Fattura n. ${inv.n_fattura}/${inv.anno}: Codice Fiscale Pagante ('${cf || "mancante"}') non valido: ${cfValidation.error}`,
@@ -159,18 +173,7 @@ export async function inviaLottoFattureService(params: {
     const importoValidation = validateImportoSpesa(prezzoTotale);
     if (!importoValidation.valid) {
       // Rollback delle fatture bloccate se la validazione dell'importo fallisce
-      await prisma.pagamento.updateMany({
-        where: {
-          id: { in: candidateIds },
-          id_Utente: userId,
-          stato_ts: "IN_TRASMISSIONE",
-          data_invio_ts: lockTimestamp,
-        },
-        data: {
-          stato_ts: "DA_INVIARE",
-          data_invio_ts: null,
-        },
-      });
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
       return {
         success: false,
         error: `Fattura n. ${inv.n_fattura}/${inv.anno}: ${importoValidation.error}`,
@@ -180,18 +183,7 @@ export async function inviaLottoFattureService(params: {
     const dataEffettiva = inv.data_pagamento ?? inv.data;
     if (isDataPagamentoFutura(inv.data_pagamento, inv.data)) {
       // Rollback delle fatture bloccate se la data di pagamento è futura
-      await prisma.pagamento.updateMany({
-        where: {
-          id: { in: candidateIds },
-          id_Utente: userId,
-          stato_ts: "IN_TRASMISSIONE",
-          data_invio_ts: lockTimestamp,
-        },
-        data: {
-          stato_ts: "DA_INVIARE",
-          data_invio_ts: null,
-        },
-      });
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
       return {
         success: false,
         error: `Fattura n. ${inv.n_fattura}/${inv.anno}: La data di incasso (${formatDateDisplay(dataEffettiva)}) è futura rispetto alla data odierna. Non è possibile trasmetterla prima di tale data (vincolo ministeriale DM 19/10/2020, errore Sogei S036).`,
@@ -237,17 +229,7 @@ export async function inviaLottoFattureService(params: {
 
     if (!res.success || !res.protocollo) {
       // Revert dello stato a DA_INVIARE se la trasmissione è stata respinta
-      await prisma.pagamento.updateMany({
-        where: {
-          id: { in: candidateIds },
-          id_Utente: userId,
-          stato_ts: "IN_TRASMISSIONE",
-        },
-        data: {
-          stato_ts: "DA_INVIARE",
-          data_invio_ts: null,
-        },
-      });
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
 
       return {
         success: false,
@@ -303,17 +285,11 @@ export async function inviaLottoFattureService(params: {
     };
   } catch (error) {
     if (!transmissionSuccess) {
-      await prisma.pagamento.updateMany({
-        where: {
-          id: { in: candidateIds },
-          id_Utente: userId,
-          stato_ts: "IN_TRASMISSIONE",
-        },
-        data: {
-          stato_ts: "DA_INVIARE",
-          data_invio_ts: null,
-        },
-      });
+      try {
+        await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
+      } catch (rollbackError) {
+        console.error("Errore durante il rollback dello stato di trasmissione:", rollbackError);
+      }
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error("inviaLottoFatture error", error);
