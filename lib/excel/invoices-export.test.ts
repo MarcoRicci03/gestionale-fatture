@@ -125,6 +125,14 @@ describe("buildInvoicesWorkbook — sanitizzazione anti formula-injection", () =
     const value = await readCell(buffer, 2, 1);
     expect(value).toBe("n/d");
   });
+
+  it("antepone un apice a un commento con spazi iniziali prima di una formula (SEC-09)", async () => {
+    const invoice = baseInvoice({ commento: "   =cmd|'/c calc'!A1" });
+    const buffer = await buildInvoicesWorkbook([invoice], ["commento"]);
+
+    const value = await readCell(buffer, 2, 1);
+    expect(value).toBe("'   =cmd|'/c calc'!A1");
+  });
 });
 
 describe("buildInvoicesWorkbook — colonne bollo_importo / prezzo_totale_con_bollo", () => {

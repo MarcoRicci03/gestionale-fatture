@@ -39,7 +39,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`SEC-06`](#sec-06) | **Alto** | Sicurezza | Convalida CSRF fragile tramite trust incondizionato di `X-Forwarded-Host` | `lib/security/same-origin.ts` | ✅ RISOLTO |
 | [`SEC-07`](#sec-07) | **Alto** | Sicurezza | Condizione di corsa (TOCTOU) su declassamento o disabilitazione ultimo admin | `lib/actions/users.ts` | ✅ RISOLTO |
 | [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` / `auth.ts` | ✅ RISOLTO |
-| [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` |
+| [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` | ✅ RISOLTO |
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` |
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` |
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` |
@@ -194,7 +194,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="sec-09"></a>
 ### [Medio] [SEC-09] Formula Injection nei file Excel esportati per bypass dei caratteri di trigger con spaziatura iniziale
-- **Posizione:** [`lib/excel/sanitize.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/excel/sanitize.ts#L8-L14)
+- **Stato:** ✅ RISOLTO (Risolto aggiornando `sanitizeCellValue` in `lib/excel/sanitize.ts` per verificare sia il primo carattere grezzo sia il primo carattere significativo dopo la rimozione degli spazi iniziali e del `trimStart()`, coperto da test unitari completi in `lib/excel/sanitize.test.ts` e `lib/excel/invoices-export.test.ts`).
+- **Posizione:** [`lib/excel/sanitize.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/excel/sanitize.ts#L8-L26)
 - **Descrizione:**
   Il modulo di sanitizzazione preventiva contro attacchi CSV / Formula Injection implementa la seguente funzione:
   ```ts
