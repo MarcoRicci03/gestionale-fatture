@@ -41,17 +41,15 @@ export async function login(
   if (!username || !password) {
     return { success: false, error: "Inserire username e password" };
   }
-  if (
-    username.length > 50 ||
-    password.length > 72 ||
-    Buffer.byteLength(password, "utf8") > 72
-  ) {
-    return { success: false, error: "Input non valido" };
-  }
 
+  // SEC-10: Risolve timing leakage e bypass del rate limiter su input fuori range:
+  // 1. Risolve l'IP del client e controlla il rate limit PRIMA dei controlli di lunghezza,
+  //    impedendo che input sovradimensionati bypassino il conteggio dei tentativi e il blocco IP/utente.
+  //    Tronchiamo la chiave di tracking a max 50 caratteri per evitare allocazioni arbitrarie di memoria.
   const ip = await getClientIp();
+  const rateLimitKey = username.slice(0, 50);
 
-  const rateLimit = checkLoginRateLimit(username, ip);
+  const rateLimit = checkLoginRateLimit(rateLimitKey, ip);
   if (!rateLimit.allowed) {
     return {
       success: false,
@@ -59,12 +57,35 @@ export async function login(
     };
   }
 
+  // 2. Se l'input supera i limiti massimi ammessi (username > 50 caratteri, o password > 72 byte/caratteri),
+  //    registriamo il fallimento nel rate limiter, eseguiamo la comparazione con DUMMY_HASH per pareggiare
+  //    il tempo di risposta a quello di una normale verifica bcrypt (~100ms) evitando timing leak oracles,
+  //    tracciamo l'audit log e restituiamo il messaggio uniforme "Credenziali non valide".
+  if (
+    username.length > 50 ||
+    password.length > 72 ||
+    Buffer.byteLength(password, "utf8") > 72
+  ) {
+    recordFailedLogin(rateLimitKey, ip);
+    await verifyPassword(password.slice(0, 72), DUMMY_HASH);
+    await logAudit({
+      azione: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
+      userId: null,
+      ip,
+      meta: {
+        motivo: "input_fuori_limite",
+        usernameTentato: redactUsernameForAudit(rateLimitKey),
+      },
+    });
+    return { success: false, error: "Credenziali non valide" };
+  }
+
   const user = await prisma.utente.findUnique({
     where: { username },
   });
 
   if (!user) {
-    recordFailedLogin(username, ip);
+    recordFailedLogin(rateLimitKey, ip);
     await verifyPassword(password, DUMMY_HASH);
     await logAudit({
       azione: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
@@ -75,14 +96,14 @@ export async function login(
       // chiaro nell'audit log visibile a ogni admin (SEC-11).
       meta: {
         motivo: "utente_inesistente",
-        usernameTentato: redactUsernameForAudit(username),
+        usernameTentato: redactUsernameForAudit(rateLimitKey),
       },
     });
     return { success: false, error: "Credenziali non valide" };
   }
 
   if (!user.abilitato) {
-    recordFailedLogin(username, ip);
+    recordFailedLogin(rateLimitKey, ip);
     await verifyPassword(password, DUMMY_HASH);
     await logAudit({
       azione: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
@@ -97,7 +118,7 @@ export async function login(
 
   const isValid = await verifyPassword(password, user.passwordHash);
   if (!isValid) {
-    recordFailedLogin(username, ip);
+    recordFailedLogin(rateLimitKey, ip);
     await logAudit({
       azione: AUDIT_ACTIONS.AUTH_LOGIN_FAILURE,
       userId: user.id,

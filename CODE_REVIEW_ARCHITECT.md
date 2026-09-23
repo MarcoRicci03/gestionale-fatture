@@ -40,7 +40,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`SEC-07`](#sec-07) | **Alto** | Sicurezza | Condizione di corsa (TOCTOU) su declassamento o disabilitazione ultimo admin | `lib/actions/users.ts` | ✅ RISOLTO |
 | [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` / `auth.ts` | ✅ RISOLTO |
 | [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` | ✅ RISOLTO |
-| [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` |
+| [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` | ✅ RISOLTO |
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` |
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` |
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` |
@@ -226,7 +226,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="sec-10"></a>
 ### [Basso] [SEC-10] Timing Leakage e bypass del rate limit su input login sovradimensionati
-- **Posizione:** [`lib/actions/auth.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/auth.ts#L44-L50)
+- **Stato:** ✅ RISOLTO (Risolto anticipando il controllo del rate limit rispetto alle validazioni dimensionali su `username` e `password`, eseguendo la comparazione a tempo costante `verifyPassword(password.slice(0, 72), DUMMY_HASH)` e registrando il tentativo fallito in caso di input fuori range, con messaggio di errore uniforme `"Credenziali non valide"`; verificato con test invariante in `scripts/verify-login-input-security.test.ts`).
+- **Posizione:** [`lib/actions/auth.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/auth.ts#L44-L80)
 - **Descrizione:**
   Nella Server Action `login`, il controllo preventivo sulla lunghezza di username e password è strutturato prima dell'acquisizione del rate limiter e del confronto a tempo costante:
   ```ts
