@@ -38,7 +38,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | [`SEC-06`](#sec-06) | **Alto** | Sicurezza | Convalida CSRF fragile tramite trust incondizionato di `X-Forwarded-Host` | `lib/security/same-origin.ts` | ✅ RISOLTO |
 | [`SEC-07`](#sec-07) | **Alto** | Sicurezza | Condizione di corsa (TOCTOU) su declassamento o disabilitazione ultimo admin | `lib/actions/users.ts` | ✅ RISOLTO |
-| [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` |
+| [`SEC-08`](#sec-08) | **Medio** | Sicurezza | Mancata revoca sessione (`tokenVersion`) alla disabilitazione dell'account | `lib/actions/users.ts` / `auth.ts` | ✅ RISOLTO |
 | [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` |
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` |
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` |
@@ -165,7 +165,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="sec-08"></a>
 ### [Medio] [SEC-08] Mancata revoca della sessione (`tokenVersion`) alla disabilitazione dell'account utente
-- **Posizione:** [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L233-L237)
+- **Stato:** ✅ RISOLTO (Risolto estendendo l'incremento di `tokenVersion` a `toggleUserEnabled` su `!abilitato`, a `updateUser` su disabilitazione, revoca admin o cambio username, e a `logout` per l'invalidazione dei JWT lato server; verificato con test di regressione in `scripts/verify-session-token-version.test.ts`).
+- **Posizione:** [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L130-L145), [`lib/actions/users.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/users.ts#L265-L278), [`lib/actions/auth.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/auth.ts#L130-L145)
 - **Descrizione:**
   Nella Server Action `toggleUserEnabled(id, abilitato)`, quando un amministratore sospende o disabilita un utente (`abilitato: false`), il record viene aggiornato impostando solo il flag booleano:
   ```ts

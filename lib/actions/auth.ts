@@ -130,6 +130,18 @@ export async function logout(): Promise<void> {
   await clearSessionCookie();
 
   if (session) {
+    try {
+      // SEC-08: incrementa tokenVersion in DB al logout per revocare istantaneamente
+      // la validità del token JWT anche lato server, impedendo il riuso di token
+      // esfiltrati o rimasti in cache su dispositivi condivisi.
+      await prisma.utente.update({
+        where: { id: session.id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    } catch (error) {
+      console.error("logout tokenVersion increment error", error);
+    }
+
     await logAudit({
       azione: AUDIT_ACTIONS.AUTH_LOGOUT,
       userId: session.id,

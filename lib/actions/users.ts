@@ -107,6 +107,14 @@ export async function updateUser(
 
   try {
     await prisma.$transaction(async (tx) => {
+      const current = await tx.utente.findUnique({
+        where: { id },
+        select: { username: true, isAdmin: true, abilitato: true },
+      });
+      if (!current) {
+        throw new Error("USER_NOT_FOUND");
+      }
+
       // Se questo aggiornamento toglierebbe a `id` lo stato di admin abilitato,
       // deve restare almeno un altro admin abilitato nel sistema — altrimenti
       // /users e /audit-log diventano irraggiungibili (requireAdmin fa redirect)
@@ -127,6 +135,13 @@ export async function updateUser(
         }
       }
 
+      // SEC-08: revoca immediata delle sessioni se l'account viene disabilitato,
+      // se perde i privilegi di amministratore, o se cambia l'username.
+      const shouldRevokeSessions =
+        !abilitato ||
+        (current.isAdmin && !isAdmin) ||
+        current.username !== username;
+
       await tx.utente.update({
         where: { id },
         data: {
@@ -135,10 +150,14 @@ export async function updateUser(
           cognome: cognome || null,
           isAdmin,
           abilitato,
+          ...(shouldRevokeSessions ? { tokenVersion: { increment: 1 } } : {}),
         },
       });
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+      return { success: false, error: "Utente non trovato" };
+    }
     if (error instanceof Error && error.message === "LAST_ADMIN_GUARD") {
       return { success: false, error: "Deve restare almeno un amministratore abilitato" };
     }
@@ -249,7 +268,14 @@ export async function toggleUserEnabled(
 
       await tx.utente.update({
         where: { id },
-        data: { abilitato },
+        data: {
+          abilitato,
+          // SEC-08: quando un account viene disabilitato (!abilitato), incrementiamo
+          // tokenVersion per invalidare immediatamente ogni sessione JWT attiva.
+          // Se in seguito l'account viene riabilitato, vecchi token (potenzialmente
+          // compromessi) non tornano attivi e l'utente deve riautenticarsi.
+          ...(!abilitato ? { tokenVersion: { increment: 1 } } : {}),
+        },
       });
     });
   } catch (error) {
