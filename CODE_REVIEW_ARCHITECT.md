@@ -42,7 +42,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`SEC-09`](#sec-09) | **Medio** | Sicurezza | Formula Injection nei file Excel esportati per bypass con spaziatura iniziale | `lib/excel/sanitize.ts` | ✅ RISOLTO |
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` | ✅ RISOLTO |
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` | ✅ RISOLTO |
-| [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` |
+| [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` | ✅ RISOLTO |
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` |
 | [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` |
 | [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` |
@@ -319,7 +319,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="dry-06"></a>
 ### [Medio] [DRY-06] Duplicazione inline del modale "Dettagli Paziente" in `patients-manager.tsx`
-- **Posizione:** [`components/patients/patients-manager.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/patients/patients-manager.tsx#L484-L556)
+- **Stato:** ✅ RISOLTO (Risolto estraendo il componente modulare autonomo `PatientDetailDialog` in `components/patients/patient-detail-dialog.tsx`, rimuovendo oltre 70 righe di JSX duplicato da `patients-manager.tsx` e re-esportando il componente in `components/invoices/patient-detail-dialog.tsx` a garanzia della retrocompatibilità con `invoices-manager.tsx`; verificato con test unitari e invarianti in `components/patients/patient-detail-dialog.test.tsx` e `scripts/verify-patient-detail-dialog-dry.test.ts`).
+- **Posizione:** [`components/patients/patient-detail-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/patients/patient-detail-dialog.tsx), [`components/patients/patients-manager.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/patients/patients-manager.tsx#L485-L490)
 - **Descrizione:**
   In seguito ai precedenti interventi di refactoring (in particolare `DRY-02`), il componente modale di dettaglio del pagante è stato correttamente estratto nel file riutilizzabile [`components/payers/payer-detail-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/payers/payer-detail-dialog.tsx).
   Al contrario, il componente "Dettagli Paziente" (`viewingPatient`) è rimasto implementato come oltre 72 righe di JSX inlined direttamente nel corpo di `patients-manager.tsx`. Oltre ad appesantire inutilmente il file del manager (che supera le 560 righe), tale implementazione duplica la logica di presentazione dei dati anagrafici e dell'eventuale pagante collegato, impedendone il riutilizzo da altre sezioni (ad es. da `invoices` o dalla futura scheda anamnestica).

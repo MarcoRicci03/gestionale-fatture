@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -22,6 +21,7 @@ import { PatientForm } from "./patient-form";
 import { ArchivePatientButton } from "./archive-patient-button";
 import { RestorePatientButton } from "./restore-patient-button";
 import { HardDeletePatientButton } from "./hard-delete-patient-button";
+import { PatientDetailDialog } from "./patient-detail-dialog";
 import { PayerDetailDialog } from "@/components/invoices/payer-detail-dialog";
 import { SearchField } from "@/components/ui/search-field";
 import { ListPagination } from "@/components/ui/list-pagination";
@@ -481,79 +481,11 @@ export function PatientsManager({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!viewingPatient}
+      <PatientDetailDialog
+        patient={viewingPatient}
         onOpenChange={(isOpen) => !isOpen && setViewingPatient(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Paziente</DialogTitle>
-            <DialogDescription>
-              Visualizza le informazioni del paziente e del pagante associato.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingPatient && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Cognome</p>
-                  <p className="font-medium">{viewingPatient.cognome}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{viewingPatient.nome}</p>
-                </div>
-              </div>
-
-              {viewingPatient.pagante ? (
-                <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
-                  <p className="font-medium">Pagante associato</p>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cognome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.cognome}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.nome}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Indirizzo</p>
-                    <p>
-                      {viewingPatient.pagante.via}, {viewingPatient.pagante.citta}{" "}
-                      {viewingPatient.pagante.cap}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">CF</p>
-                      <p>{viewingPatient.pagante.cf ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">P.IVA</p>
-                      <p>{viewingPatient.pagante.piva ?? "-"}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewingPayer(viewingPatient.pagante)}
-                  >
-                    Vedi dettagli pagante
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Nessun pagante associato.</p>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        onViewPayer={setViewingPayer}
+      />
 
       <PayerDetailDialog
         payer={viewingPayer}
