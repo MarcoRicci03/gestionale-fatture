@@ -45,7 +45,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` | ✅ RISOLTO |
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` | ✅ RISOLTO |
 | [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` | ✅ RISOLTO |
-| [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` |
+| [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` | ⏸️ AS IS |
 | [`ARCH-08`](#arch-08) | **Basso** | Architettura | Download ricevute PDF veicolato in Base64 su Server Action anziché Route Handler | `lib/actions/sistema-ts.ts` |
 | [`ARCH-09`](#arch-09) | **Basso** | Architettura | Accoppiamento diretto tra entità Prisma e stato dei componenti Client | `lib/data/*.ts` / `components/` |
 | [`PERF-05`](#perf-05) | **Medio** | Performance | Sincronizzazione ricevute TS sequenziale con query singole ripetute | `lib/sistemats/services/sync-receipts.service.ts` |
@@ -396,6 +396,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="arch-07"></a>
 ### [Medio] [ARCH-07] Schema di validazione Pagante esclude indebitamente liberi professionisti e ditte individuali (CF + P.IVA)
+- **Stato:** ⏸️ AS IS (Decisione di Business: la mutua esclusione tra CF e P.IVA per i paganti è voluta e confermata come requisito di dominio).
 - **Posizione:** [`lib/validations/payer.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/validations/payer.ts#L29-L38)
 - **Descrizione:**
   Lo schema Zod `payerSchema` impone un vincolo di mutua esclusione mediante `refine`:
