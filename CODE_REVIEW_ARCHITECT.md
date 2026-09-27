@@ -43,7 +43,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`SEC-10`](#sec-10) | **Basso** | Sicurezza | Timing Leakage e bypass del rate limit su input login sovradimensionati | `lib/actions/auth.ts` | ✅ RISOLTO |
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` | ✅ RISOLTO |
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` | ✅ RISOLTO |
-| [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` |
+| [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` | ✅ RISOLTO |
 | [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` |
 | [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` |
 | [`ARCH-08`](#arch-08) | **Basso** | Architettura | Download ricevute PDF veicolato in Base64 su Server Action anziché Route Handler | `lib/actions/sistema-ts.ts` |
@@ -338,7 +338,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="dry-07"></a>
 ### [Basso] [DRY-07] Sanitizzazione ripetuta dei parametri di paginazione nei moduli di data fetching
-- **Posizione:** [`lib/data/invoices.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/invoices.ts#L25-L35), [`lib/data/patients.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/patients.ts#L30-L40), [`lib/data/payers.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/payers.ts#L25-L35)
+- **Stato:** ✅ RISOLTO (Risolto introducendo in `lib/utils/pagination.ts` le funzioni pure `calculatePagination` e `clampPage` con sanitizzazione robusta contro indici inferiori a 1, decimali o parametri non validi, ed integrandole uniformemente in `lib/data/invoices.ts`, `lib/data/patients.ts`, `lib/data/payers.ts` e `lib/data/audit-log.ts`; verificato con test unitari e controlli invarianti in `lib/utils/pagination.test.ts` e `scripts/verify-pagination-dry.test.ts`).
+- **Posizione:** [`lib/utils/pagination.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/utils/pagination.ts), [`lib/data/invoices.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/invoices.ts), [`lib/data/patients.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/patients.ts), [`lib/data/payers.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/payers.ts), [`lib/data/audit-log.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/audit-log.ts)
 - **Descrizione:**
   In ciascuna funzione di accesso ai dati paginati (`getInvoices`, `getPatients`, `getPayers`, `getArchivedPatients`, `getArchivedPayers`), il calcolo della pagina effettiva, il clamp del valore minimo a 1 e il calcolo del parametro Prisma `skip = (page - 1) * pageSize` sono implementati attraverso frammenti di codice ridondanti scritti localmente.
 - **Soluzione consigliata:**

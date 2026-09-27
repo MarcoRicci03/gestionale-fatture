@@ -28,3 +28,43 @@ export function parsePageSize(val: unknown, fallback: number = DEFAULT_PAGE_SIZE
   const num = Number(val);
   return (PAGE_SIZE_OPTIONS as readonly number[]).includes(num) ? num : fallback;
 }
+
+/**
+ * DRY-07: Calcola i parametri di paginazione per Prisma ORM (`skip`, `take`),
+ * garantendo che `page` sia sempre un intero >= 1 e `pageSize` sia >= 1.
+ */
+export function calculatePagination(
+  page: number,
+  pageSize: number = DEFAULT_PAGE_SIZE
+): {
+  page: number;
+  pageSize: number;
+  skip: number;
+  take: number;
+} {
+  const validPage = Math.max(1, Math.floor(page) || 1);
+  const floorPageSize = Math.floor(pageSize);
+  const validPageSize = floorPageSize > 0 ? floorPageSize : DEFAULT_PAGE_SIZE;
+  return {
+    page: validPage,
+    pageSize: validPageSize,
+    skip: (validPage - 1) * validPageSize,
+    take: validPageSize,
+  };
+}
+
+/**
+ * DRY-07: Clampa `page` all'interno dell'intervallo valido [1, lastValidPage(totalCount, pageSize)].
+ * Previene valori inferiori a 1 o eccedenti il numero massimo di pagine reali.
+ */
+export function clampPage(
+  page: number,
+  totalCount: number,
+  pageSize: number = DEFAULT_PAGE_SIZE
+): number {
+  const validPage = Math.max(1, Math.floor(page) || 1);
+  const floorPageSize = Math.floor(pageSize);
+  const validPageSize = floorPageSize > 0 ? floorPageSize : DEFAULT_PAGE_SIZE;
+  return Math.min(validPage, lastValidPage(totalCount, validPageSize));
+}
+

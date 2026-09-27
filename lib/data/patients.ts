@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { buildPatientWhere } from "@/lib/patients/list-query";
-import { lastValidPage } from "@/lib/utils/pagination";
+import { calculatePagination, clampPage } from "@/lib/utils/pagination";
 import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 
 function findPatientsPage(
@@ -10,14 +10,15 @@ function findPatientsPage(
   page: number,
   pageSize: number = PATIENTS_PAGE_SIZE
 ) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.paziente.findMany({
     where,
     include: { pagante: true },
     // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
     // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
   });
 }
 
@@ -33,7 +34,7 @@ export async function getPatients(
     prisma.paziente.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectivePatients =
     clampedPage === page ? patients : await findPatientsPage(where, clampedPage, pageSize);
 
@@ -69,14 +70,15 @@ function findArchivedPatientsPage(
   page: number,
   pageSize: number = PATIENTS_PAGE_SIZE
 ) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.paziente.findMany({
     where,
     include: {
       pagante: { select: { id: true, nome: true, cognome: true, archiviato: true } },
     },
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
   });
 }
 
@@ -93,7 +95,7 @@ export async function getArchivedPatients(
     prisma.paziente.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectivePatients =
     clampedPage === page
       ? patients

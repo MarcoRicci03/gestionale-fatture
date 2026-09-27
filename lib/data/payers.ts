@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { findRestoreConflict } from "@/lib/archive/guards";
 import { buildPayerWhere } from "@/lib/payers/list-query";
-import { lastValidPage } from "@/lib/utils/pagination";
+import { calculatePagination, clampPage } from "@/lib/utils/pagination";
 import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 
 function findPayersPage(
@@ -11,6 +11,7 @@ function findPayersPage(
   page: number,
   pageSize: number = PAYERS_PAGE_SIZE
 ) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.pagante.findMany({
     where,
     include: {
@@ -22,8 +23,8 @@ function findPayersPage(
     // `id` come tiebreaker: cognome/nome non sono univoci, vedi lo stesso
     // ragionamento in lib/invoices/list-query.ts/findInvoicesPage.
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
   });
 }
 
@@ -39,7 +40,7 @@ export async function getPayers(
     prisma.pagante.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectivePayers =
     clampedPage === page ? payers : await findPayersPage(where, clampedPage, pageSize);
 
@@ -62,11 +63,12 @@ function findArchivedPayersPage(
   page: number,
   pageSize: number = PAYERS_PAGE_SIZE
 ) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.pagante.findMany({
     where,
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { id: "asc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
   });
 }
 
@@ -83,7 +85,7 @@ export async function getArchivedPayers(
     prisma.pagante.count({ where }),
   ]);
 
-  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectivePayers =
     clampedPage === page ? payers : await findArchivedPayersPage(where, clampedPage, pageSize);
 

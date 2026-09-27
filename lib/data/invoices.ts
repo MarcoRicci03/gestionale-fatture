@@ -5,7 +5,8 @@ import {
   PAYER_OPTION_SELECT,
   PATIENT_OPTION_SELECT,
 } from "@/lib/data/invoice-contact-options-select";
-import { buildInvoiceWhere, lastValidPage } from "@/lib/invoices/list-query";
+import { buildInvoiceWhere } from "@/lib/invoices/list-query";
+import { calculatePagination, clampPage } from "@/lib/utils/pagination";
 import { serializeInvoiceNumbers } from "@/lib/invoices/serialize";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
@@ -16,6 +17,7 @@ function findInvoicesPage(
   page: number,
   pageSize: number = INVOICES_PAGE_SIZE
 ) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.pagamento.findMany({
     where,
     include: { pagante: true, paziente: true, mesi: true },
@@ -26,8 +28,8 @@ function findInvoicesPage(
     // criterio univoco, una riga può comparire su due pagine consecutive o
     // sparire del tutto mentre si pagina.
     orderBy: [{ data: "desc" }, { id: "desc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
   });
 }
 
@@ -56,7 +58,7 @@ export async function getInvoices(
   // clampa alla pagina valida più vicina e si rifà la query solo in questo
   // caso raro (il percorso comune, `page` già in range, resta una singola
   // query in Promise.all sopra).
-  const clampedPage = Math.min(page, lastValidPage(totalCount, pageSize));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectiveInvoices =
     clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage, pageSize);
 
