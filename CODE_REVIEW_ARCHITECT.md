@@ -53,7 +53,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`PERF-07`](#perf-07) | **Suggerimento** | Performance | Inizializzazione ripetuta di espressioni regolari e formattatori nei cicli di render | `lib/utils/date.ts` / `lib/utils/currency.ts` |
 | [`ERR-05`](#err-05) | **Alto** | Error Handling | Taglio a mezzogiorno in `parseDateInput` esclude fatture pomeridiane nei filtri | `lib/invoices/list-query.ts` / `lib/utils/date.ts` |
 | [`ERR-06`](#err-06) | **Alto** | Error Handling | Controllo cronologico a millisecondi genera falsi positivi su fatture stesso giorno | `lib/invoices/chronology.ts` |
-| [`ERR-07`](#err-07) | **Medio** | Error Handling | Disallineamento logico in `canSubmit` correzione TS: omessa validazione bollo | `components/sistema-ts/fix-invoice-ts-dialog.tsx` |
+| [`ERR-07`](#err-07) | **Medio** | Error Handling | Disallineamento logico in `canSubmit` correzione TS: omessa validazione bollo | `components/sistema-ts/fix-invoice-ts-dialog.tsx` | ✅ RISOLTO |
 | [`ERR-08`](#err-08) | **Basso** | Error Handling | Mappatura incompleta e collasso degli errori nativi nei web service SOAP Sogei | `lib/sistemats/client.ts` / `xml-parser.ts` |
 | [`SMELL-10`](#smell-10) | **Medio** | Code Smells | Calcolo isolato di `bolloMancante` escluso da `haAnomalie` in Sistema TS | `lib/data/sistema-ts.ts` | ✅ RISOLTO |
 | [`SMELL-11`](#smell-11) | **Basso** | Code Smells | Costanti e codici IVA sparsi come Magic Numbers anziché centralizzati | `components/` / `lib/sistemats/` |
@@ -586,7 +586,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 ---
 
 <a id="err-07"></a>
-### [Medio] [ERR-07] Disallineamento logico in `canSubmit` del dialogo correzione TS: omessa validazione bollo
+### [Medio] [ERR-07] Disallineamento logico in `canSubmit` del dialogo correzione TS: omessa validazione bollo — ✅ RISOLTO
 - **Posizione:** [`components/sistema-ts/fix-invoice-ts-dialog.tsx`](file:///home/marcor/Projects/gestionale-fatture/components/sistema-ts/fix-invoice-ts-dialog.tsx#L100-L113)
 - **Descrizione:**
   Nel dialogo di correzione delle anomalie per Sistema TS, il componente calcola esplicitamente la validità del bollo:
