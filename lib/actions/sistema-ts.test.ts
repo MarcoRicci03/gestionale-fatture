@@ -477,7 +477,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
         natura_iva: "N2.2",
         flag_opposizione: false,
         pagamento_tracciato: true,
-        bolloCodice: null,
+        bolloCodice: "01202600001234",
         pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
       },
@@ -509,7 +509,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
         natura_iva: "N4",
         flag_opposizione: false,
         pagamento_tracciato: true,
-        bolloCodice: null,
+        bolloCodice: "01202600001234",
         pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
       },
@@ -526,6 +526,33 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
       importo: 2,
       naturaIva: "N1",
     });
+  });
+
+  it("rifiuta l'invio se la fattura supera 77.47 € ed è priva di codice marca da bollo valido (ARCH-06 / SMELL-10)", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 777,
+        n_fattura: 77,
+        anno: 2026,
+        data: new Date("2026-03-01"),
+        prezzo_totale: new Prisma.Decimal("100.00"),
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+
+    const result = await inviaLottoFatture([777]);
+
+    expect(result).toHaveProperty("success", false);
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("privo di codice marca da bollo valido"),
+      })
+    );
   });
 
   it("aggiunge la riga bollo anche sotto soglia se bolloCodice è presente", async () => {
@@ -568,7 +595,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
         natura_iva: "N2.2",
         flag_opposizione: false,
         pagamento_tracciato: true,
-        bolloCodice: null,
+        bolloCodice: "01202600001234",
         pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
       },
@@ -582,7 +609,7 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
         natura_iva: "N2.2",
         flag_opposizione: false,
         pagamento_tracciato: true,
-        bolloCodice: null,
+        bolloCodice: "01202600001234",
         pagante: { nome: "Luigi", cognome: "Bianchi", cf: "RSSMRA85M01H501Q" },
         paziente: { nome: "Luigi", cognome: "Bianchi", cf: "RSSMRA85M01H501Q" },
       },
@@ -1139,7 +1166,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     );
   });
 
-  it("include la riga bollo nel payload di cancellazione se l'importo supera 77.47 €", async () => {
+  it("include la riga bollo nel payload di cancellazione se la fattura ha il bollo applicato", async () => {
     mockPagamentoFindFirst.mockResolvedValueOnce({
       id: 12,
       n_fattura: 5,
@@ -1149,7 +1176,7 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
       stato_ts: "INVIATA",
       flag_opposizione: false,
       pagamento_tracciato: true,
-      bolloCodice: null,
+      bolloCodice: "01202600001234",
       pagante: { nome: "A", cognome: "B", cf: "RSSMRA85M01H501Q" },
       paziente: { nome: "A", cognome: "B", cf: "RSSMRA85M01H501Q" },
     });

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { formatDateInput, isValidCalendarDateString } from "@/lib/utils/date";
+import { isBolloDovuto, isBolloCodiceValido } from "@/lib/fiscal/bollo";
 import { correggiFatturaTs } from "@/lib/actions/sistema-ts";
 import type { FatturaTsListItem } from "@/lib/data/sistema-ts";
 
@@ -98,23 +99,27 @@ function FixInvoiceTsForm({
   }, [dataPagamento, isBadInput]);
 
   // Bollo validation
-  const requiresBollo = invoice.prezzo_totale > 77.47;
+  const requiresBollo = isBolloDovuto(invoice.prezzo_totale);
   const isBolloValid = useMemo(() => {
     if (!requiresBollo) return true;
-    if (!bolloCodice) return false;
-    return /^\d{14}$/.test(bolloCodice.trim());
+    return isBolloCodiceValido(bolloCodice);
   }, [requiresBollo, bolloCodice]);
 
   const canSubmit = useMemo(() => {
     if (!paymentDateValidation.valid) return false;
+    if (!isBolloValid) return false;
     if (flagOpposizione) return true;
     return cfValidation.valid;
-  }, [paymentDateValidation.valid, flagOpposizione, cfValidation.valid]);
+  }, [paymentDateValidation.valid, isBolloValid, flagOpposizione, cfValidation.valid]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!canSubmit) {
+      if (!isBolloValid) {
+        setServerError("Inserisci un codice marca da bollo valido di 14 cifre.");
+        return;
+      }
       setServerError(
         "Correggi il Codice Fiscale o seleziona l'opposizione alla trasmissione prima di procedere."
       );

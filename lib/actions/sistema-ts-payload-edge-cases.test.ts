@@ -271,7 +271,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
           natura_iva: "N2.2",
           flag_opposizione: false,
           pagamento_tracciato: true,
-          bolloCodice: null,
+          bolloCodice: "01202600001234",
           pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
           paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         },
@@ -309,7 +309,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
           natura_iva: "N4", // Ordinario esente art. 10
           flag_opposizione: false,
           pagamento_tracciato: true,
-          bolloCodice: null,
+          bolloCodice: "01202600001234",
           pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
           paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         },
@@ -384,6 +384,32 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
       expect(doc.vociSpesa).toHaveLength(1);
       expect(doc.vociSpesa[0].importo).toBe(77.47);
     });
+
+    it("rifiuta l'invio e fa rollback se l'importo > 77.47 € è privo di codice marca da bollo (ARCH-06 / SMELL-10)", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([
+        {
+          id: 304,
+          n_fattura: 23,
+          anno: 2026,
+          data: new Date("2026-03-13"),
+          prezzo_totale: new Prisma.Decimal("100.00"), // > 77.47
+          natura_iva: "N2.2",
+          flag_opposizione: false,
+          pagamento_tracciato: true,
+          bolloCodice: null,
+          pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+          paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        },
+      ]);
+
+      const result = await inviaLottoFatture([304]);
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: false,
+          error: expect.stringContaining("privo di codice marca da bollo valido"),
+        })
+      );
+    });
   });
 
   describe("Opposizione Assistito (Privacy & Tutela Dati)", () => {
@@ -398,7 +424,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
           natura_iva: "N2.2",
           flag_opposizione: true, // Opposizione attiva
           pagamento_tracciato: true,
-          bolloCodice: null,
+          bolloCodice: "01202600001234",
           pagante: { nome: "Gianna", cognome: "Nannini", cf: null }, // Senza CF
           paziente: { nome: "Gianna", cognome: "Nannini", cf: null },
         },
@@ -428,7 +454,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
           natura_iva: "N2.2",
           flag_opposizione: false, // Nessuna opposizione
           pagamento_tracciato: true,
-          bolloCodice: null,
+          bolloCodice: "01202600001234",
           pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
           paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
         },

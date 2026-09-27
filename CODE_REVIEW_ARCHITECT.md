@@ -44,7 +44,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`DRY-05`](#dry-05) | **Medio** | Duplicazione | Quintuplice duplicazione della logica di rollback stato in `transmission.service` | `lib/sistemats/services/transmission.service.ts` | ✅ RISOLTO |
 | [`DRY-06`](#dry-06) | **Medio** | Duplicazione | Duplicazione inline del modale Dettagli Paziente in `patients-manager` | `components/patients/patients-manager.tsx` | ✅ RISOLTO |
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` | ✅ RISOLTO |
-| [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` |
+| [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` | ✅ RISOLTO |
 | [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` |
 | [`ARCH-08`](#arch-08) | **Basso** | Architettura | Download ricevute PDF veicolato in Base64 su Server Action anziché Route Handler | `lib/actions/sistema-ts.ts` |
 | [`ARCH-09`](#arch-09) | **Basso** | Architettura | Accoppiamento diretto tra entità Prisma e stato dei componenti Client | `lib/data/*.ts` / `components/` |
@@ -55,7 +55,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`ERR-06`](#err-06) | **Alto** | Error Handling | Controllo cronologico a millisecondi genera falsi positivi su fatture stesso giorno | `lib/invoices/chronology.ts` |
 | [`ERR-07`](#err-07) | **Medio** | Error Handling | Disallineamento logico in `canSubmit` correzione TS: omessa validazione bollo | `components/sistema-ts/fix-invoice-ts-dialog.tsx` |
 | [`ERR-08`](#err-08) | **Basso** | Error Handling | Mappatura incompleta e collasso degli errori nativi nei web service SOAP Sogei | `lib/sistemats/client.ts` / `xml-parser.ts` |
-| [`SMELL-10`](#smell-10) | **Medio** | Code Smells | Calcolo isolato di `bolloMancante` escluso da `haAnomalie` in Sistema TS | `lib/data/sistema-ts.ts` |
+| [`SMELL-10`](#smell-10) | **Medio** | Code Smells | Calcolo isolato di `bolloMancante` escluso da `haAnomalie` in Sistema TS | `lib/data/sistema-ts.ts` | ✅ RISOLTO |
 | [`SMELL-11`](#smell-11) | **Basso** | Code Smells | Costanti e codici IVA sparsi come Magic Numbers anziché centralizzati | `components/` / `lib/sistemats/` |
 | [`SMELL-12`](#smell-12) | **Basso** | Code Smells | Disallineamento di nomenclatura tra database snake_case e TypeScript camelCase | `schema.prisma` / `types/` |
 | [`SMELL-13`](#smell-13) | **Suggerimento** | Code Smells | Utilizzo di `console.error` non strutturato in luogo di un logger diagnostico | `lib/actions/*.ts` |
@@ -362,7 +362,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="arch-06"></a>
 ### [Alto] [ARCH-06] Discrepanza architetturale e fiscale nel calcolo dell'imposta di bollo (€ 2,00) tra Sistema TS e PDF
-- **Posizione:** [`lib/sistemats/payload-builder.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/payload-builder.ts#L73-L79), [`lib/pdf/placeholders.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/pdf/placeholders.ts#L161-L170), [`lib/data/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/sistema-ts.ts#L110-L121)
+- **Stato:** ✅ RISOLTO (Risolto introducendo il modulo di dominio centralizzato `lib/fiscal/bollo.ts` con `calcolaTotaliFattura`, sincronizzando la logica di inclusione del bollo tra PDF e tracciato XML solo a fronte di `isBolloApplicato(bolloCodice)`, e introducendo il blocco vincolante alla trasmissione in `transmission.service.ts` e `fix-invoice-ts-dialog.tsx` per fatture superiori a 77,47 € prive di bollo; verificato con test unitari e invarianti).
+- **Posizione:** [`lib/fiscal/bollo.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/fiscal/bollo.ts), [`lib/sistemats/payload-builder.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/sistemats/payload-builder.ts#L73-L79), [`lib/pdf/placeholders.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/pdf/placeholders.ts#L161-L170), [`lib/data/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/sistema-ts.ts#L110-L121)
 - **Descrizione:**
   Nel sistema è presente un grave disallineamento concettuale tra la logica di generazione del tracciato di spesa sanitaria per l'Agenzia delle Entrate e la resa del documento PDF/fattura destinata al paziente:
   
@@ -641,6 +642,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="smell-10"></a>
 ### [Medio] [SMELL-10] Calcolo isolato di `bolloMancante` escluso da `haAnomalie` in Sistema TS
+- **Stato:** ✅ RISOLTO (Risolto includendo `bolloMancante` in `haAnomalie` in `lib/data/sistema-ts.ts` e vincolando la validazione sia a livello di servizio `transmission.service.ts` sia nel dialogo `fix-invoice-ts-dialog.tsx`, sanato contestualmente con `ARCH-06`).
 - **Posizione:** [`lib/data/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/data/sistema-ts.ts#L110-L121)
 - **Descrizione:**
   Nella query che prepara i documenti per l'interfaccia di trasmissione a Sistema TS:

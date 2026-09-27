@@ -1,4 +1,4 @@
-import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
+import { IMPORTO_BOLLO, isBolloApplicato } from "@/lib/fiscal/bollo";
 import type { VoceSpesaPayload } from "./types";
 
 /**
@@ -54,8 +54,10 @@ export function resolveNaturaIvaBollo(naturaIva?: string | null): string {
 /**
  * Costruisce l'elenco delle voci di spesa (voceSpesa) per il documento Sistema TS:
  * - Voce 1: prestazione sanitaria con tipoSpesa "SP", importo totale e natura IVA della fattura (default "N2.2").
- * - Voce 2 (se dovuta): marca da bollo da 2.00 € con tipoSpesa "SP" e natura IVA determinata
+ * - Voce 2 (se applicata): marca da bollo da 2.00 € con tipoSpesa "SP" e natura IVA determinata
  *   dinamicamente in base al regime fiscale (N2.2 per forfettari, N1 per ordinari esenti art. 10).
+ *   ARCH-06: Inclusa solo se il bollo è effettivamente applicato sulla fattura (bolloCodice presente),
+ *   garantendo che il tracciato XML e il PDF del paziente abbiano sempre lo stesso identico totale.
  */
 export function buildVociSpesa(params: {
   prezzoTotale: number;
@@ -70,7 +72,7 @@ export function buildVociSpesa(params: {
     },
   ];
 
-  if (params.prezzoTotale > SOGLIA_BOLLO || Boolean(params.bolloCodice)) {
+  if (isBolloApplicato(params.bolloCodice)) {
     voci.push({
       tipoSpesa: "SP",
       importo: IMPORTO_BOLLO,

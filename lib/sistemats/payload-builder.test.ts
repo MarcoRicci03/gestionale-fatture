@@ -88,10 +88,26 @@ describe("payload-builder — buildVociSpesa", () => {
     });
   });
 
-  it("aggiunge riga bollo con natura N2.2 per forfettari quando importo > 77.47", () => {
+  it("non aggiunge riga bollo se importo > 77.47 ma bolloCodice è assente (ARCH-06: coerenza con PDF)", () => {
     const voci = buildVociSpesa({
       prezzoTotale: 100,
       naturaIva: "N2.2",
+      bolloCodice: null,
+    });
+
+    expect(voci).toHaveLength(1);
+    expect(voci[0]).toEqual({
+      tipoSpesa: "SP",
+      importo: 100,
+      naturaIva: "N2.2",
+    });
+  });
+
+  it("aggiunge riga bollo con natura N2.2 per forfettari quando importo > 77.47 con bolloCodice", () => {
+    const voci = buildVociSpesa({
+      prezzoTotale: 100,
+      naturaIva: "N2.2",
+      bolloCodice: "01202600001234",
     });
 
     expect(voci).toHaveLength(2);
@@ -107,10 +123,11 @@ describe("payload-builder — buildVociSpesa", () => {
     });
   });
 
-  it("aggiunge riga bollo con natura N1 per regime ordinario esente art. 10 (N4) quando importo > 77.47", () => {
+  it("aggiunge riga bollo con natura N1 per regime ordinario esente art. 10 (N4) quando importo > 77.47 con bolloCodice", () => {
     const voci = buildVociSpesa({
       prezzoTotale: 150,
       naturaIva: "N4",
+      bolloCodice: "01202600001234",
     });
 
     expect(voci).toHaveLength(2);

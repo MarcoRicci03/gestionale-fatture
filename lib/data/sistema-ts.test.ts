@@ -299,8 +299,9 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
         richiedeBollo: true,
         bolloMancante: true,
         isDataFutura: false,
-        haAnomalie: false,
-        isProntaPerInvio: true,
+        // SMELL-10: bolloMancante genera anomalia e impedisce l'invio
+        haAnomalie: true,
+        isProntaPerInvio: false,
       })
     );
 

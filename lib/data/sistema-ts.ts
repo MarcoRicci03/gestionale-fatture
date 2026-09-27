@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { validateImportoSpesa } from "@/lib/sistemats/payload-builder";
-import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
+import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { parseDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
 import { Prisma, type $Enums } from "@prisma/client";
@@ -107,14 +107,17 @@ export async function getFatturePerInvioTs(
     const cfCheck = cf ? validateCodiceFiscale(cf) : { valid: false, error: "Codice Fiscale mancante" };
     const prezzoTotale = inv.prezzo_totale.toNumber();
     const importoCheck = validateImportoSpesa(prezzoTotale);
-    const richiedeBollo = prezzoTotale > SOGLIA_BOLLO;
-    const bolloMancante = richiedeBollo && !inv.bolloCodice;
+    const { bolloDovuto: richiedeBollo, bolloMancante } = calcolaTotaliFattura(
+      prezzoTotale,
+      inv.bolloCodice
+    );
 
     const cfValido = inv.flag_opposizione ? true : cfCheck.valid;
     const cfErrore = inv.flag_opposizione ? undefined : cfCheck.error;
     const importoValido = importoCheck.valid;
     const importoErrore = importoCheck.error;
-    const haAnomalie = !cfValido || !importoValido;
+    // ARCH-06 / SMELL-10: una fattura con bollo mancante ha anomalie e non è pronta per l'invio
+    const haAnomalie = !cfValido || !importoValido || bolloMancante;
 
     const dataEffettiva = inv.data_pagamento ?? inv.data;
     const isDataFutura = isDataPagamentoFutura(inv.data_pagamento, inv.data);

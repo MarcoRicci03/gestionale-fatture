@@ -39,8 +39,8 @@ describe("DRY-05: Analisi statica DRY su transmission.service.ts", () => {
     // Conta le chiamate a rollbackStatoTrasmissione all'interno di inviaLottoFattureService
     const calls = fnBody.match(/rollbackStatoTrasmissione\s*\(/g);
     expect(calls).not.toBeNull();
-    // I 5 punti: CF non valido, importo non valido, data pagamento futura, scarto Sogei, blocco catch
-    expect(calls!.length).toBe(5);
+    // I 6 punti: CF non valido, importo non valido, data pagamento futura, bollo mancante (ARCH-06), scarto Sogei, blocco catch
+    expect(calls!.length).toBe(6);
   });
 
   it("non contiene query updateMany duplicate per il rollback a DA_INVIARE dentro inviaLottoFattureService", () => {

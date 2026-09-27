@@ -26,7 +26,7 @@ describe("FixInvoiceTsDialog", () => {
     natura_iva: "N2.2",
     flag_opposizione: false,
     bollo: 2,
-    bolloCodice: null,
+    bolloCodice: "01202600001234",
     stato_ts: "DA_INVIARE",
     protocollo_ts: null,
     protocollo_cancellazione_ts: null,
@@ -38,7 +38,7 @@ describe("FixInvoiceTsDialog", () => {
     cfErrore: "Lunghezza errata: attesi 16 caratteri",
     importoValido: true,
     richiedeBollo: true,
-    bolloMancante: true,
+    bolloMancante: false,
     isDataFutura: false,
     haAnomalie: true,
     isProntaPerInvio: false,
@@ -292,5 +292,38 @@ describe("FixInvoiceTsDialog", () => {
 
     expect(screen.getByText("Data di incasso obbligatoria")).toBeInTheDocument();
     expect(submitBtn).toBeDisabled();
+  });
+
+  it("disabilita il submit se requiresBollo è true e bolloCodice non è valido", async () => {
+    const user = userEvent.setup();
+    const invoiceWithoutBollo = {
+      ...baseInvoice,
+      paganteCf: "RSSMRA80A01H501U",
+      cfValido: true,
+      cfErrore: undefined,
+      bolloCodice: null,
+      bolloMancante: true,
+    };
+
+    render(
+      <FixInvoiceTsDialog
+        invoice={invoiceWithoutBollo}
+        open={true}
+        onOpenChange={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    );
+
+    const submitBtn = screen.getByRole("button", { name: /Salva correzioni/i });
+    expect(submitBtn).toBeDisabled();
+
+    // Digita codice non valido (< 14 cifre)
+    const inputBollo = screen.getByLabelText(/Codice Marca da Bollo/i);
+    await user.type(inputBollo, "12345");
+    expect(submitBtn).toBeDisabled();
+
+    // Completa a 14 cifre
+    await user.type(inputBollo, "678901234");
+    expect(submitBtn).not.toBeDisabled();
   });
 });

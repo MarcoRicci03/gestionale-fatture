@@ -1,6 +1,5 @@
 import type { InvoiceWithRelations, MeseConfig } from "./types";
-import { IMPORTO_BOLLO } from "@/lib/constants/bollo";
-import { roundCurrency } from "@/lib/utils/currency";
+import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 
 export type PlaceholderContext = {
@@ -80,6 +79,7 @@ export function buildReplacements(
   const anagrafica = resolveAnagrafica(invoice);
   const p = anagrafica.pagante;
   const z = anagrafica.paziente;
+  const totali = calcolaTotaliFattura(invoice.prezzo_totale, invoice.bolloCodice);
 
   const replacements: Record<string, string> = {
     // Mittente
@@ -159,15 +159,13 @@ export function buildReplacements(
     "{{fattura.cap}}": invoice.cap,
     "{{fattura.mesi}}": invoice.mesi.map((m) => m.mese).join(", "),
     "{{fattura.bolloCodice}}": invoice.bolloCodice ?? "",
-    "{{fattura.bolloImporto}}": invoice.bolloCodice
-      ? formatCurrency(IMPORTO_BOLLO)
+    "{{fattura.bolloImporto}}": totali.bolloApplicato
+      ? formatCurrency(totali.bolloImporto)
       : "",
-    "{{fattura.bolloRiga}}": invoice.bolloCodice
-      ? `Imposta di bollo assolta in modo virtuale sull'originale per importi superiori a € 77,47 - Codice identificativo: ${invoice.bolloCodice} - Importo: ${formatCurrency(IMPORTO_BOLLO)}`
+    "{{fattura.bolloRiga}}": totali.bolloApplicato
+      ? `Imposta di bollo assolta in modo virtuale sull'originale per importi superiori a € 77,47 - Codice identificativo: ${invoice.bolloCodice} - Importo: ${formatCurrency(totali.bolloImporto)}`
       : "",
-    "{{fattura.totaleConBollo}}": formatCurrency(
-      roundCurrency(invoice.prezzo_totale + (invoice.bolloCodice ? IMPORTO_BOLLO : 0))
-    ),
+    "{{fattura.totaleConBollo}}": formatCurrency(totali.totaleConBollo),
 
     // Dettaglio prezzi per mese
     "{{fattura.mesiConPrezzo}}": invoice.mesi

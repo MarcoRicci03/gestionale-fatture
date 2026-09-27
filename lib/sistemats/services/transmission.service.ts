@@ -4,6 +4,7 @@ import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa, validateImportoSpesa } from "@/lib/sistemats/payload-builder";
 import { isDataPagamentoFutura, formatDateDisplay } from "@/lib/utils/date";
+import { isBolloDovuto, isBolloCodiceValido } from "@/lib/fiscal/bollo";
 import { getClientForUser } from "./client.service";
 import type {
   DocumentoSpesaPayload,
@@ -187,6 +188,16 @@ export async function inviaLottoFattureService(params: {
       return {
         success: false,
         error: `Fattura n. ${inv.n_fattura}/${inv.anno}: La data di incasso (${formatDateDisplay(dataEffettiva)}) è futura rispetto alla data odierna. Non è possibile trasmetterla prima di tale data (vincolo ministeriale DM 19/10/2020, errore Sogei S036).`,
+      };
+    }
+
+    // ARCH-06 / SMELL-10: Se la fattura supera la soglia di legge (77.47 €),
+    // deve obbligatoriamente avere un codice marca da bollo valido per essere trasmessa a Sistema TS.
+    if (isBolloDovuto(prezzoTotale) && !isBolloCodiceValido(inv.bolloCodice)) {
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
+      return {
+        success: false,
+        error: `Fattura n. ${inv.n_fattura}/${inv.anno}: L'importo (${prezzoTotale.toFixed(2)} €) supera la soglia di 77,47 € ed è privo di codice marca da bollo valido. Inserire il codice prima dell'invio.`,
       };
     }
 

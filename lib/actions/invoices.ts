@@ -30,7 +30,7 @@ const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
 import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
-import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
+import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import { annullaFatturaTs } from "./sistema-ts";
 import type { ActionResult } from "@/lib/types/actions";
 
@@ -191,10 +191,9 @@ export async function createInvoice(
     new Prisma.Decimal(0)
   );
 
-  const bollo =
-    prezzo_totale.toNumber() > SOGLIA_BOLLO || bolloCodice
-      ? new Prisma.Decimal(IMPORTO_BOLLO)
-      : new Prisma.Decimal(0);
+  const bollo = new Prisma.Decimal(
+    calcolaTotaliFattura(prezzo_totale.toNumber(), bolloCodice).bolloImporto
+  );
 
   let createdInvoiceId: number;
   try {
@@ -385,10 +384,9 @@ export async function updateInvoice(
     new Prisma.Decimal(0)
   );
 
-  const bollo =
-    prezzo_totale.toNumber() > SOGLIA_BOLLO || bolloCodice
-      ? new Prisma.Decimal(IMPORTO_BOLLO)
-      : new Prisma.Decimal(0);
+  const bollo = new Prisma.Decimal(
+    calcolaTotaliFattura(prezzo_totale.toNumber(), bolloCodice).bolloImporto
+  );
 
   try {
     await prisma.pagamento.update({

@@ -104,7 +104,7 @@ function createMockInvoice(id: number, nFattura: number, statoTs = "DA_INVIARE")
     natura_iva: "N2.2",
     flag_opposizione: false,
     pagamento_tracciato: true,
-    bolloCodice: null,
+    bolloCodice: "01202600001234",
     stato_ts: statoTs,
     protocollo_ts: null,
     pagante: {
