@@ -17,7 +17,6 @@ import { buttonVariants } from "@/components/ui/button";
 import {
   inviaLottoFatture,
   sincronizzaEsitoTrasmissione,
-  getRicevutaPdfBase64,
   annullaFatturaTs,
   ripristinaFatturaPerReinvio,
 } from "@/lib/actions/sistema-ts";
@@ -126,30 +125,6 @@ export function SistemaTsManager({
       setActionSuccess(result.message || "Esito sincronizzato con successo.");
       router.refresh();
     });
-  };
-
-  const handleDownloadPdf = async (trasmissioneId: number) => {
-    setActionError(null);
-    const res = await getRicevutaPdfBase64(trasmissioneId);
-    if ("error" in res) {
-      setActionError(res.error);
-      return;
-    }
-
-    const binaryString = window.atob(res.base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const blob = new Blob([bytes], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = res.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const handleRipristina = (invoiceId: number) => {
@@ -337,7 +312,6 @@ export function SistemaTsManager({
           syncingId={syncingId}
           storico={storico}
           onSyncEsito={handleSyncEsito}
-          onDownloadPdf={handleDownloadPdf}
           onOpenReportCsv={(csv) => setSelectedReportCsv(csv)}
           onOpenCancelModal={(data) => setCancellingInvoice(data)}
           onRipristina={handleRipristina}

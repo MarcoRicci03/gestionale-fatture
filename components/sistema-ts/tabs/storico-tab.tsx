@@ -15,7 +15,9 @@ import {
   ChevronDown,
   Ban,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,7 +47,6 @@ export type StoricoTabProps = {
   syncingId: number | null;
   storico: ReturnType<typeof useSistemaTsStorico>;
   onSyncEsito: (trasmissioneId: number) => void;
-  onDownloadPdf: (trasmissioneId: number) => void;
   onOpenReportCsv: (csvContent: string) => void;
   onOpenCancelModal: (data: CancelInvoiceData) => void;
   onRipristina: (id: number) => void;
@@ -93,7 +94,6 @@ export function StoricoTab({
   syncingId,
   storico,
   onSyncEsito,
-  onDownloadPdf,
   onOpenReportCsv,
   onOpenCancelModal,
   onRipristina,
@@ -335,14 +335,15 @@ export function StoricoTab({
                     </Button>
 
                     {t.hasPdfRicevuta && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onDownloadPdf(t.id)}
+                      <Link
+                        href={`/api/sistema-ts/trasmissioni/${t.id}/ricevuta`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
                       >
                         <FileDown className="mr-1.5 h-3.5 w-3.5" />
                         Scarica Ricevuta PDF
-                      </Button>
+                      </Link>
                     )}
 
                     <Button

@@ -46,7 +46,7 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 | [`DRY-07`](#dry-07) | **Basso** | Duplicazione | Sanitizzazione ripetuta dei parametri di paginazione nei moduli dati | `lib/data/*.ts` | ✅ RISOLTO |
 | [`ARCH-06`](#arch-06) | **Alto** | Architettura | Discrepanza fiscale nel calcolo dell'imposta di bollo tra Sistema TS e PDF | `lib/pdf/placeholders.ts` / `lib/sistemats/` | ✅ RISOLTO |
 | [`ARCH-07`](#arch-07) | **Medio** | Architettura | Schema validazione pagante rifiuta professionisti con CF e P.IVA concorrenti | `lib/validations/payer.ts` | ⏸️ AS IS |
-| [`ARCH-08`](#arch-08) | **Basso** | Architettura | Download ricevute PDF veicolato in Base64 su Server Action anziché Route Handler | `lib/actions/sistema-ts.ts` |
+| [`ARCH-08`](#arch-08) | **Basso** | Architettura | Download ricevute PDF veicolato in Base64 su Server Action anziché Route Handler | `lib/actions/sistema-ts.ts` | ✅ RISOLTO |
 | [`ARCH-09`](#arch-09) | **Basso** | Architettura | Accoppiamento diretto tra entità Prisma e stato dei componenti Client | `lib/data/*.ts` / `components/` |
 | [`PERF-05`](#perf-05) | **Medio** | Performance | Sincronizzazione ricevute TS sequenziale con query singole ripetute | `lib/sistemats/services/sync-receipts.service.ts` |
 | [`PERF-06`](#perf-06) | **Basso** | Performance | Paginazione offset non scalabile ($O(N)$) su tabelle storiche ad alto volume | `lib/data/audit.ts` / `lib/data/invoices.ts` |
@@ -433,7 +433,8 @@ I risultati sono organizzati rigorosamente in **ordine decrescente di gravità**
 
 <a id="arch-08"></a>
 ### [Basso] [ARCH-08] Download di ricevute PDF veicolato in Base64 tramite Server Action RPC anziché Route Handler HTTP
-- **Posizione:** [`lib/actions/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts#L234-L253)
+- **Stato:** ✅ RISOLTO (Risolto introducendo il Route Handler dedicato `GET /api/sistema-ts/trasmissioni/[id]/ricevuta` con streaming binario nativo, rate limiting a 30 req/min e header `Content-Type: application/pdf`, `Content-Disposition: attachment` e `Cache-Control: private, no-store`; aggiornato `storico-tab.tsx` con link diretto e marcata `@deprecated` la Server Action `getRicevutaPdfBase64`; verificato con unit test e test architetturale in `scripts/verify-receipt-pdf-route-arch.test.ts`).
+- **Posizione:** [`app/api/sistema-ts/trasmissioni/[id]/ricevuta/route.ts`](file:///home/marcor/Projects/gestionale-fatture/app/api/sistema-ts/trasmissioni/[id]/ricevuta/route.ts), [`lib/actions/sistema-ts.ts`](file:///home/marcor/Projects/gestionale-fatture/lib/actions/sistema-ts.ts#L234-L253)
 - **Descrizione:**
   La Server Action `getRicevutaPdfBase64` estrae il PDF memorizzato nel campo Postgres `Bytes` e lo invia al client come stringa Base64 serializzata in un payload JSON:
   ```ts

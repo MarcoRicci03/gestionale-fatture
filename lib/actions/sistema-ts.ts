@@ -230,6 +230,8 @@ export async function ripristinaFatturaPerReinvio(
 
 /**
  * Restituisce i byte Base64 del file PDF ricevuta memorizzato per una trasmissione.
+ * @deprecated Utilizzare il Route Handler HTTP dedicato `GET /api/sistema-ts/trasmissioni/[id]/ricevuta` (ARCH-08)
+ * per lo streaming binario nativo senza overhead Base64 né frammentazione della memoria.
  */
 export async function getRicevutaPdfBase64(
   trasmissioneId: number
