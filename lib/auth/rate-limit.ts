@@ -9,6 +9,7 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 // "unknown", ma lo username resta arbitrario e non
 // validato finché la query su Postgres non lo risolve) fa crescere le Map
 // senza limite. MAX_ENTRIES_PER_MAP impone un tetto fisso con eviction LRU
+// delle voci non bloccate (CR-13, vedi evictOldest)
 // (per ordine di scrittura, non di lettura: ogni tentativo fallito scrive
 // comunque via recordFailedLogin, quindi l'ordine di scrittura riflette già
 // l'attività reale). Sostituisce lo sweep probabilistico (SWEEP_PROBABILITY,
@@ -79,11 +80,28 @@ function writeRecord(
   map.set(key, record);
 }
 
-function evictOldest(map: Map<string, AttemptRecord>): void {
+// CR-13 (stesso difetto di CR-06): lo username è scelto dall'attaccante, che
+// con ~10.000 login falliti su username inventati spingerebbe fuori dalla Map
+// i record bloccati della vittima, azzerandone il lockout. Si espelle quindi
+// la voce più vecchia NON bloccata: gli username spruzzati producono proprio
+// voci da un tentativo, che sono le prime a sparire.
+// Solo se sono tutte bloccate (>= 50.000 bcrypt per l'attaccante) si ricade
+// sulla più vecchia: rifiutare le chiavi nuove, come fa createRateLimiter,
+// qui impedirebbe il login anche all'utente legittimo.
+// La voce appena scritta è esclusa: altrimenti, con tutte le altre bloccate,
+// il fallimento appena registrato sparirebbe subito.
+function evictOldest(map: Map<string, AttemptRecord>, justWrittenKey: string): void {
   while (map.size > MAX_ENTRIES_PER_MAP) {
-    const oldestKey = map.keys().next().value;
-    if (oldestKey === undefined) break;
-    map.delete(oldestKey);
+    let evictKey: string | undefined;
+    for (const [key, record] of map) {
+      if (key !== justWrittenKey && record.lockedUntil === null) {
+        evictKey = key;
+        break;
+      }
+    }
+    evictKey ??= map.keys().next().value;
+    if (evictKey === undefined) break;
+    map.delete(evictKey);
   }
 }
 
@@ -187,7 +205,7 @@ function recordFailure(
 
   if (!record || isExpired(record, now)) {
     writeRecord(map, key, { count: 1, windowStart: now, lockedUntil: null });
-    evictOldest(map);
+    evictOldest(map, key);
     return;
   }
 
@@ -198,7 +216,7 @@ function recordFailure(
       windowStart: record.windowStart,
       lockedUntil: now + LOCKOUT_MS,
     });
-    evictOldest(map);
+    evictOldest(map, key);
     return;
   }
 
@@ -207,7 +225,7 @@ function recordFailure(
     windowStart: record.windowStart,
     lockedUntil: null,
   });
-  evictOldest(map);
+  evictOldest(map, key);
 }
 
 export function recordFailedLogin(username: string, ip: string): void {

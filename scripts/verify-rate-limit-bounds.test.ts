@@ -10,8 +10,9 @@ import {
 // processo. Senza un tetto, un attaccante che manda uno username/IP diverso
 // a ogni tentativo di login le fa crescere senza limite. Questo test verifica
 // il comportamento osservabile (non lo stato interno): un tetto fisso con
-// eviction della voce meno recentemente scritta, e uno sweep che rimuove le
-// voci scadute indipendentemente dal traffico.
+// eviction della voce meno recentemente scritta tra quelle non bloccate
+// (CR-13), e uno sweep che rimuove le voci scadute indipendentemente dal
+// traffico.
 
 it("sweepExpired rimuove una voce bloccata una volta scaduta", () => {
   const sweepUser = "sweep_test_user";
@@ -33,36 +34,38 @@ it("sweepExpired rimuove una voce bloccata una volta scaduta", () => {
   ).toBe(true);
 });
 
-it("eviction della voce meno recentemente scritta oltre il tetto", () => {
-  const oldestUser = "lru_test_oldest";
-  const oldestIp = "lru_test_oldest_ip";
-  for (let i = 0; i < 5; i++) recordFailedLogin(oldestUser, oldestIp);
+// CR-13: il tetto non deve costare un lockout. Un attaccante che spruzza
+// login falliti su username inventati riempie la Map di voci da un tentativo:
+// sono quelle, non le coppie bloccate, a dover essere espulse.
+it("oltre il tetto espelle le voci non bloccate e conserva i lockout (CR-13)", () => {
+  const victimUser = "lru_test_victim";
+  const victimIp = "lru_test_victim_ip";
+  for (let i = 0; i < 5; i++) recordFailedLogin(victimUser, victimIp);
 
   expect(
-    checkLoginRateLimit(oldestUser, oldestIp).allowed,
-    "la voce più vecchia dovrebbe essere bloccata subito dopo la scrittura"
+    checkLoginRateLimit(victimUser, victimIp).allowed,
+    "dopo 5 fallimenti la coppia della vittima dovrebbe essere bloccata"
   ).toBe(false);
 
-  // Riempie la Map fino al tetto con chiavi distinte (1 fallimento ciascuna,
-  // non abbastanza per bloccarle): porta la Map esattamente a
-  // MAX_ENTRIES_PER_MAP voci, senza ancora far scattare l'eviction.
-  for (let i = 0; i < MAX_ENTRIES_PER_MAP - 1; i++) {
+  const firstFillerUser = "lru_test_filler_0";
+  const firstFillerIp = "lru_test_filler_ip_0";
+  // Ben oltre il tetto: ogni voce nuova fa scattare un'eviction.
+  for (let i = 0; i < MAX_ENTRIES_PER_MAP + 500; i++) {
     recordFailedLogin(`lru_test_filler_${i}`, `lru_test_filler_ip_${i}`);
   }
 
-  const newestUser = "lru_test_newest";
-  const newestIp = "lru_test_newest_ip";
-  // La prima di queste 5 scritture introduce la (MAX_ENTRIES_PER_MAP+1)-esima
-  // chiave distinta: fa scattare l'eviction della voce meno recentemente
-  // scritta, cioè oldestUser/oldestIp.
-  for (let i = 0; i < 5; i++) recordFailedLogin(newestUser, newestIp);
-
   expect(
-    checkLoginRateLimit(oldestUser, oldestIp).allowed,
-    "la voce più vecchia dovrebbe risultare evitta (sbloccata) una volta superato MAX_ENTRIES_PER_MAP"
-  ).toBe(true);
-  expect(
-    checkLoginRateLimit(newestUser, newestIp).allowed,
-    "la voce scritta più di recente non deve essere evitta: deve restare bloccata"
+    checkLoginRateLimit(victimUser, victimIp).allowed,
+    "la coppia bloccata non deve essere espulsa dallo spray di username nuovi"
   ).toBe(false);
+
+  // Il primo filler (1 tentativo, non bloccato) è stato espulso: un nuovo
+  // fallimento riparte da zero, quindi dopo 4 fallimenti non è ancora bloccato.
+  for (let i = 0; i < 4; i++) recordFailedLogin(firstFillerUser, firstFillerIp);
+  expect(
+    checkLoginRateLimit(firstFillerUser, firstFillerIp).allowed,
+    "il filler più vecchio, non bloccato, dovrebbe essere stato espulso"
+  ).toBe(true);
+
+  sweepExpired(Date.now() + 24 * 60 * 60 * 1000);
 });

@@ -68,16 +68,31 @@ export function createRateLimiter(options: {
         return { allowed: true };
       }
 
-      // Se la chiave è nuova e la mappa ha raggiunto la capacità massima,
-      // eseguiamo lo sweep delle chiavi scadute e, se ancora piena, eliminiamo
-      // la voce più vecchia per evitare memory leak.
+      // Tetto di memoria (SEC-04). CR-06: a mappa piena si espelle la voce più
+      // vecchia NON bloccata. Espellere una chiave bloccata ne azzererebbe il
+      // limite, e chi controlla molte chiavi potrebbe farlo di proposito;
+      // perdere una voce sotto soglia regala al più maxRequests - 1 richieste.
+      // Se sono tutte bloccate, la chiave nuova viene rifiutata finché la
+      // prima finestra non scade.
       if (!existingRecord && records.size >= maxEntries) {
         sweepExpired(now);
         if (records.size >= maxEntries) {
-          const oldestKey = records.keys().next().value;
-          if (oldestKey !== undefined) {
-            records.delete(oldestKey);
+          let evictable: string | undefined;
+          let earliestWindowEnd = Infinity;
+          for (const [candidateKey, record] of records) {
+            if (record.count < maxRequests) {
+              evictable = candidateKey;
+              break;
+            }
+            earliestWindowEnd = Math.min(earliestWindowEnd, record.windowStart + windowMs);
           }
+          if (evictable === undefined) {
+            return {
+              allowed: false,
+              retryAfterSeconds: Math.max(1, Math.ceil((earliestWindowEnd - now) / 1000)),
+            };
+          }
+          records.delete(evictable);
         }
       }
 

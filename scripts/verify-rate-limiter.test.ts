@@ -56,27 +56,83 @@ describe("createRateLimiter", () => {
     expect(limiter.consume("b").allowed).toBe(true);
   });
 
-  it("rispetta maxEntries ed applica eviction della chiave più vecchia (SEC-04)", () => {
+  // SEC-04 impone un tetto alla mappa. CR-06: il tetto non deve mai costare un
+  // blocco. A mappa piena si espelle la voce più vecchia NON bloccata; se sono
+  // tutte bloccate, la chiave nuova viene rifiutata.
+  it("rispetta maxEntries espellendo la chiave più vecchia non bloccata (SEC-04, CR-06)", () => {
     const limiter = createRateLimiter({
       maxRequests: 2,
       windowMs: 60000,
       maxEntries: 3,
     });
 
-    // Inseriamo 3 chiavi (raggiunge la capienza massima di 3)
     expect(limiter.consume("key1").allowed).toBe(true);
     expect(limiter.consume("key2").allowed).toBe(true);
     expect(limiter.consume("key3").allowed).toBe(true);
 
-    // Consumiamo di nuovo key1 fino a bloccarla
+    // key1 raggiunge il limite ed è bloccata
     expect(limiter.consume("key1").allowed).toBe(true);
     expect(limiter.consume("key1").allowed).toBe(false);
 
-    // L'inserimento di una 4a chiave 'key4' deve causare l'eviction di 'key1' (la più vecchia)
+    // key4 fa espellere key2 (la più vecchia non bloccata), non key1
     expect(limiter.consume("key4").allowed).toBe(true);
+    expect(limiter.consume("key1").allowed).toBe(false);
 
-    // Poiché key1 è stata evitta, un nuovo consume di key1 riparte da zero (allowed: true)
-    expect(limiter.consume("key1").allowed).toBe(true);
+    // key2 era stata espulsa: riparte da zero
+    expect(limiter.consume("key2").allowed).toBe(true);
+  });
+
+  it("con tutte le chiavi bloccate rifiuta le chiavi nuove senza toccare quelle esistenti (CR-06)", () => {
+    const limiter = createRateLimiter({
+      maxRequests: 1,
+      windowMs: 60000,
+      maxEntries: 2,
+    });
+
+    expect(limiter.consume("a").allowed).toBe(true);
+    expect(limiter.consume("b").allowed).toBe(true);
+    // maxRequests 1: a e b sono già al limite
+
+    const nuova = limiter.consume("c");
+    expect(nuova.allowed).toBe(false);
+    expect(nuova.retryAfterSeconds).toBeGreaterThan(0);
+
+    // i blocchi restano, e c non è stata inserita
+    expect(limiter.consume("a").allowed).toBe(false);
+    expect(limiter.consume("b").allowed).toBe(false);
+    expect(limiter.consume("c").allowed).toBe(false);
+  });
+
+  it("un attaccante con molte chiavi nuove non azzera il blocco di un'altra chiave (CR-06)", () => {
+    const limiter = createRateLimiter({
+      maxRequests: 2,
+      windowMs: 60000,
+      maxEntries: 100,
+    });
+
+    limiter.consume("vittima");
+    limiter.consume("vittima");
+    expect(limiter.consume("vittima").allowed).toBe(false);
+
+    for (let i = 0; i < 1000; i++) {
+      limiter.consume(`spray_${i}`);
+    }
+
+    expect(limiter.consume("vittima").allowed).toBe(false);
+  });
+
+  it("dopo la scadenza delle finestre torna posto per chiavi nuove (CR-06)", async () => {
+    const limiter = createRateLimiter({
+      maxRequests: 1,
+      windowMs: 60,
+      maxEntries: 1,
+    });
+
+    expect(limiter.consume("a").allowed).toBe(true);
+    expect(limiter.consume("b").allowed).toBe(false);
+
+    await sleep(70);
+    expect(limiter.consume("b").allowed).toBe(true);
   });
 });
 
