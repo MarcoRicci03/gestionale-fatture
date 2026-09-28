@@ -30,6 +30,8 @@ export interface FatturaTsListItem {
   // CR-10: invio iniziale partito verso Sogei senza esito certo. Va verificato
   // sul portale prima di sbloccarlo.
   esitoDaVerificare: boolean;
+  // CR-07: annullamento verso Sogei in corso (lock recente).
+  annullamentoInCorso: boolean;
   paganteNomeCompleto: string;
   paganteCf: string | null;
   pazienteNomeCompleto: string;
@@ -104,6 +106,8 @@ export async function getFatturePerInvioTs(
     orderBy: [{ anno: "desc" }, { n_fattura: "desc" }],
   });
 
+  const staleThresholdMs = Date.now() - STALE_LOCK_MINUTES * 60 * 1000;
+
   return invoices.map((inv) => {
     const anagrafica = resolveAnagrafica(inv);
     const cf = anagrafica.pagante.cf?.trim() ?? null;
@@ -151,6 +155,9 @@ export async function getFatturePerInvioTs(
         inv.stato_ts === "IN_TRASMISSIONE" &&
         inv.protocollo_ts === null &&
         inv.invio_avviato_ts !== null,
+      annullamentoInCorso:
+        inv.annullamento_avviato_ts !== null &&
+        inv.annullamento_avviato_ts.getTime() >= staleThresholdMs,
       paganteNomeCompleto: `${anagrafica.pagante.cognome} ${anagrafica.pagante.nome}`,
       paganteCf: cf,
       pazienteNomeCompleto: `${anagrafica.paziente.cognome} ${anagrafica.paziente.nome}`,
@@ -170,6 +177,7 @@ import {
   getErrorsForInvoice,
   type ErroreDocumentoTs,
 } from "@/lib/sistemats/csv-parser";
+import { STALE_LOCK_MINUTES } from "@/lib/sistemats/lock-timing";
 
 export { parseCsvErroriTs, getErrorsForInvoice, type ErroreDocumentoTs };
 

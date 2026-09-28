@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { buildSistemaTsXml, createZipArchive } from "@/lib/sistemats/xml-builder";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa } from "@/lib/sistemats/payload-builder";
@@ -41,22 +42,6 @@ export async function annullaFatturaTsService(params: {
 }): Promise<CancellationResult> {
   const { userId, invoiceId } = params;
 
-  // Recupero automatico self-healing per lock orfani di cancellazione rimasti in IN_TRASMISSIONE
-  // oltre il timeout massimo di chiamata a Sogei (120s). Finestra di sicurezza: 5 minuti.
-  const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
-  await prisma.pagamento.updateMany({
-    where: {
-      id: invoiceId,
-      id_Utente: userId,
-      stato_ts: "IN_TRASMISSIONE",
-      protocollo_ts: { not: null },
-      data_invio_ts: { lt: staleThreshold },
-    },
-    data: {
-      stato_ts: "DA_CANCELLARE_SU_TS",
-    },
-  });
-
   const invoice = await prisma.pagamento.findFirst({
     where: { id: invoiceId, id_Utente: userId },
     include: { pagante: true, paziente: true },
@@ -94,37 +79,46 @@ export async function annullaFatturaTsService(params: {
     };
   }
 
-  // Lock atomico preventivo: blocca la fattura in IN_TRASMISSIONE prima della chiamata di rete verso Sogei
+  // CR-07: lock dedicato all'annullamento. La fattura resta INVIATA o
+  // DA_CANCELLARE_SU_TS (stati già protetti da modifica e cancellazione) e
+  // data_invio_ts, la data dell'invio originale, non viene toccata. Un lock più
+  // vecchio di STALE_LOCK_MINUTES non ha più una chiamata in volo, perché
+  // inviaFile dura al massimo MAX_DURATA_INVIO_MS (CR-11), e viene superato.
   const lockTimestamp = new Date();
+  const staleThreshold = new Date(lockTimestamp.getTime() - STALE_LOCK_MINUTES * 60 * 1000);
   const lockResult = await prisma.pagamento.updateMany({
     where: {
       id: invoiceId,
       id_Utente: userId,
       stato_ts: { in: ["INVIATA", "DA_CANCELLARE_SU_TS"] },
+      OR: [
+        { annullamento_avviato_ts: null },
+        { annullamento_avviato_ts: { lt: staleThreshold } },
+      ],
     },
-    data: {
-      stato_ts: "IN_TRASMISSIONE",
-      data_invio_ts: lockTimestamp,
-    },
+    data: { annullamento_avviato_ts: lockTimestamp },
   });
 
   if (!lockResult || lockResult.count === 0) {
     return {
       success: false,
-      error: "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
+      error: "È già in corso un annullamento per questa fattura. Attendi il completamento e ricarica la pagina.",
     };
   }
+
+  // Ogni uscita rilascia solo il proprio lock: se è scaduto ed è stato ripreso
+  // da un'altra richiesta, la where non trova la riga e non tocca nulla.
+  const rilasciaLock = (data: Prisma.PagamentoUpdateManyMutationInput = {}) =>
+    prisma.pagamento.updateMany({
+      where: { id: invoiceId, id_Utente: userId, annullamento_avviato_ts: lockTimestamp },
+      data: { ...data, annullamento_avviato_ts: null },
+    });
 
   let clientInfo;
   try {
     clientInfo = await getClientForUser(userId);
   } catch (err) {
-    await prisma.pagamento.update({
-      where: { id: invoiceId },
-      data: {
-        stato_ts: invoice.stato_ts,
-      },
-    });
+    await rilasciaLock();
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 
@@ -189,11 +183,12 @@ export async function annullaFatturaTsService(params: {
           },
         });
 
-        await tx.pagamento.update({
-          where: { id: invoiceId },
+        await tx.pagamento.updateMany({
+          where: { id: invoiceId, id_Utente: userId, annullamento_avviato_ts: lockTimestamp },
           data: {
             stato_ts: "DA_CANCELLARE_SU_TS",
             protocollo_cancellazione_ts: protocollo,
+            annullamento_avviato_ts: null,
           },
         });
       });
@@ -208,12 +203,7 @@ export async function annullaFatturaTsService(params: {
       };
     } else {
       // Errore di connessione o scarto MEF: contrassegna come DA_CANCELLARE_SU_TS
-      await prisma.pagamento.update({
-        where: { id: invoiceId },
-        data: {
-          stato_ts: "DA_CANCELLARE_SU_TS",
-        },
-      });
+      await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS" });
 
       return {
         success: false,
@@ -226,12 +216,7 @@ export async function annullaFatturaTsService(params: {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("annullaFatturaTs network error", error);
-    await prisma.pagamento.update({
-      where: { id: invoiceId },
-      data: {
-        stato_ts: "DA_CANCELLARE_SU_TS",
-      },
-    });
+    await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS" });
 
     return {
       success: false,
@@ -271,17 +256,17 @@ export async function ripristinaFatturaPerReinvioService(params: {
 
   // CR-03: una fattura IN_TRASMISSIONE si può sbloccare solo se è un invio
   // iniziale (protocollo_ts nullo) il cui lock è ormai orfano. Con protocollo
-  // valorizzato è già sul Sistema TS (annullamento in corso, oppure lotto
-  // acquisito ma non registrato — CR-02): riportarla in DA_INVIARE la farebbe
-  // reinviare in duplicato e perderebbe il protocollo. Con un lock recente la
-  // chiamata a Sogei può essere ancora in volo.
+  // valorizzato è un lotto acquisito da Sogei ma non registrato (CR-02; dopo
+  // CR-07 l'annullamento non usa più IN_TRASMISSIONE): riportarla in
+  // DA_INVIARE la farebbe reinviare in duplicato e perderebbe il protocollo.
+  // Con un lock recente la chiamata a Sogei può essere ancora in volo.
   const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
   if (invoice.stato_ts === "IN_TRASMISSIONE") {
     if (invoice.protocollo_ts) {
       return {
         success: false,
         error:
-          `La fattura risulta già trasmessa al Sistema TS (protocollo ${invoice.protocollo_ts}) o è in corso un annullamento: ` +
+          `Il Sistema TS ha acquisito questa fattura (protocollo ${invoice.protocollo_ts}), ma l'invio non è stato registrato nel gestionale: ` +
           "non può tornare in 'Da Inviare'. Contatta l'assistenza indicando il protocollo.",
       };
     }

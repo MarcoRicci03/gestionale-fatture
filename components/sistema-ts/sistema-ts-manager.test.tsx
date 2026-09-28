@@ -51,6 +51,7 @@ describe("SistemaTsManager", () => {
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
       esitoDaVerificare: false,
+      annullamentoInCorso: false,
       paganteNomeCompleto: "Luigi Bianchi",
       paganteCf: "BNCLGI75C12F205E",
       pazienteNomeCompleto: "Luigi Bianchi",
@@ -80,6 +81,7 @@ describe("SistemaTsManager", () => {
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
       esitoDaVerificare: false,
+      annullamentoInCorso: false,
       paganteNomeCompleto: "Mario Rossi",
       paganteCf: "INVALID_CF",
       pazienteNomeCompleto: "Mario Rossi",
@@ -110,6 +112,7 @@ describe("SistemaTsManager", () => {
       protocollo_cancellazione_ts: null,
       data_invio_ts: new Date("2026-03-02T10:00:00Z"),
       esitoDaVerificare: false,
+      annullamentoInCorso: false,
       paganteNomeCompleto: "Anna Verdi",
       paganteCf: "VRDNNA80A41H501Z",
       pazienteNomeCompleto: "Anna Verdi",
@@ -140,6 +143,7 @@ describe("SistemaTsManager", () => {
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
       esitoDaVerificare: false,
+      annullamentoInCorso: false,
       paganteNomeCompleto: "Marco Neri",
       paganteCf: "NRIMRC85M01H501U",
       pazienteNomeCompleto: "Marco Neri",
@@ -620,5 +624,23 @@ describe("SistemaTsManager", () => {
         confermaEsitoVerificato: true,
       })
     );
+  });
+
+  it("CR-07: durante un annullamento mostra il badge e disabilita 'Annulla TS'", async () => {
+    const inviata = mockFatture.find((f) => f.stato_ts === "INVIATA");
+    expect(inviata).toBeDefined();
+
+    render(
+      <SistemaTsManager
+        {...defaultProps}
+        fatture={[{ ...inviata!, annullamentoInCorso: true }]}
+        filters={{ ...defaultProps.filters, stato: "INVIATA" }}
+      />
+    );
+
+    expect(screen.getAllByText(/Annullamento in corso/i).length).toBeGreaterThan(0);
+    for (const button of screen.getAllByRole("button", { name: /Annulla TS/i })) {
+      expect(button).toBeDisabled();
+    }
   });
 });

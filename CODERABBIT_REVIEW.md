@@ -3,7 +3,7 @@
 - **Data:** 2026-09-28
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
-- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-06`. Gli altri non sono ancora stati verificati sul codice.
+- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-07`. Gli altri non sono ancora stati verificati sul codice.
 - **Verifica dei fix (2026-09-28):** ricontrollando `CR-01`…`CR-05` sono emersi tre problemi residui, `CR-10`…`CR-12`, ora risolti. Non vengono da CodeRabbit.
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
@@ -14,7 +14,7 @@
 | `CR-04` | **Major** | [`lib/actions/invoices.ts:304-310`](./lib/actions/invoices.ts#L304-L310) | In `updateInvoice` e `refreshInvoiceAnagrafica` l'update non filtra su `stato_ts`. Una race può modificare una fattura appena inviata al Sistema TS. | Aggiungere `stato_ts: "DA_INVIARE"` alla `where` dell'update. Se il record non viene trovato, restituire `FATTURA_GIA_INVIATA_TS_ERROR`. | ✅ RISOLTO |
 | `CR-05` | **Major** | [`lib/sistemats/services/correction.service.ts:143-147`](./lib/sistemats/services/correction.service.ts#L143-L147) | La correzione sovrascrive campi che il client non ha inviato (`data_pagamento`, `pagamento_tracciato`, `bolloCodice`). Quando `targetCf` è null, perde `pagante.cf` dallo snapshot. | Aggiornare solo i campi forniti e conservare `currentSnap.pagante.cf`. In `correggiFatturaTsSchema`, rendere `dataPagamento` e `pagamentoTracciato` opzionali senza default. | ✅ RISOLTO |
 | `CR-06` | **Major** | [`lib/auth/rate-limiter.ts:74-81`](./lib/auth/rate-limiter.ts#L74-L81) | Quando il limiter raggiunge `maxEntries`, elimina il record più vecchio. Un attaccante che riempie la mappa può azzerare il limite di altre chiavi. | Se dopo `sweepExpired` la mappa è ancora piena, rifiutare la nuova chiave con `retryAfterSeconds` e non toccare i record esistenti. | ✅ RISOLTO |
-| `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ⏳ DA VERIFICARE |
+| `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ✅ RISOLTO |
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
 | `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ✅ RISOLTO |
@@ -77,7 +77,7 @@ Il problema è confermato ed è più ampio del rilievo. Il pulsante "Sblocca" (`
   - la scrittura ora è un `updateMany` condizionato, che ripete le stesse condizioni nella `where`: per `ANNULLATA_TS` lo stato, per `IN_TRASMISSIONE` protocollo nullo e lock scaduto. Con `count === 0` non si ripristina nulla e non si scrive l'audit.
 - **`STALE_LOCK_MINUTES`:** prima era duplicato in due service, ora è esportato una sola volta da `transmission.service.ts`.
 
-**Limite residuo:** una fattura rimasta `IN_TRASMISSIONE` con protocollo dopo un annullamento interrotto da un crash non si può più sbloccare dall'interfaccia e va sistemata a mano. È raro, perché il flusso di annullamento rilascia il lock su tutti gli errori gestiti. Se capita, la si può distinguere dal caso CR-02 controllando se esiste un `TrasmissioneTs` con quel protocollo e spostarla su `DA_CANCELLARE_SU_TS`.
+**Limite residuo (chiuso da CR-07):** una fattura rimasta `IN_TRASMISSIONE` con protocollo dopo un annullamento interrotto da un crash non si poteva più sbloccare dall'interfaccia e andava sistemata a mano. Dopo CR-07 l'annullamento non usa più `IN_TRASMISSIONE`, quindi la combinazione indica solo il caso CR-02. È raro, perché il flusso di annullamento rilascia il lock su tutti gli errori gestiti. Se capita, la si può distinguere dal caso CR-02 controllando se esiste un `TrasmissioneTs` con quel protocollo e spostarla su `DA_CANCELLARE_SU_TS`.
 
 **Test:**
 - `lib/actions/sistema-ts.test.ts`: la scrittura condizionata per `ANNULLATA_TS` e il caso `count: 0`.
@@ -224,3 +224,39 @@ Il problema è confermato. Il tetto di memoria di SEC-04 espelleva la voce più 
   - il ritorno di spazio dopo la scadenza delle finestre.
 - `scripts/verify-rate-limit-bounds.test.ts`: con `MAX_ENTRIES_PER_MAP + 500` login su username nuovi, la coppia bloccata resta bloccata e il filler più vecchio (non bloccato) viene espulso.
 - Risultato di `npm test`: 1195/1195 passati.
+
+### CR-07 — il lock dell'annullamento sovrascriveva `data_invio_ts`
+
+Il problema è confermato, e l'effetto più serio non è la data persa. Il lock dell'annullamento portava la fattura a `IN_TRASMISSIONE` e scriveva `data_invio_ts = lockTimestamp`, e nessun percorso d'uscita ripristinava la data dell'invio originale. La data sopravviveva solo in `TrasmissioneTs.dataInvio`, mentre il campo sulla fattura diventava falso. Inoltre `IN_TRASMISSIONE` con `protocollo_ts` voleva dire due cose opposte: un annullamento in corso oppure un lotto acquisito ma non registrato (CR-02). Il recupero dei lock orfani dell'annullamento le trattava entrambe come annullamenti. Il percorso "credenziali mancanti" ripristinava lo stato con un `update` non condizionato.
+
+**Correzioni:**
+- **Schema:** nuovo campo `Pagamento.annullamento_avviato_ts` (migration `add_annullamento_avviato_ts`).
+- **`lib/sistemats/services/cancellation.service.ts` → `annullaFatturaTsService`:**
+  - il lock è un `updateMany` condizionato su `stato_ts ∈ {INVIATA, DA_CANCELLARE_SU_TS}` e su `annullamento_avviato_ts` nullo o più vecchio di `STALE_LOCK_MINUTES`. La chiamata dura al massimo `MAX_DURATA_INVIO_MS` (CR-11), quindi un lock scaduto non ha più una chiamata in volo e viene superato;
+  - la fattura resta nel suo stato durante la chiamata. Quegli stati sono già protetti da modifica e cancellazione, e l'invio iniziale non li tocca;
+  - `data_invio_ts` non viene mai scritta;
+  - tolto il recupero dei lock orfani basato su `IN_TRASMISSIONE` più protocollo;
+  - ogni uscita rilascia solo il proprio lock (`where` su `annullamento_avviato_ts: lockTimestamp`). Nel caso "credenziali mancanti" lo stato resta invariato; nel successo e nel fallback la fattura passa a `DA_CANCELLARE_SU_TS` come prima.
+- **`ripristinaFatturaPerReinvioService`:** `IN_TRASMISSIONE` con protocollo ora è solo il caso CR-02, e il messaggio lo dice.
+- **UI:** `FatturaTsListItem.annullamentoInCorso` (lock non scaduto). In `lotti-tab.tsx`, vista desktop e mobile, compare il badge "Annullamento in corso" e "Annulla TS" è disabilitato.
+
+**Prima del deploy in produzione:** eseguire questa query in sola lettura.
+```sql
+SELECT p.id, p.protocollo_ts, p.data_invio_ts,
+       EXISTS (SELECT 1 FROM trasmissioni_ts t WHERE t.protocollo = p.protocollo_ts) AS lotto_registrato
+FROM pagamenti p
+WHERE p.stato_ts = 'IN_TRASMISSIONE' AND p.protocollo_ts IS NOT NULL;
+```
+- Una riga con `lotto_registrato = true` è un annullamento interrotto con il vecchio codice, che il nuovo non recupera più: va portata a mano a `DA_CANCELLARE_SU_TS`.
+- Con `false` è il caso CR-02 e resta com'è.
+
+**Test:**
+- `lib/actions/sistema-ts-cancellation.test.ts`, blocco "CR-07":
+  - il lock scrive solo `annullamento_avviato_ts`;
+  - con un annullamento già in corso il secondo viene rifiutato senza chiamare Sogei;
+  - senza credenziali il lock viene rilasciato e lo stato resta invariato;
+  - il rilascio usa lo stesso timestamp del lock.
+- Aggiornate le asserzioni sull'annullamento in `sistema-ts.test.ts`, `sistema-ts-concurrency.test.ts` (anche il messaggio CR-03) e `sistema-ts-cancellation.test.ts`.
+- `lib/data/sistema-ts.test.ts`: `annullamentoInCorso` è vero solo con un lock non scaduto.
+- `components/sistema-ts/sistema-ts-manager.test.tsx`: il badge e il pulsante disabilitato.
+- Risultato di `npm test`: 1201/1201 passati. `npm run test:db`: 6/6, tutte le migration applicate.

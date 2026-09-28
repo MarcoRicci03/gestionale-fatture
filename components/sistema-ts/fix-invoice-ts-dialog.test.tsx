@@ -32,6 +32,7 @@ describe("FixInvoiceTsDialog", () => {
     protocollo_cancellazione_ts: null,
     data_invio_ts: null,
     esitoDaVerificare: false,
+    annullamentoInCorso: false,
     paganteNomeCompleto: "Rossi Mario",
     paganteCf: "WRONG_CF",
     pazienteNomeCompleto: "Rossi Luigi",

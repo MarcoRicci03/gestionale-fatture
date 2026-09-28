@@ -205,6 +205,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
       protocollo_ts: null,
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
+      invio_avviato_ts: null,
+      annullamento_avviato_ts: null,
       pagante: {
         nome: "Mario",
         cognome: "Rossi",
@@ -233,6 +235,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
       protocollo_ts: null,
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
+      invio_avviato_ts: null,
+      annullamento_avviato_ts: null,
       pagante: {
         nome: "Anna",
         cognome: "Verdi",
@@ -261,6 +265,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
       protocollo_ts: "PROT_99",
       protocollo_cancellazione_ts: null,
       data_invio_ts: new Date("2026-03-12"),
+      invio_avviato_ts: null,
+      annullamento_avviato_ts: null,
       pagante: {
         nome: "Giulia",
         cognome: "Neri",
@@ -355,6 +361,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
         protocollo_ts: null,
         protocollo_cancellazione_ts: null,
         data_invio_ts: null,
+        invio_avviato_ts: null,
+        annullamento_avviato_ts: null,
         pagante: { nome: "Paolo", cognome: "Gialli", cf: "RSSMRA85M01H501Q" },
         paziente: { nome: "Paolo", cognome: "Gialli", cf: "RSSMRA85M01H501Q" },
       },
@@ -600,5 +608,46 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
     expect(result[1].fatture[0].id).toBe(77);
     expect(result[1].fatture[0].esitoFattura).toBe("SCARTATA");
     expect(result[1].fatture[0].errori[0].codiceErrore).toBe("S050");
+  });
+});
+
+describe("lib/data/sistema-ts — annullamentoInCorso (CR-07)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPagamentoFindMany.mockReset();
+  });
+
+  const inviata = (id: number, annullamento_avviato_ts: Date | null) => ({
+    id,
+    n_fattura: id,
+    anno: 2026,
+    data: new Date("2026-03-12"),
+    prezzo_totale: new Prisma.Decimal("50.00"),
+    mod_pag: $Enums.ModalitaPagamento.BONIFICO,
+    pagamento_tracciato: true,
+    natura_iva: "N2.2",
+    flag_opposizione: false,
+    bollo: new Prisma.Decimal("0.00"),
+    bolloCodice: null,
+    stato_ts: $Enums.StatoTs.INVIATA,
+    protocollo_ts: "PROT_1",
+    protocollo_cancellazione_ts: null,
+    data_invio_ts: new Date("2026-03-12"),
+    invio_avviato_ts: null,
+    annullamento_avviato_ts,
+    pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    paziente: { nome: "Mario", cognome: "Rossi" },
+  });
+
+  it("è vero solo con un lock di annullamento non scaduto", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      inviata(1, null),
+      inviata(2, new Date(Date.now() - 60 * 1000)),
+      inviata(3, new Date(Date.now() - 60 * 60 * 1000)),
+    ]);
+
+    const items = await getFatturePerInvioTs(1);
+
+    expect(items.map((i) => i.annullamentoInCorso)).toEqual([false, true, false]);
   });
 });

@@ -432,10 +432,10 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     mockPagamentoFindFirst.mockResolvedValue(invoice);
 
     let locked = false;
-    mockPagamentoUpdateMany.mockImplementation(async (args?: { where?: { data_invio_ts?: unknown } }) => {
-      // Stale recovery (controlla data_invio_ts < soglia): nessun lock orfano
-      if (args?.where?.data_invio_ts) {
-        return { count: 0 };
+    mockPagamentoUpdateMany.mockImplementation(async (args?: { where?: { annullamento_avviato_ts?: unknown } }) => {
+      // Rilascio del proprio lock (CR-07): where condizionata sul lockTimestamp
+      if (args?.where?.annullamento_avviato_ts instanceof Date) {
+        return { count: 1 };
       }
       // Tentativo di lock atomico: solo la prima chiamata concorrente ottiene il lock (CAS)
       if (!locked) {
@@ -461,7 +461,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     expect(res2).toEqual({
       success: false,
       error:
-        "La fattura è attualmente in fase di trasmissione. Attendi il completamento prima di annullarla.",
+        "È già in corso un annullamento per questa fattura. Attendi il completamento e ricarica la pagina.",
     });
 
     // CRITICO: Sogei inviaFile deve essere stato chiamato ESATTAMENTE UNA SOLA VOLTA!
@@ -551,7 +551,8 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
 
     expect(result).toEqual({
       success: false,
-      error: expect.stringContaining("protocollo PROT-GIA-ACQUISITO"),
+      // CR-07: con protocollo è solo il caso CR-02 (lotto acquisito ma non registrato)
+      error: expect.stringMatching(/protocollo PROT-GIA-ACQUISITO.*non è stato registrato/),
     });
     expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
     expect(mockPagamentoUpdate).not.toHaveBeenCalled();

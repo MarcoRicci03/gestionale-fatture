@@ -161,6 +161,9 @@ model Pagamento {
   // stato_ts IN_TRASMISSIONE e protocollo_ts nullo significa "esito incerto":
   // Sogei potrebbe aver ricevuto il file, quindi niente sblocco automatico.
   invio_avviato_ts            DateTime?
+  // CR-07: lock dell'annullamento in corso verso Sogei. L'annullamento non
+  // usa IN_TRASMISSIONE né data_invio_ts, che resta la data dell'invio originale.
+  annullamento_avviato_ts     DateTime?
   // Relazione molti-a-molti con TrasmissioneTs tramite tabella ponte _FattureTrasmissioni.
   // Conserva lo storico completo di ogni trasmissione (invio, reinvio e cancellazione).
   trasmissioniTs              TrasmissioneTs[] @relation("FattureTrasmissioni")

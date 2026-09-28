@@ -1164,12 +1164,11 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
       })
     );
 
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 10 },
-        data: { stato_ts: "DA_CANCELLARE_SU_TS" },
-      })
-    );
+    // CR-07: rilascio del proprio lock, data_invio_ts non viene toccata
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 10, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
+      data: { stato_ts: "DA_CANCELLARE_SU_TS", annullamento_avviato_ts: null },
+    });
   });
 
   it("imposta DA_CANCELLARE_SU_TS e fallback=true su eccezione di rete", async () => {
@@ -1195,12 +1194,10 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     );
     expect(result).toHaveProperty("error");
 
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 11 },
-        data: { stato_ts: "DA_CANCELLARE_SU_TS" },
-      })
-    );
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 11, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
+      data: { stato_ts: "DA_CANCELLARE_SU_TS", annullamento_avviato_ts: null },
+    });
   });
 
   it("include la riga bollo nel payload di cancellazione se la fattura ha il bollo applicato", async () => {

@@ -426,12 +426,17 @@ export function LottiTab({
                             <AlertTriangle className="mr-1 h-3 w-3" /> Esito da verificare
                           </span>
                         )}
-                        {f.stato_ts === "INVIATA" && (
+                        {f.annullamentoInCorso && (
+                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                            <Clock className="mr-1 h-3 w-3 animate-spin" /> Annullamento in corso
+                          </span>
+                        )}
+                        {f.stato_ts === "INVIATA" && !f.annullamentoInCorso && (
                           <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/30 dark:text-emerald-400">
                             <CheckCircle2 className="mr-1 h-3 w-3" /> Inviata
                           </span>
                         )}
-                        {f.stato_ts === "DA_CANCELLARE_SU_TS" && (
+                        {f.stato_ts === "DA_CANCELLARE_SU_TS" && !f.annullamentoInCorso && (
                           <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
                             <AlertTriangle className="mr-1 h-3 w-3" />
                             {f.protocollo_cancellazione_ts ? "Canc. in corso" : "Da cancellare"}
@@ -474,7 +479,7 @@ export function LottiTab({
                                   paganteNome: f.paganteNomeCompleto,
                                 })
                               }
-                              disabled={isPending}
+                              disabled={isPending || f.annullamentoInCorso}
                             >
                               <Ban className="mr-1 h-3 w-3" />
                               Annulla TS
@@ -618,10 +623,15 @@ export function LottiTab({
                         {f.stato_ts === "DA_INVIARE" && isReady && (
                           <span className="text-blue-600 font-medium">Pronta</span>
                         )}
-                        {f.stato_ts === "INVIATA" && (
+                        {f.annullamentoInCorso && (
+                          <span className="text-amber-600 font-medium inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3 animate-spin" /> Annullamento in corso
+                          </span>
+                        )}
+                        {f.stato_ts === "INVIATA" && !f.annullamentoInCorso && (
                           <span className="text-emerald-600 font-medium">Inviata</span>
                         )}
-                        {f.stato_ts === "DA_CANCELLARE_SU_TS" && (
+                        {f.stato_ts === "DA_CANCELLARE_SU_TS" && !f.annullamentoInCorso && (
                           <span className="text-amber-600 font-medium">
                             {f.protocollo_cancellazione_ts ? "Canc. in corso" : "Da cancellare"}
                           </span>
@@ -664,7 +674,7 @@ export function LottiTab({
                               paganteNome: f.paganteNomeCompleto,
                             })
                           }
-                          disabled={isPending}
+                          disabled={isPending || f.annullamentoInCorso}
                         >
                           <Ban className="mr-1 h-3 w-3" />
                           Annulla TS

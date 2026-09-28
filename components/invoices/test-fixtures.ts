@@ -68,6 +68,7 @@ export function makeInvoice(
     protocollo_cancellazione_ts: null,
     data_invio_ts: null,
     invio_avviato_ts: null,
+    annullamento_avviato_ts: null,
     flag_opposizione: false,
     pagamento_tracciato: true,
     natura_iva: "N2.2",
