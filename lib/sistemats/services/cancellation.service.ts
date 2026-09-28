@@ -25,6 +25,10 @@ export type ReissueResult =
   | {
       success: true;
       invoice: { n_fattura: number; anno: number; statoPrecedente: string };
+      // CR-10: presente solo per lo sblocco confermato di un invio con esito
+      // incerto, che rilascia tutte le fatture dello stesso lotto.
+      esitoIncertoConfermato?: boolean;
+      numFatture: number;
     }
   | {
       success: false;
@@ -241,8 +245,11 @@ export async function annullaFatturaTsService(params: {
 export async function ripristinaFatturaPerReinvioService(params: {
   userId: number;
   invoiceId: number;
+  // CR-10: l'utente dichiara di aver verificato sul portale Sistema TS che il
+  // lotto con esito incerto non è stato acquisito.
+  confermaEsitoVerificato?: boolean;
 }): Promise<ReissueResult> {
-  const { userId, invoiceId } = params;
+  const { userId, invoiceId, confermaEsitoVerificato = false } = params;
 
   const invoice = await prisma.pagamento.findFirst({
     where: { id: invoiceId, id_Utente: userId },
@@ -284,6 +291,57 @@ export async function ripristinaFatturaPerReinvioService(params: {
         error: "Trasmissione in corso: riprova tra qualche minuto.",
       };
     }
+    // CR-10: la chiamata a Sogei è partita senza un esito certo. Si sblocca
+    // solo su conferma esplicita, e l'intero lotto insieme.
+    if (invoice.invio_avviato_ts) {
+      if (invoice.invio_avviato_ts >= staleThreshold) {
+        return {
+          success: false,
+          error: "Trasmissione in corso: riprova tra qualche minuto.",
+        };
+      }
+      if (!confermaEsitoVerificato) {
+        return {
+          success: false,
+          error:
+            "Esito dell'invio incerto: verifica sul portale Sistema TS che il lotto non sia stato acquisito, poi conferma lo sblocco.",
+        };
+      }
+
+      const lotto = await prisma.pagamento.updateMany({
+        where: {
+          id_Utente: userId,
+          stato_ts: "IN_TRASMISSIONE",
+          protocollo_ts: null,
+          data_invio_ts: invoice.data_invio_ts,
+          invio_avviato_ts: { lt: staleThreshold },
+        },
+        data: {
+          stato_ts: "DA_INVIARE",
+          protocollo_ts: null,
+          data_invio_ts: null,
+          invio_avviato_ts: null,
+        },
+      });
+
+      if (lotto.count === 0) {
+        return {
+          success: false,
+          error: "Lo stato della fattura è cambiato nel frattempo: ricarica la pagina.",
+        };
+      }
+
+      return {
+        success: true,
+        invoice: {
+          n_fattura: invoice.n_fattura,
+          anno: invoice.anno,
+          statoPrecedente: invoice.stato_ts,
+        },
+        esitoIncertoConfermato: true,
+        numFatture: lotto.count,
+      };
+    }
   }
 
   // Scrittura condizionata: se lo stato è cambiato tra la lettura e qui
@@ -296,6 +354,7 @@ export async function ripristinaFatturaPerReinvioService(params: {
             id_Utente: userId,
             stato_ts: "IN_TRASMISSIONE",
             protocollo_ts: null,
+            invio_avviato_ts: null,
             data_invio_ts: { lt: staleThreshold },
           }
         : { id: invoiceId, id_Utente: userId, stato_ts: "ANNULLATA_TS" },
@@ -320,5 +379,6 @@ export async function ripristinaFatturaPerReinvioService(params: {
       anno: invoice.anno,
       statoPrecedente: invoice.stato_ts,
     },
+    numFatture: result.count,
   };
 }

@@ -79,6 +79,8 @@ describe("DRY-05: Test unitari funzionali su rollbackStatoTrasmissione", () => {
       data: {
         stato_ts: "DA_INVIARE",
         data_invio_ts: null,
+        // CR-10: il rollback segue un rifiuto certo, il segno di invio avviato va tolto.
+        invio_avviato_ts: null,
       },
     });
   });
@@ -101,6 +103,8 @@ describe("DRY-05: Test unitari funzionali su rollbackStatoTrasmissione", () => {
       data: {
         stato_ts: "DA_INVIARE",
         data_invio_ts: null,
+        // CR-10: il rollback segue un rifiuto certo, il segno di invio avviato va tolto.
+        invio_avviato_ts: null,
       },
     });
   });

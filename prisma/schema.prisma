@@ -157,6 +157,10 @@ model Pagamento {
   protocollo_ts               String?
   protocollo_cancellazione_ts String?
   data_invio_ts               DateTime?
+  // CR-10: istante in cui è partita la chiamata di invio a Sogei. Con
+  // stato_ts IN_TRASMISSIONE e protocollo_ts nullo significa "esito incerto":
+  // Sogei potrebbe aver ricevuto il file, quindi niente sblocco automatico.
+  invio_avviato_ts            DateTime?
   // Relazione molti-a-molti con TrasmissioneTs tramite tabella ponte _FattureTrasmissioni.
   // Conserva lo storico completo di ogni trasmissione (invio, reinvio e cancellazione).
   trasmissioniTs              TrasmissioneTs[] @relation("FattureTrasmissioni")

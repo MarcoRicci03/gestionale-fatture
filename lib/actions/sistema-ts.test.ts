@@ -693,11 +693,11 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(result).toHaveProperty("success", false);
     expect(result).toHaveProperty("error", expect.stringContaining("Esito della trasmissione incerto"));
     expect(result).toHaveProperty("error", expect.stringContaining("Timeout"));
-    // Il rollback a DA_INVIARE resta invariato (CR-02/CR-03 fuori scope).
-    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+    // CR-10: niente rollback, le fatture restano bloccate come "Esito da verificare".
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: { in: [5] } }),
-        data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+        data: expect.objectContaining({ stato_ts: "DA_INVIARE" }),
       })
     );
   });

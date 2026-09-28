@@ -50,6 +50,7 @@ describe("SistemaTsManager", () => {
       protocollo_ts: null,
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
+      esitoDaVerificare: false,
       paganteNomeCompleto: "Luigi Bianchi",
       paganteCf: "BNCLGI75C12F205E",
       pazienteNomeCompleto: "Luigi Bianchi",
@@ -78,6 +79,7 @@ describe("SistemaTsManager", () => {
       protocollo_ts: null,
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
+      esitoDaVerificare: false,
       paganteNomeCompleto: "Mario Rossi",
       paganteCf: "INVALID_CF",
       pazienteNomeCompleto: "Mario Rossi",
@@ -107,6 +109,7 @@ describe("SistemaTsManager", () => {
       protocollo_ts: "PROT-2026-001",
       protocollo_cancellazione_ts: null,
       data_invio_ts: new Date("2026-03-02T10:00:00Z"),
+      esitoDaVerificare: false,
       paganteNomeCompleto: "Anna Verdi",
       paganteCf: "VRDNNA80A41H501Z",
       pazienteNomeCompleto: "Anna Verdi",
@@ -136,6 +139,7 @@ describe("SistemaTsManager", () => {
       protocollo_ts: null,
       protocollo_cancellazione_ts: null,
       data_invio_ts: null,
+      esitoDaVerificare: false,
       paganteNomeCompleto: "Marco Neri",
       paganteCf: "NRIMRC85M01H501U",
       pazienteNomeCompleto: "Marco Neri",
@@ -568,5 +572,53 @@ describe("SistemaTsManager", () => {
     await user.click(closeBtn);
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("CR-10: un invio con esito incerto si sblocca solo dal dialog con la verifica confermata", async () => {
+    const user = userEvent.setup();
+    mockRipristinaFatturaPerReinvio.mockResolvedValueOnce({
+      success: true,
+      message: 'Lotto sbloccato: 1 fattura riportata su "Da Inviare".',
+    });
+    const incerta: FatturaTsListItem = {
+      ...mockFatture[0],
+      id: 9,
+      stato_ts: "IN_TRASMISSIONE",
+      data_invio_ts: new Date("2026-03-02T10:00:00Z"),
+      esitoDaVerificare: true,
+      isProntaPerInvio: false,
+    };
+
+    render(
+      <SistemaTsManager
+        {...defaultProps}
+        fatture={[incerta]}
+        filters={{ dateFrom: "", dateTo: "", stato: "IN_TRASMISSIONE" }}
+      />
+    );
+    const tutte = screen.queryByRole("button", { name: /Tutte/i });
+    if (tutte) await user.click(tutte);
+
+    expect(screen.getAllByText(/Esito da verificare/i).length).toBeGreaterThan(0);
+    // "In trasmissione" resta solo come opzione del filtro di stato, non come badge.
+    expect(
+      screen.queryAllByText(/In trasmissione/i).filter((el) => el.tagName !== "OPTION")
+    ).toHaveLength(0);
+
+    await user.click(screen.getAllByRole("button", { name: /Verifica e sblocca/i })[0]);
+
+    const conferma = screen.getByRole("button", { name: /Sblocca il lotto/i });
+    expect(conferma).toBeDisabled();
+    expect(mockRipristinaFatturaPerReinvio).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("checkbox", { name: /Ho verificato sul portale/i }));
+    expect(conferma).not.toBeDisabled();
+    await user.click(conferma);
+
+    await waitFor(() =>
+      expect(mockRipristinaFatturaPerReinvio).toHaveBeenCalledWith(9, {
+        confermaEsitoVerificato: true,
+      })
+    );
   });
 });

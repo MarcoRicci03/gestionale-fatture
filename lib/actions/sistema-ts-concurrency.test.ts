@@ -92,6 +92,7 @@ import {
   ripristinaFatturaPerReinvio,
 } from "./sistema-ts";
 import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
+import { logAudit } from "@/lib/audit/log";
 import { Prisma } from "@prisma/client";
 
 function createMockInvoice(id: number, nFattura: number, statoTs = "DA_INVIARE") {
@@ -177,12 +178,27 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
       })
     );
 
-    // 3. Chiamata di rete eseguita
-    expect(mockInviaFile).toHaveBeenCalledTimes(1);
-
-    // 4. Promozione finale a INVIATA dentro $transaction
+    // 3. CR-10: segno di invio avviato scritto prima della chiamata di rete
     expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
       3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: [101, 102] },
+          stato_ts: "IN_TRASMISSIONE",
+        }),
+        data: { invio_avviato_ts: expect.any(Date) },
+      })
+    );
+    expect(mockPagamentoUpdateMany.mock.invocationCallOrder[2]).toBeLessThan(
+      mockInviaFile.mock.invocationCallOrder[0]
+    );
+
+    // 4. Chiamata di rete eseguita
+    expect(mockInviaFile).toHaveBeenCalledTimes(1);
+
+    // 5. Promozione finale a INVIATA dentro $transaction
+    expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
+      4,
       expect.objectContaining({
         where: expect.objectContaining({
           id: { in: [101, 102] },
@@ -191,6 +207,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
         data: expect.objectContaining({
           stato_ts: "INVIATA",
           protocollo_ts: "PROT-2026-999",
+          invio_avviato_ts: null,
         }),
       })
     );
@@ -268,9 +285,10 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
       error: "Errore S017: File già presente",
     });
 
-    // Deve aver fatto rollback da IN_TRASMISSIONE a DA_INVIARE
+    // Rifiuto certo: rollback da IN_TRASMISSIONE a DA_INVIARE (la 3a chiamata
+    // è il segno di invio avviato, CR-10)
     expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({
         where: expect.objectContaining({
           id: { in: [101] },
@@ -285,7 +303,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     expect(mockTrasmissioneCreate).not.toHaveBeenCalled();
   });
 
-  it("Rollback su eccezione di rete: se la chiamata lancia errore (es. timeout), ripristina DA_INVIARE", async () => {
+  it("Rollback su eccezione prima della rete: se inviaFile lancia (es. cifratura del pincode), ripristina DA_INVIARE", async () => {
     const mockInvoices = [createMockInvoice(101, 1)];
     mockPagamentoFindMany.mockResolvedValueOnce(mockInvoices);
 
@@ -302,9 +320,10 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
       expect(result.error).toContain("Connection reset by peer");
     }
 
-    // Deve aver fatto rollback da IN_TRASMISSIONE a DA_INVIARE nel blocco catch
+    // inviaFile lancia solo prima del fetch (gli errori di rete tornano come
+    // esitoIncerto): nulla è partito, rollback nel blocco catch
     expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({
         where: expect.objectContaining({
           id: { in: [101] },
@@ -491,6 +510,7 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
         id_Utente: 1,
         stato_ts: "IN_TRASMISSIONE",
         protocollo_ts: null,
+        invio_avviato_ts: null,
         data_invio_ts: { lt: expect.any(Date) },
       },
       data: { stato_ts: "DA_INVIARE", protocollo_ts: null, data_invio_ts: null },
@@ -535,5 +555,161 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     });
     expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
     expect(mockPagamentoUpdate).not.toHaveBeenCalled();
+  });
+
+  describe("CR-10: invio con esito incerto", () => {
+    const MINUTO = 60 * 1000;
+
+    // vi.clearAllMocks non svuota le code dei mockResolvedValueOnce lasciate
+    // dai test precedenti.
+    beforeEach(() => {
+      mockPagamentoFindMany.mockReset();
+      mockPagamentoFindFirst.mockReset();
+      mockPagamentoUpdateMany.mockReset();
+      mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it("con esitoIncerto non esegue il rollback e lascia le fatture bloccate", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([createMockInvoice(101, 1)]);
+      mockPagamentoUpdateMany
+        .mockResolvedValueOnce({ count: 0 }) // stale recovery
+        .mockResolvedValueOnce({ count: 1 }) // lock
+        .mockResolvedValueOnce({ count: 1 }); // invio avviato
+      mockInviaFile.mockResolvedValueOnce({
+        success: false,
+        statusCode: 0,
+        errorMessage: "Errore di rete: timeout",
+        esitoIncerto: true,
+      });
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const result = await inviaLottoFatture([101]);
+
+      expect(result).toEqual({
+        success: false,
+        error: expect.stringContaining("Esito da verificare"),
+      });
+      expect(mockPagamentoUpdateMany).toHaveBeenCalledTimes(3);
+      const rollback = mockPagamentoUpdateMany.mock.calls.find(
+        ([arg]) => (arg as { data: { stato_ts?: string } }).data.stato_ts === "DA_INVIARE" &&
+          (arg as { where: { id?: unknown } }).where.id !== undefined
+      );
+      expect(rollback).toBeUndefined();
+      expect(consoleError).toHaveBeenCalledWith(
+        "TS_ESITO_INCERTO",
+        expect.objectContaining({ invoiceIds: [101] })
+      );
+      consoleError.mockRestore();
+    });
+
+    it("il recupero dei lock orfani esclude gli invii già avviati", async () => {
+      mockPagamentoFindMany.mockResolvedValueOnce([createMockInvoice(101, 1)]);
+      mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
+
+      await inviaLottoFatture([101]);
+
+      expect(mockPagamentoUpdateMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: expect.objectContaining({
+            stato_ts: "IN_TRASMISSIONE",
+            protocollo_ts: null,
+            invio_avviato_ts: null,
+          }),
+        })
+      );
+    });
+
+    const invioIncerto = {
+      id: 300,
+      n_fattura: 12,
+      anno: 2026,
+      stato_ts: "IN_TRASMISSIONE",
+      protocollo_ts: null,
+      data_invio_ts: new Date(Date.now() - 10 * MINUTO),
+      invio_avviato_ts: new Date(Date.now() - 10 * MINUTO),
+    };
+
+    it("rifiuta lo sblocco senza conferma della verifica", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...invioIncerto });
+
+      const result = await ripristinaFatturaPerReinvio(300);
+
+      expect(result).toEqual({
+        success: false,
+        error: expect.stringContaining("Esito dell'invio incerto"),
+      });
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+      expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    it("ignora una conferma che non sia esattamente true", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...invioIncerto });
+
+      const result = await ripristinaFatturaPerReinvio(300, {
+        confermaEsitoVerificato: "si" as unknown as boolean,
+      });
+
+      expect(result).toHaveProperty("success", false);
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("con conferma sblocca l'intero lotto con una scrittura condizionata", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...invioIncerto });
+      mockPagamentoUpdateMany.mockResolvedValueOnce({ count: 3 });
+
+      const result = await ripristinaFatturaPerReinvio(300, { confermaEsitoVerificato: true });
+
+      expect(result).toEqual({
+        success: true,
+        message: 'Lotto sbloccato: 3 fatture riportate su "Da Inviare".',
+      });
+      expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+        where: {
+          id_Utente: 1,
+          stato_ts: "IN_TRASMISSIONE",
+          protocollo_ts: null,
+          data_invio_ts: invioIncerto.data_invio_ts,
+          invio_avviato_ts: { lt: expect.any(Date) },
+        },
+        data: {
+          stato_ts: "DA_INVIARE",
+          protocollo_ts: null,
+          data_invio_ts: null,
+          invio_avviato_ts: null,
+        },
+      });
+      expect(logAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          meta: expect.objectContaining({ esitoIncertoConfermato: true, numFatture: 3 }),
+        })
+      );
+    });
+
+    it("rifiuta lo sblocco confermato se l'invio è partito da poco", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({
+        ...invioIncerto,
+        data_invio_ts: new Date(Date.now() - 6 * MINUTO),
+        invio_avviato_ts: new Date(Date.now() - 1 * MINUTO),
+      });
+
+      const result = await ripristinaFatturaPerReinvio(300, { confermaEsitoVerificato: true });
+
+      expect(result).toEqual({
+        success: false,
+        error: "Trasmissione in corso: riprova tra qualche minuto.",
+      });
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("con count 0 non sblocca nulla e non scrive l'audit", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...invioIncerto });
+      mockPagamentoUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+      const result = await ripristinaFatturaPerReinvio(300, { confermaEsitoVerificato: true });
+
+      expect(result).toHaveProperty("success", false);
+      expect(logAudit).not.toHaveBeenCalled();
+    });
   });
 });

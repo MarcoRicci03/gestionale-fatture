@@ -4,7 +4,7 @@
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
 - **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-05`. Gli altri non sono ancora stati verificati sul codice.
-- **Verifica dei fix (2026-09-28):** ricontrollando `CR-01`…`CR-05` sono emersi tre problemi residui, `CR-10`…`CR-12`. Non vengono da CodeRabbit.
+- **Verifica dei fix (2026-09-28):** ricontrollando `CR-01`…`CR-05` sono emersi tre problemi residui, `CR-10`…`CR-12`, ora risolti. Non vengono da CodeRabbit.
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
@@ -17,7 +17,7 @@
 | `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ⏳ DA VERIFICARE |
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
-| `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ⏳ DA CORREGGERE |
+| `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ✅ RISOLTO |
 | `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ✅ RISOLTO |
 | `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
 
@@ -36,7 +36,7 @@ Il problema è confermato: `inviaFile` usava la stessa policy di retry delle let
   - quando fallisce in un caso ambiguo, `inviaFile` restituisce `esitoIncerto: true`.
 - **Letture** (`interrogaEsito`, `scaricaRicevutaPdf`, `scaricaDettaglioErrori`): i retry restano quelli di prima.
 - **`lib/sistemats/services/transmission.service.ts`:** se l'esito è incerto, l'utente riceve l'avviso di verificare sul portale Sistema TS prima di reinviare.
-  - Il rollback a `DA_INVIARE` resta invariato: rientra in CR-02/CR-03.
+  - Il rollback a `DA_INVIARE` era rimasto invariato, e né CR-02 né CR-03 lo coprivano: con esito incerto le fatture tornavano subito inviabili. È stato chiuso da CR-10.
 
 **Test:**
 - `lib/sistemats/client.test.ts`: nuovo blocco "CR-01" e test di `isSafeToRetrySubmission`. Aggiornati i due test che fissavano il retry su ECONNRESET.
@@ -161,3 +161,40 @@ Il problema è confermato. `STALE_LOCK_MINUTES = 5` presumeva che una chiamata a
 - l'invariante `MAX_DURATA_INVIO_MS < STALE_LOCK_MINUTES`;
 - con un orologio simulato, lo stop dei retry quando un tentativo intero non ci sta più (l'esito resta non incerto);
 - il timeout del singolo tentativo limitato alla durata massima.
+
+### CR-10 — un invio con esito incerto non si sblocca da solo
+
+Il problema è confermato, e i percorsi sono due. Con `esitoIncerto` il service eseguiva `rollbackStatoTrasmissione` prima ancora di guardare il flag, quindi le fatture tornavano `DA_INVIARE` e bastava un clic su "Invia" per creare un duplicato. Inoltre, se il processo moriva dopo l'invio, il recupero dei lock orfani o il pulsante "Sblocca" le sbloccavano dopo 5 minuti, senza distinguere tra un crash avvenuto prima dell'invio e uno avvenuto dopo.
+
+**Correzioni:**
+- **Schema:** nuovo campo `Pagamento.invio_avviato_ts` (migration `add_invio_avviato_ts`). Una migration separata, `align_fatture_trasmissioni_pk`, allinea la tabella ponte al formato di Prisma 7: era un drift preesistente, emerso generando questa migration.
+- **`lib/sistemats/services/transmission.service.ts`:**
+  - `invio_avviato_ts` viene scritto subito prima di `inviaFile`;
+  - con `esitoIncerto` non c'è rollback: log `TS_ESITO_INCERTO` (id e nome file) e un messaggio con il nome file e l'ora, che rimanda a "Verifica e sblocca";
+  - il rollback resta per i rifiuti certi e per le eccezioni del `catch`, che arrivano per forza da prima del `fetch`. Rollback e registrazione riuscita azzerano il campo;
+  - il recupero dei lock orfani richiede `invio_avviato_ts: null`, quindi sblocca da solo solo i crash avvenuti prima dell'invio.
+- **`lib/sistemats/services/cancellation.service.ts` → `ripristinaFatturaPerReinvioService`:**
+  - con `invio_avviato_ts` valorizzato serve `confermaEsitoVerificato`, e l'invio deve essere più vecchio di `STALE_LOCK_MINUTES`;
+  - lo sblocco riguarda **tutto il lotto** (stesso `data_invio_ts`) e avviene con un `updateMany` condizionato. Con `count === 0` non si sblocca nulla e non si scrive l'audit.
+- **`lib/actions/sistema-ts.ts` → `ripristinaFatturaPerReinvio(id, opzioni?)`:**
+  - vale solo `confermaEsitoVerificato === true`;
+  - la meta dell'audit riceve `esitoIncertoConfermato` e `numFatture`;
+  - il tipo delle opzioni ha un nome e non è inline, perché i test statici `verify-actions-auth`/`verify-audit-log-coverage` leggono il corpo dalla prima `{`.
+- **UI:**
+  - `FatturaTsListItem.esitoDaVerificare`;
+  - in `lotti-tab.tsx`, vista desktop e mobile, il badge "Esito da verificare" e il pulsante "Verifica e sblocca";
+  - il nuovo `dialogs/verifica-esito-dialog.tsx` spiega cosa controllare sul portale e ha una checkbox obbligatoria.
+
+**Fuori scope:** l'annullamento ha lo stesso schema di esito incerto, ma lì un reinvio non genera dati duplicati, perché Sogei scarta il secondo annullamento dello stesso documento.
+
+**Test:**
+- `lib/actions/sistema-ts-concurrency.test.ts`, blocco "CR-10":
+  - con esito incerto nessun rollback e il log;
+  - il recupero dei lock orfani esclude gli invii avviati;
+  - lo sblocco senza conferma, o con una conferma non booleana, viene rifiutato;
+  - lo sblocco confermato aggiorna il lotto e scrive l'audit;
+  - un invio recente viene rifiutato;
+  - `count: 0` non scrive l'audit.
+- Aggiornati i test che contavano le chiamate `updateMany` o si aspettavano il rollback su esito incerto (`sistema-ts.test.ts`, `sistema-ts-payload-edge-cases.test.ts`, `verify-transmission-rollback-dry.test.ts`, dove le chiamate di rollback restano 6).
+- `components/sistema-ts/sistema-ts-manager.test.tsx`: il badge e il dialog con la checkbox obbligatoria.
+- Risultato di `npm test`: 1192/1192 passati. `npm run test:db`: 6/6, tutte le migration applicate.

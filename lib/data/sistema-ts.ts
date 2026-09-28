@@ -27,6 +27,9 @@ export interface FatturaTsListItem {
   protocollo_ts: string | null;
   protocollo_cancellazione_ts: string | null;
   data_invio_ts: Date | null;
+  // CR-10: invio iniziale partito verso Sogei senza esito certo. Va verificato
+  // sul portale prima di sbloccarlo.
+  esitoDaVerificare: boolean;
   paganteNomeCompleto: string;
   paganteCf: string | null;
   pazienteNomeCompleto: string;
@@ -144,6 +147,10 @@ export async function getFatturePerInvioTs(
       protocollo_ts: inv.protocollo_ts,
       protocollo_cancellazione_ts: inv.protocollo_cancellazione_ts,
       data_invio_ts: inv.data_invio_ts,
+      esitoDaVerificare:
+        inv.stato_ts === "IN_TRASMISSIONE" &&
+        inv.protocollo_ts === null &&
+        inv.invio_avviato_ts !== null,
       paganteNomeCompleto: `${anagrafica.pagante.cognome} ${anagrafica.pagante.nome}`,
       paganteCf: cf,
       pazienteNomeCompleto: `${anagrafica.paziente.cognome} ${anagrafica.paziente.nome}`,

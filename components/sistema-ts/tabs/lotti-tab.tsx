@@ -38,6 +38,7 @@ export type LottiTabProps = {
   onFixInvoice: (invoice: FatturaTsListItem) => void;
   onOpenCancelModal: (data: CancelInvoiceData) => void;
   onRipristina: (id: number) => void;
+  onVerificaEsito: (invoice: FatturaTsListItem) => void;
 };
 
 export function LottiTab({
@@ -48,6 +49,7 @@ export function LottiTab({
   onFixInvoice,
   onOpenCancelModal,
   onRipristina,
+  onVerificaEsito,
 }: LottiTabProps) {
   const {
     selectedIds,
@@ -414,9 +416,14 @@ export function LottiTab({
                             <Clock className="mr-1 h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" /> Incasso futuro
                           </span>
                         )}
-                        {f.stato_ts === "IN_TRASMISSIONE" && (
+                        {f.stato_ts === "IN_TRASMISSIONE" && !f.esitoDaVerificare && (
                           <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
                             <Clock className="mr-1 h-3 w-3 animate-spin" /> In trasmissione
+                          </span>
+                        )}
+                        {f.esitoDaVerificare && (
+                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
+                            <AlertTriangle className="mr-1 h-3 w-3" /> Esito da verificare
                           </span>
                         )}
                         {f.stato_ts === "INVIATA" && (
@@ -478,11 +485,13 @@ export function LottiTab({
                               variant="outline"
                               size="sm"
                               className="h-7 text-xs text-amber-700 hover:text-amber-800"
-                              onClick={() => onRipristina(f.id)}
+                              onClick={() =>
+                                f.esitoDaVerificare ? onVerificaEsito(f) : onRipristina(f.id)
+                              }
                               disabled={isPending}
                             >
                               <RotateCcw className="mr-1 h-3 w-3" />
-                              Sblocca
+                              {f.esitoDaVerificare ? "Verifica e sblocca" : "Sblocca"}
                             </Button>
                           )}
                           {f.stato_ts === "ANNULLATA_TS" && (
@@ -586,9 +595,14 @@ export function LottiTab({
                       )}
                       <div className="flex justify-between items-center pt-1">
                         <span className="text-muted-foreground">Stato TS:</span>
-                        {f.stato_ts === "IN_TRASMISSIONE" && (
+                        {f.stato_ts === "IN_TRASMISSIONE" && !f.esitoDaVerificare && (
                           <span className="text-amber-600 font-medium inline-flex items-center gap-1">
                             <Clock className="h-3 w-3 animate-spin" /> In trasmissione
+                          </span>
+                        )}
+                        {f.esitoDaVerificare && (
+                          <span className="text-amber-600 font-medium inline-flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> Esito da verificare
                           </span>
                         )}
                         {f.stato_ts === "DA_INVIARE" && hasAnomalies && (
@@ -663,11 +677,13 @@ export function LottiTab({
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs w-full text-amber-700 hover:text-amber-800"
-                          onClick={() => onRipristina(f.id)}
+                          onClick={() =>
+                            f.esitoDaVerificare ? onVerificaEsito(f) : onRipristina(f.id)
+                          }
                           disabled={isPending}
                         >
                           <RotateCcw className="mr-1 h-3 w-3" />
-                          Sblocca per reinvio
+                          {f.esitoDaVerificare ? "Verifica e sblocca" : "Sblocca per reinvio"}
                         </Button>
                       </div>
                     )}

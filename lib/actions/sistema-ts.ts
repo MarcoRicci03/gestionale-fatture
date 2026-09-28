@@ -192,18 +192,29 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
   };
 }
 
+// Tipo con nome, non inline: i test di invarianti (verify-actions-auth,
+// verify-audit-log-coverage) leggono il corpo dalla prima "{" dopo la firma.
+type RipristinaOpzioni = { confermaEsitoVerificato?: boolean };
+
 /**
  * Riporta allo stato 'DA_INVIARE' una fattura annullata sul Sistema TS (ANNULLATA_TS) o
  * rimasta bloccata in un invio iniziale (IN_TRASMISSIONE senza protocollo, lock scaduto).
  * Consente all'utente di correggere eventuali dati errati e ritrasmetterla a Sistema TS.
- * Le regole sono in ripristinaFatturaPerReinvioService (CR-03).
+ * Le regole sono in ripristinaFatturaPerReinvioService (CR-03). Un invio con
+ * esito incerto si sblocca solo con `confermaEsitoVerificato` (CR-10).
  */
 export async function ripristinaFatturaPerReinvio(
-  invoiceId: number
+  invoiceId: number,
+  opzioni?: RipristinaOpzioni
 ): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
 
-  const res = await ripristinaFatturaPerReinvioService({ userId, invoiceId });
+  const res = await ripristinaFatturaPerReinvioService({
+    userId,
+    invoiceId,
+    // Endpoint RPC pubblico: vale solo un `true` esplicito.
+    confermaEsitoVerificato: opzioni?.confermaEsitoVerificato === true,
+  });
   if (!res.success) {
     return res;
   }
@@ -218,11 +229,21 @@ export async function ripristinaFatturaPerReinvio(
       n_fattura: res.invoice.n_fattura,
       anno: res.invoice.anno,
       statoPrecedente: res.invoice.statoPrecedente,
+      ...(res.esitoIncertoConfermato
+        ? { esitoIncertoConfermato: true, numFatture: res.numFatture }
+        : {}),
     },
   });
 
   revalidatePath("/invoices");
   revalidatePath("/sistema-ts");
+
+  if (res.esitoIncertoConfermato) {
+    return {
+      success: true,
+      message: `Lotto sbloccato: ${res.numFatture} ${res.numFatture === 1 ? "fattura riportata" : "fatture riportate"} su "Da Inviare".`,
+    };
+  }
 
   return {
     success: true,

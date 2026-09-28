@@ -505,7 +505,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
       expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ id: { in: [501] } }),
-          data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+          data: { stato_ts: "DA_INVIARE", data_invio_ts: null, invio_avviato_ts: null },
         })
       );
     });
@@ -538,7 +538,7 @@ describe("Layer 2: Sistema TS Payload Edge Cases & Fiscal Rules", () => {
       expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ id: { in: [502] } }),
-          data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+          data: { stato_ts: "DA_INVIARE", data_invio_ts: null, invio_avviato_ts: null },
         })
       );
     });

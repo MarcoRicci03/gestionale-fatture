@@ -53,6 +53,7 @@ export async function rollbackStatoTrasmissione(
     data: {
       stato_ts: "DA_INVIARE",
       data_invio_ts: null,
+      invio_avviato_ts: null,
     },
   });
 }
@@ -106,6 +107,14 @@ async function gestisciProtocolloNonRegistrato(params: {
   };
 }
 
+function formatOra(date: Date): string {
+  return date.toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Rome",
+  });
+}
+
 export async function inviaLottoFattureService(params: {
   userId: number;
   invoiceIds: number[];
@@ -127,14 +136,17 @@ export async function inviaLottoFattureService(params: {
   const { client, proprietario, user } = clientInfo;
 
   // Recupero automatico self-healing per lock orfani rimasti in IN_TRASMISSIONE
-  // oltre il timeout massimo di chiamata a Sogei (120s). Finestra di sicurezza: 5 minuti.
-  // Limita il recupero a DA_INVIARE solo agli invii iniziali (protocollo_ts nullo).
+  // oltre STALE_LOCK_MINUTES. Limita il recupero a DA_INVIARE agli invii
+  // iniziali (protocollo_ts nullo) la cui chiamata a Sogei non è mai partita
+  // (CR-10: con invio_avviato_ts valorizzato l'esito è incerto e serve la
+  // verifica dell'utente, vedi ripristinaFatturaPerReinvioService).
   const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
   await prisma.pagamento.updateMany({
     where: {
       id_Utente: userId,
       stato_ts: "IN_TRASMISSIONE",
       protocollo_ts: null,
+      invio_avviato_ts: null,
       data_invio_ts: { lt: staleThreshold },
     },
     data: {
@@ -289,21 +301,40 @@ export async function inviaLottoFattureService(params: {
     const xmlString = buildSistemaTsXml(payload);
     const zipBytes = await createZipArchive(xmlString, "730.xml");
 
+    // CR-10: da qui Sogei potrebbe ricevere il file. Il segno resta finché
+    // l'esito non è certo: né il recupero dei lock orfani né lo sblocco
+    // senza conferma dell'utente toccano più queste fatture.
+    const invioAvviatoIl = new Date();
+    await prisma.pagamento.updateMany({
+      where: {
+        id: { in: candidateIds },
+        id_Utente: userId,
+        stato_ts: "IN_TRASMISSIONE",
+        data_invio_ts: lockTimestamp,
+      },
+      data: { invio_avviato_ts: invioAvviatoIl },
+    });
+
     const res = await client.inviaFile(zipBytes, fileName);
 
     if (!res.success || !res.protocollo) {
-      // Revert dello stato a DA_INVIARE se la trasmissione è stata respinta
-      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
-
       if (res.esitoIncerto) {
+        // CR-10: niente rollback. Riportarle in DA_INVIARE permetterebbe un
+        // reinvio immediato e, se Sogei aveva acquisito il file, un duplicato.
+        console.error("TS_ESITO_INCERTO", { fileName, invoiceIds: candidateIds });
         return {
           success: false,
           error:
-            "Esito della trasmissione incerto: il Sistema TS potrebbe aver ricevuto il file. " +
-            "Prima di reinviare, verifica sul portale Sistema TS che il lotto non risulti già acquisito." +
+            "Esito della trasmissione incerto: il Sistema TS potrebbe aver ricevuto il file " +
+            `${fileName} (inviato alle ${formatOra(invioAvviatoIl)}). ` +
+            "Le fatture restano bloccate come 'Esito da verificare': controlla sul portale Sistema TS " +
+            "se il lotto risulta acquisito. Se non lo è, sbloccale dalla scheda Lotti con 'Verifica e sblocca'." +
             (res.errorMessage ? ` (${res.errorMessage})` : ""),
         };
       }
+
+      // Rifiuto certo: il file non è stato acquisito, si rilascia il lock.
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
 
       return {
         success: false,
@@ -346,6 +377,7 @@ export async function inviaLottoFattureService(params: {
           stato_ts: "INVIATA",
           protocollo_ts: protocollo,
           data_invio_ts: now,
+          invio_avviato_ts: null,
         },
       });
     });
@@ -386,6 +418,10 @@ export async function inviaLottoFattureService(params: {
         error,
       });
     }
+    // Senza protocollo, un'eccezione arriva da prima della chiamata di rete
+    // (XML/ZIP, verifyEndpointSafety, cifratura del pincode): gli errori del
+    // fetch sono intercettati da executeWithRetry e tornano come esitoIncerto.
+    // Nulla è partito, quindi il rollback è sicuro.
     try {
       await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
     } catch (rollbackError) {

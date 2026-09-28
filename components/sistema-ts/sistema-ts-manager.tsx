@@ -25,6 +25,7 @@ import { LottiTab } from "./tabs/lotti-tab";
 import { StoricoTab } from "./tabs/storico-tab";
 import { BatchConfirmDialog } from "./dialogs/batch-confirm-dialog";
 import { CancelInvoiceTsDialog } from "./dialogs/cancel-invoice-ts-dialog";
+import { VerificaEsitoDialog } from "./dialogs/verifica-esito-dialog";
 import { CsvReportDialog } from "./dialogs/csv-report-dialog";
 import { useSistemaTsLotti } from "./hooks/use-sistema-ts-lotti";
 import { useSistemaTsStorico } from "./hooks/use-sistema-ts-storico";
@@ -62,6 +63,7 @@ export function SistemaTsManager({
   const [fixingInvoice, setFixingInvoice] = useState<FatturaTsListItem | null>(null);
   const [selectedReportCsv, setSelectedReportCsv] = useState<string | null>(null);
   const [cancellingInvoice, setCancellingInvoice] = useState<CancelInvoiceData | null>(null);
+  const [verificaInvoice, setVerificaInvoice] = useState<FatturaTsListItem | null>(null);
 
   // Hooks specializzati per la gestione dello stato dei due tab
   const lotti = useSistemaTsLotti({ fatture, initialFilters: filters });
@@ -127,12 +129,16 @@ export function SistemaTsManager({
     });
   };
 
-  const handleRipristina = (invoiceId: number) => {
+  const handleRipristina = (invoiceId: number, confermaEsitoVerificato = false) => {
     setActionError(null);
     setActionSuccess(null);
 
     startTransition(async () => {
-      const res = await ripristinaFatturaPerReinvio(invoiceId);
+      const res = await ripristinaFatturaPerReinvio(
+        invoiceId,
+        confermaEsitoVerificato ? { confermaEsitoVerificato: true } : undefined
+      );
+      setVerificaInvoice(null);
       if ("error" in res) {
         setActionError(res.error);
         return;
@@ -301,7 +307,8 @@ export function SistemaTsManager({
           onOpenConfirmBatch={() => setConfirmModalOpen(true)}
           onFixInvoice={(invoice) => setFixingInvoice(invoice)}
           onOpenCancelModal={(data) => setCancellingInvoice(data)}
-          onRipristina={handleRipristina}
+          onRipristina={(id) => handleRipristina(id)}
+          onVerificaEsito={(invoice) => setVerificaInvoice(invoice)}
         />
       )}
 
@@ -339,6 +346,14 @@ export function SistemaTsManager({
         cancellingInvoice={cancellingInvoice}
         onClose={() => setCancellingInvoice(null)}
         onConfirm={handleAnnullaTs}
+        isPending={isPending}
+      />
+
+      {/* Modale Verifica Esito Incerto (CR-10) */}
+      <VerificaEsitoDialog
+        invoice={verificaInvoice}
+        onClose={() => setVerificaInvoice(null)}
+        onConfirm={(id) => handleRipristina(id, true)}
         isPending={isPending}
       />
 
