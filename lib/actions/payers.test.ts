@@ -28,6 +28,7 @@ const mockPaganteUpdate = vi.fn();
 const mockPaganteDelete = vi.fn();
 const mockPagamentoFindMany = vi.fn();
 const mockPagamentoUpdate = vi.fn();
+const mockPagamentoUpdateMany = vi.fn();
 const mockPagamentoCount = vi.fn();
 const mockPazienteCount = vi.fn();
 
@@ -42,6 +43,7 @@ const mockTransaction = vi.fn(async (cb: (tx: unknown) => unknown) => {
     pagamento: {
       findMany: (...args: unknown[]) => mockPagamentoFindMany(...args),
       update: (...args: unknown[]) => mockPagamentoUpdate(...args),
+      updateMany: (...args: unknown[]) => mockPagamentoUpdateMany(...args),
       count: (...args: unknown[]) => mockPagamentoCount(...args),
     },
     paziente: {
@@ -105,7 +107,7 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
       })
     );
     expect(mockPagamentoFindMany).not.toHaveBeenCalled();
-    expect(mockPagamentoUpdate).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
   });
 
   it("propaga i nuovi dati anagrafici alle bozze DA_INVIARE quando propagaFattureInAttesa è true", async () => {
@@ -147,9 +149,10 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
       include: { pagante: true, paziente: true },
     });
 
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+    // CR-04: la where ricontrolla lo stato, così una bozza partita nel frattempo viene saltata.
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 50 },
+        where: { id: 50, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({
@@ -208,11 +211,11 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
     });
 
     expect(res).toEqual({ success: true });
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 51 } })
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 51, stato_ts: "DA_INVIARE" } })
     );
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 52 } })
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 52, stato_ts: "DA_INVIARE" } })
     );
   });
 });

@@ -390,7 +390,9 @@ export async function updateInvoice(
 
   try {
     await prisma.pagamento.update({
-      where: { id, id_Utente: userId },
+      // CR-04: ricontrolla lo stato nella scrittura (stesso schema di ERR-04 in
+      // deleteInvoice): se nel frattempo un invio l'ha bloccata/trasmessa, P2025.
+      where: { id, id_Utente: userId, stato_ts: "DA_INVIARE" },
       data: {
         id_Pagante,
         id_Paziente,
@@ -424,6 +426,9 @@ export async function updateInvoice(
       },
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return { success: false, error: FATTURA_GIA_INVIATA_TS_ERROR };
+    }
     if (isBolloCodiceUniqueViolation(error)) {
       return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
     }
@@ -595,7 +600,8 @@ export async function refreshInvoiceAnagrafica(
     // questa azione esiste apposta per sostituire lo snapshot congelato
     // con lo stato attuale, su scelta esplicita dell'utente.
     await prisma.pagamento.update({
-      where: { id, id_Utente: userId },
+      // CR-04: la fattura potrebbe essere partita per il Sistema TS dopo il controllo.
+      where: { id, id_Utente: userId, stato_ts: "DA_INVIARE" },
       data: {
         snapshotAnagrafica: buildSnapshotAnagrafica(
           invoice.pagante,
@@ -604,6 +610,9 @@ export async function refreshInvoiceAnagrafica(
       },
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return { success: false, error: ANAGRAFICA_FATTURA_TS_ERROR };
+    }
     console.error("refreshInvoiceAnagrafica error", error);
     return { success: false, error: "Errore durante l'aggiornamento dell'anagrafica" };
   }

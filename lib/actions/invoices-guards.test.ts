@@ -29,8 +29,17 @@ const mockTransaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>
   })
 );
 
+const mockPaganteFindFirst = vi.fn();
+const mockPazienteFindFirst = vi.fn();
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    pagante: {
+      findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
+    },
+    paziente: {
+      findFirst: (...args: unknown[]) => mockPazienteFindFirst(...args),
+    },
     pagamento: {
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
@@ -192,6 +201,75 @@ describe("refreshInvoiceAnagrafica TS desync protection", () => {
 
     expect(result).toEqual({ success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("CR-04: race tra controllo di stato e scrittura", () => {
+  // La fattura è DA_INVIARE al momento della lettura, ma un invio concorrente
+  // la blocca in IN_TRASMISSIONE prima dell'update: la where condizionata non
+  // trova la riga e Prisma lancia P2025.
+  const recordNotFound = () =>
+    new Prisma.PrismaClientKnownRequestError("No record was found for an update.", {
+      code: "P2025",
+      clientVersion: "test",
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("updateInvoice: scrive solo se ancora DA_INVIARE e, se non lo è più, restituisce FATTURA_GIA_INVIATA_TS_ERROR", async () => {
+    mockFindFirst
+      .mockResolvedValueOnce({
+        id: 10,
+        n_fattura: 1,
+        anno: validFormData.data.getFullYear(),
+        stato_ts: "DA_INVIARE",
+        id_Pagante: 1,
+        id_Paziente: 1,
+        data: validFormData.data,
+        mod_pag: "BONIFICO",
+        sedute: null,
+        commento: null,
+        citta: "Roma",
+        cap: "00100",
+        bolloCodice: null,
+        mesi: [{ mese: "GENNAIO", prezzo: new Prisma.Decimal(100) }],
+      })
+      .mockResolvedValue(null); // vicini cronologici: nessuno
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 1, nome: "Mario", cognome: "Rossi" });
+    mockPazienteFindFirst.mockResolvedValueOnce({ id: 1, id_Pagante: 1, nome: "Luigi", cognome: "Rossi" });
+    mockUpdate.mockRejectedValueOnce(recordNotFound());
+
+    const result = await updateInvoice(10, validFormData);
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10, id_Utente: 1, stato_ts: "DA_INVIARE" },
+      })
+    );
+    expect(result).toEqual({ success: false, error: FATTURA_GIA_INVIATA_TS_ERROR });
+    expect(mockAuditLogCreate).not.toHaveBeenCalled();
+  });
+
+  it("refreshInvoiceAnagrafica: scrive solo se ancora DA_INVIARE e, se non lo è più, restituisce ANAGRAFICA_FATTURA_TS_ERROR", async () => {
+    mockFindFirst.mockResolvedValueOnce({
+      id: 10,
+      stato_ts: "DA_INVIARE",
+      pagante: { nome: "Mario", cognome: "Rossi" },
+      paziente: { nome: "Luigi", cognome: "Rossi" },
+    });
+    mockUpdate.mockRejectedValueOnce(recordNotFound());
+
+    const result = await refreshInvoiceAnagrafica(10);
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10, id_Utente: 1, stato_ts: "DA_INVIARE" },
+      })
+    );
+    expect(result).toEqual({ success: false, error: ANAGRAFICA_FATTURA_TS_ERROR });
+    expect(mockAuditLogCreate).not.toHaveBeenCalled();
   });
 });
 

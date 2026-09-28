@@ -169,8 +169,10 @@ export async function updatePayer(
                 piva: parsed.data.piva ?? null,
               },
             };
-            return tx.pagamento.update({
-              where: { id: draft.id },
+            // CR-04: una bozza partita per il Sistema TS nel frattempo va
+            // saltata, non modificata (updateMany non lancia se non trova righe).
+            return tx.pagamento.updateMany({
+              where: { id: draft.id, stato_ts: "DA_INVIARE" },
               data: {
                 snapshotAnagrafica: newSnap as unknown as Prisma.InputJsonValue,
               },
