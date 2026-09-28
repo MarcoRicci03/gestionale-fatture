@@ -12,3 +12,8 @@ tmp
 *.log
 /postgres_dev_data
 /backups
+# CR-08: solo il certificato Sogei ufficiale entra nell'immagine; il
+# certificato di test e la sua chiave privata restano fuori.
+certs/*
+!certs/.gitkeep
+!certs/SanitelCF.cer

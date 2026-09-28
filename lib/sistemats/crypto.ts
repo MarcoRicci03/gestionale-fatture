@@ -7,12 +7,39 @@ const MOCK_CERT_PATH = path.join(process.cwd(), "certs", "mock_sanitelcf.cer");
 
 // Cache in-memory delle chiavi pubbliche X.509 indicizzate per percorso del file
 const certCache = new Map<string, crypto.KeyObject>();
+// Avviso del ripiego sul certificato di test emesso una sola volta (CR-08).
+let mockFallbackWarned = false;
 
 /**
  * Pulisce la cache delle chiavi pubbliche in memoria (usata nei test o in caso di rinnovo certificato).
  */
 export function clearPublicKeyCache(): void {
   certCache.clear();
+  mockFallbackWarned = false;
+}
+
+// CR-08: senza certificato ufficiale, in produzione PIN e CF finirebbero
+// cifrati con il certificato di test: Sogei scarterebbe gli invii con errori
+// fuorvianti (PIN errato, CF invalidi). Lì si blocca con un errore esplicito;
+// fuori dalla produzione il ripiego sul mock resta, ma segnalato.
+// Un certPath esplicito è usato così com'è.
+function resolveCertPath(certPath?: string): string {
+  if (certPath) return certPath;
+  if (fs.existsSync(DEFAULT_CERT_PATH)) return DEFAULT_CERT_PATH;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[BLOCCO DI SICUREZZA] Certificato Sogei certs/SanitelCF.cer non trovato: in produzione non è consentito ripiegare sul certificato di test."
+    );
+  }
+
+  if (!mockFallbackWarned) {
+    mockFallbackWarned = true;
+    console.warn(
+      `Certificato Sogei ${DEFAULT_CERT_PATH} non trovato: uso il certificato di test ${MOCK_CERT_PATH}.`
+    );
+  }
+  return MOCK_CERT_PATH;
 }
 
 /**
@@ -20,7 +47,7 @@ export function clearPublicKeyCache(): void {
  * Utilizza una cache in-memory per evitare I/O sincrono su disco e parsing ripetuto ad ogni documento.
  */
 export function loadPublicKeyFromCert(certPath?: string): crypto.KeyObject {
-  const targetPath = certPath || (fs.existsSync(DEFAULT_CERT_PATH) ? DEFAULT_CERT_PATH : MOCK_CERT_PATH);
+  const targetPath = resolveCertPath(certPath);
 
   const cachedKey = certCache.get(targetPath);
   if (cachedKey) {

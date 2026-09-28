@@ -82,3 +82,47 @@ describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
     });
   });
 });
+
+describe("crypto — scelta del certificato (CR-08)", () => {
+  const DEFAULT_CERT = path.join(process.cwd(), "certs", "SanitelCF.cer");
+
+  beforeEach(() => {
+    clearPublicKeyCache();
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  function senzaCertificatoUfficiale() {
+    const realExists = fs.existsSync;
+    vi.spyOn(fs, "existsSync").mockImplementation((p) =>
+      p === DEFAULT_CERT ? false : realExists(p)
+    );
+  }
+
+  it("in produzione, senza certificato ufficiale, blocca invece di usare il mock", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    senzaCertificatoUfficiale();
+
+    expect(() => loadPublicKeyFromCert()).toThrow(/\[BLOCCO DI SICUREZZA\].*SanitelCF\.cer/);
+  });
+
+  it("in produzione un certPath esplicito resta valido", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    senzaCertificatoUfficiale();
+
+    expect(loadPublicKeyFromCert(MOCK_CERT).asymmetricKeyType).toBe("rsa");
+  });
+
+  it("fuori dalla produzione ripiega sul mock e lo segnala una sola volta", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    senzaCertificatoUfficiale();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const key1 = loadPublicKeyFromCert();
+    const key2 = loadPublicKeyFromCert();
+
+    expect(key1).toBe(key2);
+    expect(key1).toBe(loadPublicKeyFromCert(MOCK_CERT));
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});

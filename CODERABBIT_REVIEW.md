@@ -3,8 +3,8 @@
 - **Data:** 2026-09-28
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
-- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-07`. Gli altri non sono ancora stati verificati sul codice.
-- **Verifica dei fix (2026-09-28):** ricontrollando `CR-01`…`CR-05` sono emersi tre problemi residui, `CR-10`…`CR-12`, ora risolti. Non vengono da CodeRabbit.
+- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti tutti: `CR-01`…`CR-09`.
+- **Rilievi emersi durante i fix (2026-09-28):** non vengono da CodeRabbit. `CR-10`…`CR-12` sono i residui trovati ricontrollando `CR-01`…`CR-05`, `CR-13` è il limiter del login (collegato a CR-06). Sono tutti risolti. `CR-14` (test che dipendono da certificati mock non versionati) è da verificare.
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
@@ -15,12 +15,13 @@
 | `CR-05` | **Major** | [`lib/sistemats/services/correction.service.ts:143-147`](./lib/sistemats/services/correction.service.ts#L143-L147) | La correzione sovrascrive campi che il client non ha inviato (`data_pagamento`, `pagamento_tracciato`, `bolloCodice`). Quando `targetCf` è null, perde `pagante.cf` dallo snapshot. | Aggiornare solo i campi forniti e conservare `currentSnap.pagante.cf`. In `correggiFatturaTsSchema`, rendere `dataPagamento` e `pagamentoTracciato` opzionali senza default. | ✅ RISOLTO |
 | `CR-06` | **Major** | [`lib/auth/rate-limiter.ts:74-81`](./lib/auth/rate-limiter.ts#L74-L81) | Quando il limiter raggiunge `maxEntries`, elimina il record più vecchio. Un attaccante che riempie la mappa può azzerare il limite di altre chiavi. | Se dopo `sweepExpired` la mappa è ancora piena, rifiutare la nuova chiave con `retryAfterSeconds` e non toccare i record esistenti. | ✅ RISOLTO |
 | `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ✅ RISOLTO |
-| `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
+| `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ✅ RISOLTO |
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ✅ RISOLTO |
 | `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ✅ RISOLTO |
 | `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ✅ RISOLTO |
 | `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
 | `CR-13` | **Major** | [`lib/auth/rate-limit.ts:82-88`](./lib/auth/rate-limit.ts#L82-L88) | Stesso difetto di CR-06 nel limiter del login, ed è l'unico punto in cui è sfruttabile: lo username lo sceglie l'attaccante. Circa 10.000 login falliti su username inventati espellono dalla Map i record bloccati della vittima e ne azzerano il lockout. | Espellere la voce più vecchia non bloccata. Non rifiutare le chiavi nuove, perché al login impedirebbe l'accesso all'utente legittimo. | ✅ RISOLTO |
+| `CR-14` | Minor | [`lib/sistemats/crypto.test.ts:11-12`](./lib/sistemats/crypto.test.ts#L11-L12) | `crypto.test.ts` e `xml-builder.test.ts` usano `certs/mock_sanitelcf.cer`/`.key` senza `skipIf`, ma quei file non sono versionati e nessuno script li genera. In CI, con un checkout pulito, quei test dovrebbero fallire. Non è stato verificato perché `gh` non era disponibile. | Generare la coppia mock in un setup di vitest dentro una cartella temporanea (`openssl` è disponibile sui runner) invece di leggerla da `certs/`. | ⏳ DA VERIFICARE |
 
 **Legenda stato:** ⏳ DA VERIFICARE · ⏳ DA CORREGGERE (verificato, fix da fare) · ❌ FALSO POSITIVO · ✅ RISOLTO
 
@@ -272,3 +273,23 @@ Il problema è confermato. `getHardDeleteInvoiceBlockReason(1)` restituiva "ci s
 I testi compaiono nei dialog di eliminazione definitiva di pazienti e paganti. Nessun test di componente o e2e verificava il testo esatto.
 
 **Test:** in `lib/archive/formatting.test.ts` ho aggiornato le due asserzioni.
+
+### CR-08 — fallback silenzioso sul certificato mock
+
+Il problema è confermato, con un aggravante che CodeRabbit non ha visto. Nessun chiamante passa `certPath`, quindi senza `certs/SanitelCF.cer` il PIN code e i CF venivano cifrati con il certificato di test **in qualunque ambiente**. In produzione Sogei avrebbe scartato gli invii con errori fuorvianti (PIN errato, CF invalidi). Inoltre `.dockerignore` non escludeva `certs/`, e il Dockerfile copia l'intera cartella: una build fatta da una macchina di sviluppo portava nell'immagine di produzione `mock_sanitelcf.cer` e **la sua chiave privata** `mock_sanitelcf.key`, rendendo raggiungibile proprio il fallback.
+
+**Correzioni:**
+- **`lib/sistemats/crypto.ts` → `resolveCertPath`:**
+  - un `certPath` esplicito viene usato così com'è;
+  - altrimenti si usa `SanitelCF.cer`;
+  - se manca, in produzione si ferma con `[BLOCCO DI SICUREZZA] ...`. `inviaFile` lancia prima del `fetch`, quindi scatta il rollback sicuro e nessun file parte;
+  - fuori dalla produzione ripiega sul mock con un `console.warn`, emesso una sola volta e azzerato da `clearPublicKeyCache()`.
+- **`.dockerignore`:** `certs/*`, riammettendo solo `.gitkeep` e `SanitelCF.cer`, con la stessa regola di `.gitignore`. Verificato con una build di prova su un contesto minimo: la cartella sorgente contiene mock e chiave, l'immagine solo `.gitkeep` e `SanitelCF.cer`.
+
+**Test:**
+- `lib/sistemats/crypto.test.ts`, blocco "CR-08":
+  - in produzione senza certificato ufficiale la funzione lancia l'errore;
+  - in produzione un `certPath` esplicito resta valido;
+  - in sviluppo ripiega sul mock con un solo avviso.
+- `scripts/verify-docker-build-config.test.ts`: `.dockerignore` esclude `certs/*` e riammette solo i due file.
+- Risultato di `npm test`: 1205/1205 passati.
