@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
 import { isSafeToRetrySubmission, RetryableHttpError, SistemaTsClient } from "./client";
 import type { SistemaTsConfig } from "./types";
+import { MAX_DURATA_INVIO_MS, STALE_LOCK_MINUTES } from "./lock-timing";
 
 const mockConfig: SistemaTsConfig = {
   username: "testuser",
@@ -371,6 +372,67 @@ describe("SistemaTsClient — inviaFile non ritenta invii ambigui (CR-01)", () =
 
     expect(callCount).toBe(2);
     expect(res.success).toBe(true);
+  });
+});
+
+describe("SistemaTsClient — durata massima di inviaFile (CR-11)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("la durata massima di inviaFile resta sotto la soglia dei lock orfani", () => {
+    expect(MAX_DURATA_INVIO_MS).toBeLessThan(STALE_LOCK_MINUTES * 60_000);
+  });
+
+  it("non avvia un nuovo tentativo se non c'è più tempo per un tentativo intero", async () => {
+    // Orologio simulato: ogni chiamata a Sogei "dura" 40 ms e risponde 503.
+    let now = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    let callCount = 0;
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      now += 40;
+      return { ok: false, status: 503, text: async () => "Service Unavailable" };
+    }) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({
+      ...mockConfig,
+      maxRetries: 5,
+      retryBaseDelayMs: 0,
+      timeoutMs: 50,
+      maxDurataInvioMs: 100,
+    });
+    const res = await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    // Tentativo 1 finisce a 40 ms: 40 + 50 <= 100, si ritenta.
+    // Tentativo 2 finisce a 80 ms: 80 + 50 > 100, ci si ferma.
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(false);
+    expect(res.statusCode).toBe(503);
+    // L'ultimo errore era "sicuro" (503): nessun esito incerto.
+    expect(res.esitoIncerto).toBe(false);
+  });
+
+  it("limita il timeout del singolo tentativo alla durata massima", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "Service Unavailable",
+    })) as unknown as typeof fetch;
+
+    const client = new SistemaTsClient({
+      ...mockConfig,
+      maxRetries: 0,
+      timeoutMs: 600_000,
+      maxDurataInvioMs: 1_000,
+    });
+    await client.inviaFile(Buffer.from("dummy-zip"), "test.zip");
+
+    expect(timeoutSpy).toHaveBeenCalledWith(1_000);
   });
 });
 

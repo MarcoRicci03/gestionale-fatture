@@ -7,14 +7,11 @@ import { isDataPagamentoFutura, formatDateDisplay } from "@/lib/utils/date";
 import { isBolloDovuto, isBolloCodiceValido } from "@/lib/fiscal/bollo";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { getClientForUser } from "./client.service";
+import { STALE_LOCK_MINUTES } from "@/lib/sistemats/lock-timing";
 import type {
   DocumentoSpesaPayload,
   SpesaSanitariaPayload,
 } from "@/lib/sistemats/types";
-
-// Oltre questa età un lock IN_TRASMISSIONE è considerato orfano: supera con
-// margine il timeout massimo di una chiamata a Sogei (120s).
-export const STALE_LOCK_MINUTES = 5;
 
 export class ConcurrencyLockError extends Error {
   constructor(message: string) {

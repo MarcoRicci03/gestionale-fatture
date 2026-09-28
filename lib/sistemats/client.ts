@@ -16,6 +16,7 @@ import type {
   RicevutaPdfResult,
   SistemaTsConfig,
 } from "./types";
+import { MAX_DURATA_INVIO_MS } from "./lock-timing";
 
 const DEFAULT_ENDPOINT_INVIO =
   process.env.SISTEMATS_ENDPOINT_INVIO ||
@@ -194,10 +195,15 @@ export class SistemaTsClient {
   private async executeWithRetry<T>(
     operation: () => Promise<T>,
     formatError: (error: unknown) => T,
-    shouldRetry: (error: unknown) => boolean = isRetryableError
+    shouldRetry: (error: unknown) => boolean = isRetryableError,
+    // CR-11: se indicato, un nuovo tentativo parte solo se attesa + tentativo
+    // intero (attemptMs) stanno ancora entro totalMs. Nessun tentativo viene
+    // accorciato: un timeout anticipato renderebbe incerto l'esito.
+    budget?: { totalMs: number; attemptMs: number }
   ): Promise<T> {
     const maxRetries = this.getMaxRetries();
     const baseDelay = this.getRetryDelayMs();
+    const startedAt = Date.now();
 
     let lastError: unknown;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -207,6 +213,12 @@ export class SistemaTsClient {
         lastError = error;
         if (attempt < maxRetries && shouldRetry(error)) {
           const delay = baseDelay * Math.pow(2, attempt);
+          if (
+            budget &&
+            Date.now() - startedAt + delay + budget.attemptMs > budget.totalMs
+          ) {
+            break;
+          }
           if (delay > 0) {
             await new Promise((resolve) => setTimeout(resolve, delay));
           }
@@ -266,7 +278,9 @@ export class SistemaTsClient {
       attachmentCid,
     });
 
-    const timeoutMs = this.getTimeoutMs();
+    // CR-11: nessun tentativo può superare da solo la durata massima.
+    const maxDurataMs = this.config.maxDurataInvioMs ?? MAX_DURATA_INVIO_MS;
+    const timeoutMs = Math.min(this.getTimeoutMs(), maxDurataMs);
 
     return this.executeWithRetry(
       async () => {
@@ -296,7 +310,8 @@ export class SistemaTsClient {
         errorMessage: `Errore di rete durante la trasmissione a Sistema TS: ${formatErrorWithCause(error, timeoutMs)}`,
         esitoIncerto: !isSafeToRetrySubmission(error),
       }),
-      isSafeToRetrySubmission
+      isSafeToRetrySubmission,
+      { totalMs: maxDurataMs, attemptMs: timeoutMs }
     );
   }
 

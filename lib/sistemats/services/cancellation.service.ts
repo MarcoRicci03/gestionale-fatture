@@ -3,7 +3,7 @@ import { buildSistemaTsXml, createZipArchive } from "@/lib/sistemats/xml-builder
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa } from "@/lib/sistemats/payload-builder";
 import { getClientForUser } from "./client.service";
-import { STALE_LOCK_MINUTES } from "./transmission.service";
+import { STALE_LOCK_MINUTES } from "@/lib/sistemats/lock-timing";
 import type {
   DocumentoSpesaPayload,
   SpesaSanitariaPayload,

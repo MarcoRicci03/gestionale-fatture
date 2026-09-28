@@ -18,7 +18,7 @@
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
 | `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ⏳ DA CORREGGERE |
-| `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ⏳ DA CORREGGERE |
+| `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ✅ RISOLTO |
 | `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
 
 **Legenda stato:** ⏳ DA VERIFICARE · ⏳ DA CORREGGERE (verificato, fix da fare) · ❌ FALSO POSITIVO · ✅ RISOLTO
@@ -143,3 +143,21 @@ Il problema è confermato. `correggiFatturaTsService` controllava `stato_ts` con
 **Test (`lib/actions/sistema-ts.test.ts`):**
 - nuovo blocco "CR-12": la `where` condizionata con lo stato letto, e con P2025 l'errore senza audit;
 - aggiornate le asserzioni esistenti sulla `where` dell'update e sulla propagazione, che ora usa `updateMany`.
+
+### CR-11 — durata massima di `inviaFile` sotto la soglia dei lock orfani
+
+Il problema è confermato. `STALE_LOCK_MINUTES = 5` presumeva che una chiamata a Sogei non superasse i 120 s, ma con 2 retry su 429/503 `inviaFile` poteva durare circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non aveva limiti. Un lock poteva quindi risultare "orfano" mentre la chiamata era ancora in volo.
+
+**Correzioni:**
+- **Nuovo `lib/sistemats/lock-timing.ts`:** contiene sia `STALE_LOCK_MINUTES` (spostato da `transmission.service.ts`) sia il nuovo `MAX_DURATA_INVIO_MS = 4 min`, perché le due soglie dipendono l'una dall'altra.
+- **`lib/sistemats/client.ts`:**
+  - `executeWithRetry` accetta un budget `{ totalMs, attemptMs }`: un retry parte solo se attesa più tentativo intero stanno ancora entro `totalMs`;
+  - `inviaFile` usa come timeout di ogni tentativo `min(timeoutMs, MAX_DURATA_INVIO_MS)`. Nessun tentativo viene accorciato a metà, perché un timeout anticipato renderebbe incerto l'esito;
+  - le letture non cambiano.
+- **`SistemaTsConfig.maxDurataInvioMs`:** override del tetto, usato dai test.
+- Anche l'annullamento usa `inviaFile`, quindi ne beneficia.
+
+**Test (`lib/sistemats/client.test.ts`, blocco "CR-11"):**
+- l'invariante `MAX_DURATA_INVIO_MS < STALE_LOCK_MINUTES`;
+- con un orologio simulato, lo stop dei retry quando un tentativo intero non ci sta più (l'esito resta non incerto);
+- il timeout del singolo tentativo limitato alla durata massima.

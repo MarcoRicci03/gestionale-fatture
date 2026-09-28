@@ -55,6 +55,8 @@ export interface SistemaTsConfig {
   timeoutMs?: number;
   maxRetries?: number;
   retryBaseDelayMs?: number;
+  // Durata massima complessiva di inviaFile (CR-11). Default MAX_DURATA_INVIO_MS.
+  maxDurataInvioMs?: number;
 }
 
 export interface InvioTsResult {
