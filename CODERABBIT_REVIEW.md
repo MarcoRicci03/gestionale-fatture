@@ -19,7 +19,7 @@
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
 | `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ⏳ DA CORREGGERE |
 | `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ⏳ DA CORREGGERE |
-| `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ⏳ DA CORREGGERE |
+| `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
 
 **Legenda stato:** ⏳ DA VERIFICARE · ⏳ DA CORREGGERE (verificato, fix da fare) · ❌ FALSO POSITIVO · ✅ RISOLTO
 
@@ -130,3 +130,16 @@ Il problema è confermato, con un campo in più rispetto al rilievo. Lo schema d
 - Il blocco CR-05 azzera `mockPagamentoFindFirst`/`mockPaganteFindFirst`: un test precedente lascia un `mockResolvedValueOnce` mai consumato.
 - Nuovo `lib/validations/sistema-ts-correction.test.ts`.
 - Risultato di `npm test`: 1179/1179 passati.
+
+### CR-12 — race di CR-04 nella correzione Sistema TS
+
+Il problema è confermato. `correggiFatturaTsService` controllava `stato_ts` con una `findFirst` e poi scriveva con `update({ where: { id } })`. Un invio concorrente poteva bloccare la fattura nel mezzo, e la correzione finiva su una fattura in trasmissione. La propagazione del CF alle altre bozze aveva la stessa race.
+
+**Correzioni (`lib/sistemats/services/correction.service.ts`):**
+- l'update della fattura ha `where: { id, id_Utente, stato_ts: invoice.stato_ts }`, cioè lo stato letto (`DA_INVIARE` o `ANNULLATA_TS`);
+- P2025 (`isRecordNotFoundError`) restituisce lo stesso messaggio del controllo iniziale ("fattura già trasmessa o in fase di trasmissione"). Il pagante aggiornato nella stessa transazione torna com'era, e l'action non scrive l'audit;
+- la propagazione alle bozze usa `updateMany({ where: { id, stato_ts: "DA_INVIARE" } })`, come `updatePayer`: una bozza partita nel frattempo viene saltata.
+
+**Test (`lib/actions/sistema-ts.test.ts`):**
+- nuovo blocco "CR-12": la `where` condizionata con lo stato letto, e con P2025 l'errore senza audit;
+- aggiornate le asserzioni esistenti sulla `where` dell'update e sulla propagazione, che ora usa `updateMany`.

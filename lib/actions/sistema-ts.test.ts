@@ -1569,7 +1569,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
 
     expect(mockPagamentoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 10 },
+        where: { id: 10, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({
@@ -1620,9 +1620,9 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     expect(res).toHaveProperty("success", true);
 
     // Deve aggiornare sia la fattura 10 che l'altra bozza 11
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 11 },
+        where: { id: 11, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1674,9 +1674,9 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     });
 
     expect(res).toHaveProperty("success", true);
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 11 },
+        where: { id: 11, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1684,9 +1684,9 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
         }),
       })
     );
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 12 },
+        where: { id: 12, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1731,7 +1731,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
 
     expect(mockPagamentoUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 10 },
+        where: { id: 10, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           flag_opposizione: true,
           // CR-05: il CF resta sulla fattura anche con opposizione
@@ -1741,6 +1741,49 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
         }),
       })
     );
+  });
+
+  describe("CR-12 — race tra controllo di stato e scrittura", () => {
+    const recordNotFound = () =>
+      new Prisma.PrismaClientKnownRequestError("No record was found for an update.", {
+        code: "P2025",
+        clientVersion: "test",
+      });
+
+    beforeEach(() => {
+      mockPagamentoFindFirst.mockReset();
+      mockPaganteFindFirst.mockReset();
+      mockPagamentoUpdate.mockReset();
+    });
+
+    it("ricontrolla lo stato letto nella where dell'update", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice, stato_ts: "ANNULLATA_TS" });
+
+      await correggiFatturaTs({ invoiceId: 10, paganteCf: "RSSMRA80A01H501U", aggiornaAnagrafica: false });
+
+      expect(mockPagamentoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 10, id_Utente: 1, stato_ts: "ANNULLATA_TS" },
+        })
+      );
+    });
+
+    it("con P2025 restituisce l'errore di fattura trasmessa e non scrive l'audit", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
+      mockPagamentoUpdate.mockRejectedValueOnce(recordNotFound());
+
+      const res = await correggiFatturaTs({
+        invoiceId: 10,
+        paganteCf: "RSSMRA80A01H501U",
+        aggiornaAnagrafica: false,
+      });
+
+      expect(res).toEqual({
+        success: false,
+        error: "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.",
+      });
+      expect(mockLogAudit).not.toHaveBeenCalled();
+    });
   });
 
   describe("CR-05 — aggiornamento parziale", () => {

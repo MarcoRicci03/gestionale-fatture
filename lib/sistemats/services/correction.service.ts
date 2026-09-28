@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
 import type { CorreggiFatturaTsData } from "@/lib/validations/sistema-ts-correction";
 
@@ -23,6 +23,9 @@ export type CorrectionResult =
       success: false;
       error: string;
     };
+
+const FATTURA_TRASMESSA_ERROR =
+  "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.";
 
 export async function correggiFatturaTsService(params: {
   userId: number;
@@ -55,11 +58,7 @@ export async function correggiFatturaTsService(params: {
     invoice.stato_ts === "IN_TRASMISSIONE" ||
     invoice.stato_ts === "DA_CANCELLARE_SU_TS"
   ) {
-    return {
-      success: false,
-      error:
-        "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.",
-    };
+    return { success: false, error: FATTURA_TRASMESSA_ERROR };
   }
 
   // CR-05: i campi omessi valgono come "invariati". L'opposizione effettiva è
@@ -145,9 +144,10 @@ export async function correggiFatturaTsService(params: {
 
       // 3. Aggiorna la fattura corrente. CR-05: un valore `undefined` (campo non
       // inviato) viene ignorato da Prisma e lascia il campo invariato; `null`
-      // esplicito lo svuota.
+      // esplicito lo svuota. CR-12: lo stato letto viene ricontrollato nella
+      // scrittura; se un invio l'ha bloccata nel frattempo, P2025.
       await tx.pagamento.update({
-        where: { id: invoice.id },
+        where: { id: invoice.id, id_Utente: userId, stato_ts: invoice.stato_ts },
         data: {
           data_pagamento: dataPagamento,
           flag_opposizione: flagOpposizione,
@@ -179,8 +179,10 @@ export async function correggiFatturaTsService(params: {
                 cf: nuovoCf,
               },
             };
-            return tx.pagamento.update({
-              where: { id: draft.id },
+            // CR-12: una bozza partita per il Sistema TS nel frattempo va
+            // saltata, non modificata (stesso schema di updatePayer, CR-04).
+            return tx.pagamento.updateMany({
+              where: { id: draft.id, stato_ts: "DA_INVIARE" },
               data: {
                 snapshotAnagrafica: newDraftSnap as unknown as Prisma.InputJsonValue,
               },
@@ -190,6 +192,9 @@ export async function correggiFatturaTsService(params: {
       }
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return { success: false, error: FATTURA_TRASMESSA_ERROR };
+    }
     if (isUniqueViolationOnField(error, "bolloCodice")) {
       return { success: false, error: "Codice marca da bollo già utilizzato." };
     }
