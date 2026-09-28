@@ -3,7 +3,7 @@
 - **Data:** 2026-09-28
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
-- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-04`. Gli altri non sono ancora stati verificati sul codice.
+- **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-05`. Gli altri non sono ancora stati verificati sul codice.
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
@@ -11,7 +11,7 @@
 | `CR-02` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-304`](./lib/sistemats/services/transmission.service.ts#L297-L304) | Se `inviaFile` riesce ma il salvataggio successivo nel DB fallisce, il `catch` esegue `rollbackStatoTrasmissione`. Le fatture già trasmesse tornano così `DA_INVIARE`. | Tenere traccia dell'invio riuscito e del protocollo. Dopo un invio riuscito, niente rollback: le fatture restano `IN_TRASMISSIONE` e l'errore va registrato nel log con il protocollo. | ✅ RISOLTO |
 | `CR-03` | **Major** | [`lib/sistemats/services/cancellation.service.ts:257-272`](./lib/sistemats/services/cancellation.service.ts#L257-L272) | `ripristinaFatturaPerReinvioService` riporta a `DA_INVIARE` una fattura `IN_TRASMISSIONE` senza condizioni. | Ripristinare solo se `protocollo_ts` è null e `data_invio_ts` è più vecchia della soglia di stallo, con una scrittura condizionata. Se non viene aggiornata nessuna riga, non ripristinare. | ✅ RISOLTO |
 | `CR-04` | **Major** | [`lib/actions/invoices.ts:304-310`](./lib/actions/invoices.ts#L304-L310) | In `updateInvoice` e `refreshInvoiceAnagrafica` l'update non filtra su `stato_ts`. Una race può modificare una fattura appena inviata al Sistema TS. | Aggiungere `stato_ts: "DA_INVIARE"` alla `where` dell'update. Se il record non viene trovato, restituire `FATTURA_GIA_INVIATA_TS_ERROR`. | ✅ RISOLTO |
-| `CR-05` | **Major** | [`lib/sistemats/services/correction.service.ts:143-147`](./lib/sistemats/services/correction.service.ts#L143-L147) | La correzione sovrascrive campi che il client non ha inviato (`data_pagamento`, `pagamento_tracciato`, `bolloCodice`). Quando `targetCf` è null, perde `pagante.cf` dallo snapshot. | Aggiornare solo i campi forniti e conservare `currentSnap.pagante.cf`. In `correggiFatturaTsSchema`, rendere `dataPagamento` e `pagamentoTracciato` opzionali senza default. | ⏳ DA VERIFICARE |
+| `CR-05` | **Major** | [`lib/sistemats/services/correction.service.ts:143-147`](./lib/sistemats/services/correction.service.ts#L143-L147) | La correzione sovrascrive campi che il client non ha inviato (`data_pagamento`, `pagamento_tracciato`, `bolloCodice`). Quando `targetCf` è null, perde `pagante.cf` dallo snapshot. | Aggiornare solo i campi forniti e conservare `currentSnap.pagante.cf`. In `correggiFatturaTsSchema`, rendere `dataPagamento` e `pagamentoTracciato` opzionali senza default. | ✅ RISOLTO |
 | `CR-06` | **Major** | [`lib/auth/rate-limiter.ts:74-81`](./lib/auth/rate-limiter.ts#L74-L81) | Quando il limiter raggiunge `maxEntries`, elimina il record più vecchio. Un attaccante che riempie la mappa può azzerare il limite di altre chiavi. | Se dopo `sweepExpired` la mappa è ancora piena, rifiutare la nuova chiave con `retryAfterSeconds` e non toccare i record esistenti. | ⏳ DA VERIFICARE |
 | `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ⏳ DA VERIFICARE |
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
@@ -96,3 +96,33 @@ Il problema è confermato. `updateInvoice` e `refreshInvoiceAnagrafica` controll
 - `lib/actions/invoices-guards.test.ts`, blocco "CR-04": per `updateInvoice` e `refreshInvoiceAnagrafica` verifica la `where` condizionata, il messaggio d'errore con P2025 e l'assenza di audit.
 - `lib/actions/payers.test.ts`: la propagazione usa `updateMany` con lo stato nella `where`.
 - Risultato di `npm test`: 1168/1168 passati.
+
+### CR-05 — correzione TS con campi non inviati e CF perso
+
+Il problema è confermato, con un campo in più rispetto al rilievo. Lo schema dava un default ai campi salvati: `dataPagamento` → `null`, `pagamentoTracciato` → `true` e anche `flagOpposizione` → `false`, che CodeRabbit non cita. Il service scriveva poi `bolloCodice ?? null`. Un chiamante che ometteva un campo azzerava quindi la data di incasso e il bollo, trasformava un pagamento in contanti in tracciato e revocava l'opposizione. Il dialog attuale manda sempre tutti i campi, ma i test dell'action no: azzeravano quei campi senza che nessuna asserzione lo notasse. In più, con l'opposizione e il CF vuoto, lo snapshot perdeva `pagante.cf`, che si stampa sul PDF. L'opposizione riguarda solo la trasmissione, e XML e service omettono già `cfCittadino`.
+
+**Correzioni:**
+- **`lib/validations/sistema-ts-correction.ts`:** `dataPagamento`, `pagamentoTracciato` e `flagOpposizione` sono `.optional()` senza default. Un campo omesso resta `undefined`, mentre `""`/`null` espliciti diventano `null`. `aggiornaAnagrafica` e `propagaFattureInAttesa` tengono il default perché sono opzioni di comportamento.
+- **`lib/sistemats/services/correction.service.ts`:**
+  - il parametro è tipizzato come `CorreggiFatturaTsData` (output Zod) invece che come input;
+  - i valori passano a Prisma così come sono: `undefined` lascia il campo invariato, `null` esplicito lo svuota;
+  - `opposizioneEffettiva` = valore inviato o, in mancanza, quello salvato. Senza opposizione si valida il CF effettivo (nuovo o dello snapshot), così si può correggere solo la data senza rimandare il CF;
+  - lo snapshot usa `nuovoCf ?? currentSnap.pagante.cf`, quindi non perde mai il CF;
+  - l'aggiornamento dell'anagrafica, il controllo di unicità e la propagazione alle bozze partono solo con un CF inviato esplicitamente;
+  - `cfModificato` si confronta con lo snapshot della fattura.
+- `fix-invoice-ts-dialog.tsx` è invariato.
+
+**Rilievo aperto collegato (fuori scope):** l'update della fattura filtra solo per `id` e non ricontrolla `stato_ts`. È la stessa race di CR-04: un invio concorrente tra la `findFirst` e l'update. Il fix possibile è `where: { id, stato_ts: { in: ["DA_INVIARE", "ANNULLATA_TS"] } }` con la gestione di P2025.
+
+**Test:**
+- `lib/actions/sistema-ts.test.ts`, blocco "CR-05":
+  - i campi omessi restano `undefined` nell'update;
+  - `null` esplicito svuota bollo e data;
+  - vale l'opposizione salvata;
+  - senza nuovo CF non si aggiorna l'anagrafica e non si propaga;
+  - si può correggere la sola data con il CF salvato;
+  - la correzione viene rifiutata se il CF salvato non è valido.
+- Il test sull'opposizione ora verifica che il CF resti nello snapshot.
+- Il blocco CR-05 azzera `mockPagamentoFindFirst`/`mockPaganteFindFirst`: un test precedente lascia un `mockResolvedValueOnce` mai consumato.
+- Nuovo `lib/validations/sistema-ts-correction.test.ts`.
+- Risultato di `npm test`: 1179/1179 passati.

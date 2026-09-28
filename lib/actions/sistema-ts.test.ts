@@ -1734,9 +1734,128 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
         where: { id: 10 },
         data: expect.objectContaining({
           flag_opposizione: true,
+          // CR-05: il CF resta sulla fattura anche con opposizione
+          snapshotAnagrafica: expect.objectContaining({
+            pagante: expect.objectContaining({ cf: "WRONG_CF" }),
+          }),
         }),
       })
     );
+  });
+
+  describe("CR-05 — aggiornamento parziale", () => {
+    // vi.clearAllMocks non svuota la coda dei mockResolvedValueOnce: un test
+    // precedente che fallisce alla validazione Zod lascia una fattura accodata.
+    beforeEach(() => {
+      mockPagamentoFindFirst.mockReset();
+      mockPaganteFindFirst.mockReset();
+    });
+
+    const VALID_CF = "RSSMRA80A01H501U";
+    const savedInvoice = {
+      ...baseInvoice,
+      data_pagamento: new Date("2026-03-05T12:00:00Z"),
+      flag_opposizione: true,
+      pagamento_tracciato: false,
+      bolloCodice: "01234567890123",
+    };
+
+    function lastInvoiceUpdateData() {
+      const call = mockPagamentoUpdate.mock.calls.find(
+        (c) => (c[0] as { where: { id: number } }).where.id === 10
+      );
+      return (call?.[0] as { data: Record<string, unknown> }).data;
+    }
+
+    it("lascia invariati i campi non inviati", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...savedInvoice });
+
+      const res = await correggiFatturaTs({ invoiceId: 10 });
+
+      expect(res).toHaveProperty("success", true);
+      const data = lastInvoiceUpdateData();
+      expect(data.data_pagamento).toBeUndefined();
+      expect(data.flag_opposizione).toBeUndefined();
+      expect(data.pagamento_tracciato).toBeUndefined();
+      expect(data.bolloCodice).toBeUndefined();
+      expect(data.snapshotAnagrafica).toEqual(
+        expect.objectContaining({
+          pagante: expect.objectContaining({ cf: "WRONG_CF" }),
+        })
+      );
+    });
+
+    it("svuota bollo e data di incasso solo se inviati esplicitamente come null", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...savedInvoice });
+
+      const res = await correggiFatturaTs({
+        invoiceId: 10,
+        dataPagamento: null,
+        bolloCodice: null,
+      });
+
+      expect(res).toHaveProperty("success", true);
+      const data = lastInvoiceUpdateData();
+      expect(data.data_pagamento).toBeNull();
+      expect(data.bolloCodice).toBeNull();
+    });
+
+    it("usa l'opposizione già salvata se flagOpposizione non è inviato", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...savedInvoice });
+
+      const res = await correggiFatturaTs({ invoiceId: 10, paganteCf: "" });
+
+      expect(res).toHaveProperty("success", true);
+    });
+
+    it("senza nuovo CF non aggiorna l'anagrafica né propaga alle bozze", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...savedInvoice });
+
+      const res = await correggiFatturaTs({
+        invoiceId: 10,
+        aggiornaAnagrafica: true,
+        propagaFattureInAttesa: true,
+      });
+
+      expect(res).toHaveProperty("success", true);
+      expect(mockPaganteFindFirst).not.toHaveBeenCalled();
+      expect(mockPaganteUpdate).not.toHaveBeenCalled();
+      expect(mockPagamentoFindMany).not.toHaveBeenCalled();
+    });
+
+    it("corregge la sola data di incasso usando il CF valido già salvato", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({
+        ...savedInvoice,
+        flag_opposizione: false,
+        snapshotAnagrafica: {
+          ...baseInvoice.snapshotAnagrafica,
+          pagante: { ...baseInvoice.snapshotAnagrafica.pagante, cf: VALID_CF },
+        },
+      });
+
+      const res = await correggiFatturaTs({
+        invoiceId: 10,
+        dataPagamento: "2026-03-10",
+      });
+
+      expect(res).toHaveProperty("success", true);
+      const data = lastInvoiceUpdateData();
+      expect(data.data_pagamento).toBeInstanceOf(Date);
+      expect(data.pagamento_tracciato).toBeUndefined();
+      expect(data.bolloCodice).toBeUndefined();
+    });
+
+    it("rifiuta la correzione se senza opposizione il CF salvato non è valido", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({
+        ...savedInvoice,
+        flag_opposizione: false,
+      });
+
+      const res = await correggiFatturaTs({ invoiceId: 10 });
+
+      expect(res).toHaveProperty("success", false);
+      expect(mockPagamentoUpdate).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -3,7 +3,7 @@ import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
-import type { CorreggiFatturaTsInput } from "@/lib/validations/sistema-ts-correction";
+import type { CorreggiFatturaTsData } from "@/lib/validations/sistema-ts-correction";
 
 export type CorrectionResult =
   | {
@@ -26,7 +26,7 @@ export type CorrectionResult =
 
 export async function correggiFatturaTsService(params: {
   userId: number;
-  data: CorreggiFatturaTsInput;
+  data: CorreggiFatturaTsData;
 }): Promise<CorrectionResult> {
   const { userId, data } = params;
 
@@ -62,17 +62,25 @@ export async function correggiFatturaTsService(params: {
     };
   }
 
+  // CR-05: i campi omessi valgono come "invariati". L'opposizione effettiva è
+  // quella inviata o, in assenza, quella già salvata; il CF dello snapshot non
+  // viene mai svuotato (l'opposizione riguarda solo l'invio a Sistema TS, il
+  // CF resta sulla fattura).
+  const opposizioneEffettiva = flagOpposizione ?? invoice.flag_opposizione;
+  const currentSnap = resolveAnagrafica(invoice);
+  const nuovoCf = paganteCf ? paganteCf.trim().toUpperCase() : null;
+  const cfEffettivo = nuovoCf ?? currentSnap.pagante.cf;
+
   // Validazione Codice Fiscale se non c'è opposizione del paziente
-  const targetCf = paganteCf ? paganteCf.trim().toUpperCase() : null;
-  if (!flagOpposizione) {
-    if (!targetCf) {
+  if (!opposizioneEffettiva) {
+    if (!cfEffettivo) {
       return {
         success: false,
         error:
           "È necessario inserire un Codice Fiscale valido oppure selezionare l'opposizione alla trasmissione.",
       };
     }
-    const cfCheck = validateCodiceFiscale(targetCf);
+    const cfCheck = validateCodiceFiscale(cfEffettivo);
     if (!cfCheck.valid) {
       return {
         success: false,
@@ -82,19 +90,19 @@ export async function correggiFatturaTsService(params: {
   }
 
   // Verifica unicità Codice Fiscale su altri paganti attivi dell'utente
-  if (aggiornaAnagrafica && targetCf) {
+  if (aggiornaAnagrafica && nuovoCf) {
     const existingPayer = await prisma.pagante.findFirst({
       where: {
         id_Utente: userId,
         archiviato: false,
         id: { not: invoice.id_Pagante },
-        cf: targetCf,
+        cf: nuovoCf,
       },
     });
     if (existingPayer) {
       return {
         success: false,
-        error: `Il Codice Fiscale ${targetCf} è già associato ad un altro cliente (${existingPayer.cognome} ${existingPayer.nome}).`,
+        error: `Il Codice Fiscale ${nuovoCf} è già associato ad un altro cliente (${existingPayer.cognome} ${existingPayer.nome}).`,
       };
     }
   }
@@ -119,37 +127,38 @@ export async function correggiFatturaTsService(params: {
   try {
     await prisma.$transaction(async (tx) => {
       // 1. Aggiorna anagrafica cliente Pagante se richiesto
-      if (aggiornaAnagrafica && targetCf) {
+      if (aggiornaAnagrafica && nuovoCf) {
         await tx.pagante.update({
           where: { id: invoice.id_Pagante },
-          data: { cf: targetCf },
+          data: { cf: nuovoCf },
         });
       }
 
       // 2. Prepara snapshot aggiornato per la fattura corrente
-      const currentSnap = resolveAnagrafica(invoice);
       const updatedSnap = {
         ...currentSnap,
         pagante: {
           ...currentSnap.pagante,
-          cf: targetCf,
+          cf: cfEffettivo,
         },
       };
 
-      // 3. Aggiorna la fattura corrente
+      // 3. Aggiorna la fattura corrente. CR-05: un valore `undefined` (campo non
+      // inviato) viene ignorato da Prisma e lascia il campo invariato; `null`
+      // esplicito lo svuota.
       await tx.pagamento.update({
         where: { id: invoice.id },
         data: {
           data_pagamento: dataPagamento,
           flag_opposizione: flagOpposizione,
           pagamento_tracciato: pagamentoTracciato,
-          bolloCodice: bolloCodice ?? null,
+          bolloCodice,
           snapshotAnagrafica: updatedSnap as unknown as Prisma.InputJsonValue,
         },
       });
 
-      // 4. Se richiesto e targetCf presente, propaga alle altre fatture DA_INVIARE dello stesso pagante
-      if (propagaFattureInAttesa && targetCf) {
+      // 4. Se richiesto e un nuovo CF è stato inviato, propaga alle altre fatture DA_INVIARE dello stesso pagante
+      if (propagaFattureInAttesa && nuovoCf) {
         const otherDrafts = await tx.pagamento.findMany({
           where: {
             id_Utente: userId,
@@ -167,7 +176,7 @@ export async function correggiFatturaTsService(params: {
               ...draftSnap,
               pagante: {
                 ...draftSnap.pagante,
-                cf: targetCf,
+                cf: nuovoCf,
               },
             };
             return tx.pagamento.update({
@@ -199,9 +208,9 @@ export async function correggiFatturaTsService(params: {
       anno: invoice.anno,
       paganteCf: invoice.pagante.cf,
     },
-    cfModificato: targetCf !== invoice.pagante.cf,
+    cfModificato: nuovoCf !== null && nuovoCf !== currentSnap.pagante.cf,
     propagaFattureInAttesa,
-    flagOpposizione,
+    flagOpposizione: opposizioneEffettiva,
     aggiornaAnagrafica,
   };
 }
