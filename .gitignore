@@ -68,4 +68,5 @@ next-env.d.ts
 docs/
 .superpowers/
 
-ROADMAP_FIX.md
+ROADMAP_FIX.mdgraphify-out/
+graphify-out/
