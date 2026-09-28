@@ -28,8 +28,8 @@ export function formatArchiveInvoiceImpact(impact: InvoiceImpactData): string | 
 
 export function getHardDeleteInvoiceBlockReason(count: number): string | null {
   if (count <= 0) return null;
-  const noun = count === 1 ? "fattura collegata" : "fatture collegate";
-  return `Impossibile eliminare: ci sono ${count} ${noun}. Le fatture non possono essere cancellate.`;
+  const collegate = count === 1 ? "c'è 1 fattura collegata" : `ci sono ${count} fatture collegate`;
+  return `Impossibile eliminare: ${collegate}. Le fatture non possono essere cancellate.`;
 }
 
 export function getHardDeletePatientsBlockReason(count: number): string | null {
@@ -37,5 +37,5 @@ export function getHardDeletePatientsBlockReason(count: number): string | null {
   if (count === 1) {
     return "Impossibile eliminare: 1 paziente collegato non è ancora archiviato. Archivialo prima di procedere.";
   }
-  return `Impossibile eliminare: ${count} pazienti collegati non sono ancora archiviati. Archivialo prima di procedere.`;
+  return `Impossibile eliminare: ${count} pazienti collegati non sono ancora archiviati. Archiviali prima di procedere.`;
 }

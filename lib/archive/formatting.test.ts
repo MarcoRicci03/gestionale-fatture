@@ -55,7 +55,7 @@ describe("lib/archive/formatting (DRY-01)", () => {
 
     it("formatta il motivo di blocco per 1 fattura", () => {
       expect(getHardDeleteInvoiceBlockReason(1)).toBe(
-        "Impossibile eliminare: ci sono 1 fattura collegata. Le fatture non possono essere cancellate."
+        "Impossibile eliminare: c'è 1 fattura collegata. Le fatture non possono essere cancellate."
       );
     });
 
@@ -79,7 +79,7 @@ describe("lib/archive/formatting (DRY-01)", () => {
 
     it("formatta il motivo di blocco per più pazienti non archiviati", () => {
       expect(getHardDeletePatientsBlockReason(2)).toBe(
-        "Impossibile eliminare: 2 pazienti collegati non sono ancora archiviati. Archivialo prima di procedere."
+        "Impossibile eliminare: 2 pazienti collegati non sono ancora archiviati. Archiviali prima di procedere."
       );
     });
   });

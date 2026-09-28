@@ -16,7 +16,7 @@
 | `CR-06` | **Major** | [`lib/auth/rate-limiter.ts:74-81`](./lib/auth/rate-limiter.ts#L74-L81) | Quando il limiter raggiunge `maxEntries`, elimina il record più vecchio. Un attaccante che riempie la mappa può azzerare il limite di altre chiavi. | Se dopo `sweepExpired` la mappa è ancora piena, rifiutare la nuova chiave con `retryAfterSeconds` e non toccare i record esistenti. | ✅ RISOLTO |
 | `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ✅ RISOLTO |
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
-| `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
+| `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ✅ RISOLTO |
 | `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ✅ RISOLTO |
 | `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ✅ RISOLTO |
 | `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
@@ -260,3 +260,15 @@ WHERE p.stato_ts = 'IN_TRASMISSIONE' AND p.protocollo_ts IS NOT NULL;
 - `lib/data/sistema-ts.test.ts`: `annullamentoInCorso` è vero solo con un lock non scaduto.
 - `components/sistema-ts/sistema-ts-manager.test.tsx`: il badge e il pulsante disabilitato.
 - Risultato di `npm test`: 1201/1201 passati. `npm run test:db`: 6/6, tutte le migration applicate.
+
+### CR-09 — testi dell'archiviazione
+
+Il problema è confermato. `getHardDeleteInvoiceBlockReason(1)` restituiva "ci sono 1 fattura collegata", e `getHardDeletePatientsBlockReason` al plurale diceva "Archivialo".
+
+**Correzioni (`lib/archive/formatting.ts`):**
+- per una sola fattura il testo è "c'è 1 fattura collegata", per più fatture resta "ci sono N fatture collegate";
+- per più pazienti il testo è "Archiviali prima di procedere".
+
+I testi compaiono nei dialog di eliminazione definitiva di pazienti e paganti. Nessun test di componente o e2e verificava il testo esatto.
+
+**Test:** in `lib/archive/formatting.test.ts` ho aggiornato le due asserzioni.
