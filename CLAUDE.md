@@ -134,3 +134,13 @@ Sono test statici sul sorgente e falliscono se violi:
 - Ogni nuova query deve filtrare per `id_Utente`. Ogni nuova action deve verificare la sessione e chiamare `logAudit`, come richiesto dai test di invarianti.
 - I commenti citano ID di audit. I rilievi aperti sono in `CODE_REVIEW_ARCHITECT.md` (`SEC-`, `ARCH-`, `ERR-`...) e in `CODERABBIT_REVIEW.md` (`CR-`). Quando risolvi un rilievo, aggiorna il suo stato in quel file e aggiungi una nota sul fix. Gli ID più vecchi citati nel codice vengono da report di audit ormai rimossi.
 - Non toccare `certs/`, `.env*` né i segreti. Non puntare mai e2e o seed a un DB non locale.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

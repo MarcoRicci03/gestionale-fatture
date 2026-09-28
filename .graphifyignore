@@ -1,0 +1,28 @@
+# dipendenze e build
+node_modules/
+.next/
+tsconfig.tsbuildinfo
+package-lock.json
+next-env.d.ts
+
+# dati e segreti: non devono finire nel grafo
+postgres_dev_data/
+certs/
+.env
+.env.*
+!.env.prod.example
+rclone.conf.example
+
+# asset statici (in modalità non --code-only le immagini passano dal modello)
+public/
+
+# output di graphify e artefatti di test
+graphify-out/
+playwright-report/
+test-results/
+coverage/
+
+# documenti di review/roadmap: rumore, non struttura del codice
+CODE_REVIEW_ARCHITECT.md
+CODERABBIT_REVIEW.md
+ROADMAP-APERTI.md
