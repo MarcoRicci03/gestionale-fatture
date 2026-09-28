@@ -15,10 +15,7 @@ function makePagante(overrides: Partial<Pagante> = {}): Pagante {
     via: "Via del Corso 1",
     cf: "RSSMRA80A01H501U",
     piva: null,
-    isArchived: false,
-    archivedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    archiviato: false,
     ...overrides,
   };
 }
@@ -33,10 +30,8 @@ function makePaziente(
     nome: "Anna",
     cognome: "Bianchi",
     id_Pagante: null,
-    isArchived: false,
-    archivedAt: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    archiviato: false,
+    archiviatoInCascata: false,
     ...pazienteOverrides,
     pagante,
   };

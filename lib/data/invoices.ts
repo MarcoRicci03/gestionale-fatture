@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";

@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { validateImportoSpesa } from "@/lib/sistemats/payload-builder";

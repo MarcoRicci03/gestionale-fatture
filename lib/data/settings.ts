@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import { Prisma } from "@prisma/client";
 import type { ImpostazioniPdf as PrismaImpostazioniPdf } from "@prisma/client";

@@ -24,6 +24,8 @@ export type CorrectionResult =
       error: string;
     };
 
+class PaganteNonTrovatoError extends Error {}
+
 const FATTURA_TRASMESSA_ERROR =
   "Non è possibile modificare i dati di una fattura già trasmessa o in fase di trasmissione.";
 
@@ -127,10 +129,16 @@ export async function correggiFatturaTsService(params: {
     await prisma.$transaction(async (tx) => {
       // 1. Aggiorna anagrafica cliente Pagante se richiesto
       if (aggiornaAnagrafica && nuovoCf) {
-        await tx.pagante.update({
-          where: { id: invoice.id_Pagante },
+        // updateMany invece di update: con update un P2025 finirebbe nel ramo
+        // isRecordNotFoundError e mostrerebbe "fattura già trasmessa". Qui
+        // il pagante manca o non è dell'utente, un errore diverso.
+        const { count } = await tx.pagante.updateMany({
+          where: { id: invoice.id_Pagante, id_Utente: userId },
           data: { cf: nuovoCf },
         });
+        if (count === 0) {
+          throw new PaganteNonTrovatoError();
+        }
       }
 
       // 2. Prepara snapshot aggiornato per la fattura corrente
@@ -182,7 +190,7 @@ export async function correggiFatturaTsService(params: {
             // CR-12: una bozza partita per il Sistema TS nel frattempo va
             // saltata, non modificata (stesso schema di updatePayer, CR-04).
             return tx.pagamento.updateMany({
-              where: { id: draft.id, stato_ts: "DA_INVIARE" },
+              where: { id: draft.id, id_Utente: userId, stato_ts: "DA_INVIARE" },
               data: {
                 snapshotAnagrafica: newDraftSnap as unknown as Prisma.InputJsonValue,
               },
@@ -192,6 +200,9 @@ export async function correggiFatturaTsService(params: {
       }
     });
   } catch (error) {
+    if (error instanceof PaganteNonTrovatoError) {
+      return { success: false, error: "Cliente non trovato." };
+    }
     if (isRecordNotFoundError(error)) {
       return { success: false, error: FATTURA_TRASMESSA_ERROR };
     }

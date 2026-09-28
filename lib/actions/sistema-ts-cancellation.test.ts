@@ -275,7 +275,7 @@ describe("sincronizzaEsitoTrasmissione — Riconciliazione esito cancellazione",
     // Aggiornamento trasmissione con esito e ricevuta
     expect(mockTrasmissioneUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 99 },
+        where: { id: 99, id_Utente: 1 },
         data: expect.objectContaining({
           statoElaborazione: "2",
           pdfRicevuta: expect.any(Uint8Array),
@@ -326,7 +326,7 @@ describe("sincronizzaEsitoTrasmissione — Riconciliazione esito cancellazione",
     // Aggiornamento trasmissione con esito e report errori
     expect(mockTrasmissioneUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 100 },
+        where: { id: 100, id_Utente: 1 },
         data: expect.objectContaining({
           statoElaborazione: "4",
           csvErrori: expect.stringContaining("S016"),

@@ -62,7 +62,7 @@ const mockPagamentoFindMany = vi.fn();
 const mockPagamentoUpdate = vi.fn();
 const mockPagamentoUpdateMany = vi.fn();
 const mockPaganteFindFirst = vi.fn();
-const mockPaganteUpdate = vi.fn();
+const mockPaganteUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 const mockTrasmissioneFindFirst = vi.fn();
 const mockTrasmissioneCreate = vi.fn();
 const mockTrasmissioneUpdate = vi.fn();
@@ -80,7 +80,7 @@ const mockTransaction = vi.fn(async (cb: (tx: unknown) => unknown) => {
     },
     pagante: {
       findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
-      update: (...args: unknown[]) => mockPaganteUpdate(...args),
+      updateMany: (...args: unknown[]) => mockPaganteUpdateMany(...args),
     },
   };
   return cb(tx);
@@ -108,7 +108,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     pagante: {
       findFirst: (...args: unknown[]) => mockPaganteFindFirst(...args),
-      update: (...args: unknown[]) => mockPaganteUpdate(...args),
+      updateMany: (...args: unknown[]) => mockPaganteUpdateMany(...args),
     },
     $transaction: (...args: unknown[]) => mockTransaction(...args as [(tx: unknown) => unknown]),
   },
@@ -813,7 +813,7 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
 
     expect(mockTrasmissioneUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 20 },
+        where: { id: 20, id_Utente: 1 },
         data: expect.objectContaining({
           statoElaborazione: "3",
           pdfRicevuta: expect.any(Uint8Array),
@@ -1557,9 +1557,9 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       message: "Fattura n. 5/2026 corretta con successo.",
     });
 
-    expect(mockPaganteUpdate).toHaveBeenCalledWith(
+    expect(mockPaganteUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 100 },
+        where: { id: 100, id_Utente: 1 },
         data: { cf: "RSSMRA80A01H501U" },
       })
     );
@@ -1619,7 +1619,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     // Deve aggiornare sia la fattura 10 che l'altra bozza 11
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 11, stato_ts: "DA_INVIARE" },
+        where: { id: 11, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1673,7 +1673,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     expect(res).toHaveProperty("success", true);
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 11, stato_ts: "DA_INVIARE" },
+        where: { id: 11, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1683,7 +1683,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     );
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 12, stato_ts: "DA_INVIARE" },
+        where: { id: 12, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({ cf: "RSSMRA80A01H501U" }),
@@ -1707,7 +1707,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
 
     expect(res).toHaveProperty("success", true);
     expect(mockPagamentoFindMany).not.toHaveBeenCalled();
-    expect(mockPaganteUpdate).not.toHaveBeenCalled();
+    expect(mockPaganteUpdateMany).not.toHaveBeenCalled();
   });
 
   it("consente il salvataggio con opposizione senza richiedere il Codice Fiscale", async () => {
@@ -1859,7 +1859,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
 
       expect(res).toHaveProperty("success", true);
       expect(mockPaganteFindFirst).not.toHaveBeenCalled();
-      expect(mockPaganteUpdate).not.toHaveBeenCalled();
+      expect(mockPaganteUpdateMany).not.toHaveBeenCalled();
       expect(mockPagamentoFindMany).not.toHaveBeenCalled();
     });
 

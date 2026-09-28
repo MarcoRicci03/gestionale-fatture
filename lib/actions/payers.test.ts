@@ -152,7 +152,7 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
     // CR-04: la where ricontrolla lo stato, così una bozza partita nel frattempo viene saltata.
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 50, stato_ts: "DA_INVIARE" },
+        where: { id: 50, id_Utente: 1, stato_ts: "DA_INVIARE" },
         data: expect.objectContaining({
           snapshotAnagrafica: expect.objectContaining({
             pagante: expect.objectContaining({
@@ -212,10 +212,10 @@ describe("lib/actions/payers — updatePayer con gestione propagazione", () => {
 
     expect(res).toEqual({ success: true });
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 51, stato_ts: "DA_INVIARE" } })
+      expect.objectContaining({ where: { id: 51, id_Utente: 1, stato_ts: "DA_INVIARE" } })
     );
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 52, stato_ts: "DA_INVIARE" } })
+      expect.objectContaining({ where: { id: 52, id_Utente: 1, stato_ts: "DA_INVIARE" } })
     );
   });
 });

@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getNextInvoiceNumberForUserYear } from "@/lib/data/invoices";
 import { TEST_USER } from "./test-user";
 
 async function getTestUserId(): Promise<number> {
@@ -45,7 +44,15 @@ export async function createTestPatient(id_Pagante: number, suffix: string) {
 export async function createTestInvoice(id_Pagante: number, id_Paziente: number) {
   const id_Utente = await getTestUserId();
   const anno = new Date().getFullYear();
-  const n_fattura = await getNextInvoiceNumberForUserYear(id_Utente, anno);
+  // Query ripetuta qui invece di importare getNextInvoiceNumberForUserYear:
+  // lib/data/* importa "server-only", che fuori da Next (Playwright gira in
+  // Node) lancia all'import.
+  const last = await prisma.pagamento.findFirst({
+    where: { id_Utente, anno },
+    orderBy: { n_fattura: "desc" },
+    select: { n_fattura: true },
+  });
+  const n_fattura = (last?.n_fattura ?? 0) + 1;
   return prisma.pagamento.create({
     data: {
       id_Utente,

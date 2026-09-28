@@ -80,7 +80,10 @@ export async function sincronizzaEsitoTrasmissioneService(params: {
 
     await prisma.$transaction(async (tx) => {
       await tx.trasmissioneTs.update({
-        where: { id: trasmissioneId },
+        // id_Utente anche qui, non solo nella findFirst iniziale: la scrittura
+        // resta isolata per utente anche senza la lettura che la precede.
+        // Se non trova la riga lancia P2025 e la transazione viene annullata.
+        where: { id: trasmissioneId, id_Utente: userId },
         data: {
           statoElaborazione: esitoRes.statoElaborazione,
           codiceEsito: esitoRes.codiceEsito,

@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { AUDIT_LOG_SELECT, type AuditLogEntry } from "./audit-log-select";

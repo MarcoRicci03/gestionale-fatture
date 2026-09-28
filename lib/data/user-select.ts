@@ -1,3 +1,4 @@
+import "server-only";
 import type { Prisma } from "@prisma/client";
 
 // Esclude esplicitamente `passwordHash`: questo select alimenta componenti
