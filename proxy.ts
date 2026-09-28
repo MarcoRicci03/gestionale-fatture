@@ -47,16 +47,16 @@ export async function proxy(request: NextRequest) {
   // ogni Server Action verifica autonomamente la sessione. Non c'è modo di
   // intercettare le Server Action qui con la stessa granularità delle route
   // GET in questa versione di Next.js — l'invariante "ogni action esportata
-  // chiama requireUserId/requireSession/requireAdmin" è garantita da
-  // `npm run verify:actions-auth` (scripts/verify-actions-auth.ts), non da
+  // chiama requireUserId/requireSession/requireAdmin" è garantita dal test
+  // scripts/verify-actions-auth.test.ts (eseguito da `npm test`), non da
   // questo proxy.
   //
   // Il matcher sopra esclude anche "api": un 307 verso /login non è una
   // risposta sensata per un client API, quindi le route in
-  // app/api/**/route.ts si autenticano da sole (requireUserId/requireSession/
-  // requireAdmin nell'handler), come le Server Action. L'invariante è
-  // garantita da `npm run verify:api-routes-auth`
-  // (scripts/verify-api-routes-auth.ts).
+  // app/api/**/route.ts si autenticano da sole (getUserIdOrNull() con 401
+  // esplicito, o requireUserId/requireSession/requireAdmin nell'handler),
+  // come le Server Action. L'invariante è garantita dal test
+  // scripts/verify-api-routes-auth.test.ts (eseguito da `npm test`).
   //
   // HEAD va trattato come GET (Next.js instrada le HEAD sulle stesse route):
   // senza escluderlo esplicitamente, una richiesta HEAD su una pagina
