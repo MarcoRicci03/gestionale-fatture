@@ -3,6 +3,7 @@ import { buildSistemaTsXml, createZipArchive } from "@/lib/sistemats/xml-builder
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa } from "@/lib/sistemats/payload-builder";
 import { getClientForUser } from "./client.service";
+import { STALE_LOCK_MINUTES } from "./transmission.service";
 import type {
   DocumentoSpesaPayload,
   SpesaSanitariaPayload,
@@ -38,7 +39,6 @@ export async function annullaFatturaTsService(params: {
 
   // Recupero automatico self-healing per lock orfani di cancellazione rimasti in IN_TRASMISSIONE
   // oltre il timeout massimo di chiamata a Sogei (120s). Finestra di sicurezza: 5 minuti.
-  const STALE_LOCK_MINUTES = 5;
   const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
   await prisma.pagamento.updateMany({
     where: {
@@ -262,14 +262,56 @@ export async function ripristinaFatturaPerReinvioService(params: {
     };
   }
 
-  await prisma.pagamento.update({
-    where: { id: invoiceId },
+  // CR-03: una fattura IN_TRASMISSIONE si può sbloccare solo se è un invio
+  // iniziale (protocollo_ts nullo) il cui lock è ormai orfano. Con protocollo
+  // valorizzato è già sul Sistema TS (annullamento in corso, oppure lotto
+  // acquisito ma non registrato — CR-02): riportarla in DA_INVIARE la farebbe
+  // reinviare in duplicato e perderebbe il protocollo. Con un lock recente la
+  // chiamata a Sogei può essere ancora in volo.
+  const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
+  if (invoice.stato_ts === "IN_TRASMISSIONE") {
+    if (invoice.protocollo_ts) {
+      return {
+        success: false,
+        error:
+          `La fattura risulta già trasmessa al Sistema TS (protocollo ${invoice.protocollo_ts}) o è in corso un annullamento: ` +
+          "non può tornare in 'Da Inviare'. Contatta l'assistenza indicando il protocollo.",
+      };
+    }
+    if (!invoice.data_invio_ts || invoice.data_invio_ts >= staleThreshold) {
+      return {
+        success: false,
+        error: "Trasmissione in corso: riprova tra qualche minuto.",
+      };
+    }
+  }
+
+  // Scrittura condizionata: se lo stato è cambiato tra la lettura e qui
+  // (invio o sincronizzazione concorrente) non si tocca nulla.
+  const result = await prisma.pagamento.updateMany({
+    where:
+      invoice.stato_ts === "IN_TRASMISSIONE"
+        ? {
+            id: invoiceId,
+            id_Utente: userId,
+            stato_ts: "IN_TRASMISSIONE",
+            protocollo_ts: null,
+            data_invio_ts: { lt: staleThreshold },
+          }
+        : { id: invoiceId, id_Utente: userId, stato_ts: "ANNULLATA_TS" },
     data: {
       stato_ts: "DA_INVIARE",
       protocollo_ts: null,
       data_invio_ts: null,
     },
   });
+
+  if (result.count === 0) {
+    return {
+      success: false,
+      error: "Lo stato della fattura è cambiato nel frattempo: ricarica la pagina.",
+    };
+  }
 
   return {
     success: true,

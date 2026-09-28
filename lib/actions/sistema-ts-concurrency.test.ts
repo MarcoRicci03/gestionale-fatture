@@ -318,6 +318,78 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     );
   });
 
+  describe("CR-02: protocollo acquisito ma registrazione nel DB fallita", () => {
+    const rollbackCall = expect.objectContaining({
+      where: expect.objectContaining({ id: { in: [101] } }),
+      data: expect.objectContaining({ stato_ts: "DA_INVIARE" }),
+    });
+
+    beforeEach(() => {
+      mockPagamentoFindMany.mockResolvedValueOnce([createMockInvoice(101, 1)]);
+      mockPagamentoUpdateMany
+        .mockResolvedValueOnce({ count: 0 }) // stale recovery
+        .mockResolvedValueOnce({ count: 1 }); // lock ok
+    });
+
+    it("errore DB transitorio: il secondo tentativo registra la trasmissione, nessun rollback", async () => {
+      mockTrasmissioneCreate.mockRejectedValueOnce(new Error("Connection terminated unexpectedly"));
+
+      const result = await inviaLottoFatture([101]);
+
+      expect(result).toEqual(
+        expect.objectContaining({ success: true, protocollo: "PROT-2026-999" })
+      );
+      expect(mockInviaFile).toHaveBeenCalledTimes(1);
+      expect(mockTrasmissioneCreate).toHaveBeenCalledTimes(2);
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalledWith(rollbackCall);
+    });
+
+    it("violazione di unicità su protocollo al secondo tentativo: la trasmissione risulta già registrata", async () => {
+      mockTrasmissioneCreate
+        .mockRejectedValueOnce(new Error("Connection terminated unexpectedly"))
+        .mockRejectedValueOnce(
+          new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+            code: "P2002",
+            clientVersion: "test",
+            meta: { target: ["protocollo"] },
+          })
+        );
+
+      const result = await inviaLottoFatture([101]);
+
+      expect(result).toEqual(
+        expect.objectContaining({ success: true, protocollo: "PROT-2026-999" })
+      );
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalledWith(rollbackCall);
+    });
+
+    it("errore DB persistente: nessun rollback, protocollo salvato di ripiego e messaggio 'NON reinviare'", async () => {
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockTrasmissioneCreate.mockRejectedValue(new Error("Connection terminated unexpectedly"));
+
+      const result = await inviaLottoFatture([101]);
+
+      expect(result).toEqual({
+        success: false,
+        error: expect.stringContaining("protocollo PROT-2026-999"),
+      });
+      expect(result).toHaveProperty("error", expect.stringContaining("NON reinviare"));
+      expect(mockPagamentoUpdateMany).not.toHaveBeenCalledWith(rollbackCall);
+      expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({ id: { in: [101] }, stato_ts: "IN_TRASMISSIONE" }),
+        data: { protocollo_ts: "PROT-2026-999" },
+      });
+      expect(consoleError).toHaveBeenCalledWith(
+        "TS_PROTOCOLLO_NON_REGISTRATO",
+        expect.objectContaining({ protocollo: "PROT-2026-999", invoiceIds: [101] }),
+        expect.any(Error)
+      );
+
+      consoleError.mockRestore();
+      mockTrasmissioneCreate.mockReset();
+    });
+  });
+
   it("annullaFatturaTs: rifiuta l'annullamento se la fattura è in IN_TRASMISSIONE", async () => {
     mockPagamentoFindFirst.mockResolvedValueOnce({
       id: 200,
@@ -394,14 +466,16 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
     );
   });
 
-  it("ripristinaFatturaPerReinvio: consente lo sblocco manuale se la fattura è rimasta in IN_TRASMISSIONE", async () => {
+  it("ripristinaFatturaPerReinvio: consente lo sblocco manuale di un invio iniziale con lock scaduto", async () => {
     mockPagamentoFindFirst.mockResolvedValueOnce({
       id: 200,
       n_fattura: 10,
       anno: 2026,
       stato_ts: "IN_TRASMISSIONE",
+      protocollo_ts: null,
+      data_invio_ts: new Date(Date.now() - 10 * 60 * 1000), // 10 minuti fa
     });
-    mockPagamentoUpdate.mockResolvedValueOnce({ id: 200 });
+    mockPagamentoUpdateMany.mockResolvedValueOnce({ count: 1 });
 
     const result = await ripristinaFatturaPerReinvio(200);
 
@@ -410,13 +484,56 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
         success: true,
       })
     );
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 200 },
-        data: expect.objectContaining({
-          stato_ts: "DA_INVIARE",
-        }),
-      })
-    );
+    // CR-03: la scrittura ricontrolla le stesse condizioni (niente race).
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: 200,
+        id_Utente: 1,
+        stato_ts: "IN_TRASMISSIONE",
+        protocollo_ts: null,
+        data_invio_ts: { lt: expect.any(Date) },
+      },
+      data: { stato_ts: "DA_INVIARE", protocollo_ts: null, data_invio_ts: null },
+    });
+  });
+
+  it("CR-03: rifiuta lo sblocco se il lock è recente (chiamata a Sogei forse ancora in volo)", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 201,
+      n_fattura: 11,
+      anno: 2026,
+      stato_ts: "IN_TRASMISSIONE",
+      protocollo_ts: null,
+      data_invio_ts: new Date(Date.now() - 30 * 1000), // 30 secondi fa
+    });
+
+    const result = await ripristinaFatturaPerReinvio(201);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Trasmissione in corso: riprova tra qualche minuto.",
+    });
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdate).not.toHaveBeenCalled();
+  });
+
+  it("CR-03: rifiuta lo sblocco se la fattura ha già un protocollo (già sul Sistema TS)", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 202,
+      n_fattura: 12,
+      anno: 2026,
+      stato_ts: "IN_TRASMISSIONE",
+      protocollo_ts: "PROT-GIA-ACQUISITO",
+      data_invio_ts: new Date(Date.now() - 60 * 60 * 1000), // anche se il lock è vecchio
+    });
+
+    const result = await ripristinaFatturaPerReinvio(202);
+
+    expect(result).toEqual({
+      success: false,
+      error: expect.stringContaining("protocollo PROT-GIA-ACQUISITO"),
+    });
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdate).not.toHaveBeenCalled();
   });
 });

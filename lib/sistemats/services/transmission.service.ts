@@ -5,11 +5,16 @@ import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa, validateImportoSpesa } from "@/lib/sistemats/payload-builder";
 import { isDataPagamentoFutura, formatDateDisplay } from "@/lib/utils/date";
 import { isBolloDovuto, isBolloCodiceValido } from "@/lib/fiscal/bollo";
+import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { getClientForUser } from "./client.service";
 import type {
   DocumentoSpesaPayload,
   SpesaSanitariaPayload,
 } from "@/lib/sistemats/types";
+
+// Oltre questa età un lock IN_TRASMISSIONE è considerato orfano: supera con
+// margine il timeout massimo di una chiamata a Sogei (120s).
+export const STALE_LOCK_MINUTES = 5;
 
 export class ConcurrencyLockError extends Error {
   constructor(message: string) {
@@ -55,6 +60,55 @@ export async function rollbackStatoTrasmissione(
   });
 }
 
+/**
+ * CR-02: Sogei ha acquisito il lotto ma la registrazione nel DB è fallita.
+ * Niente rollback: le fatture restano IN_TRASMISSIONE. Si prova a scrivere
+ * almeno protocollo_ts, così il recupero dei lock orfani (che agisce solo con
+ * protocollo_ts nullo) non le rimette in DA_INVIARE. Il protocollo finisce
+ * comunque nel log e nel messaggio all'utente.
+ */
+async function gestisciProtocolloNonRegistrato(params: {
+  protocollo: string;
+  fileName: string;
+  candidateIds: number[];
+  userId: number;
+  lockTimestamp: Date;
+  error: unknown;
+}): Promise<TransmissionResult> {
+  const { protocollo, fileName, candidateIds, userId, lockTimestamp, error } = params;
+
+  try {
+    await prisma.pagamento.updateMany({
+      where: {
+        id: { in: candidateIds },
+        id_Utente: userId,
+        stato_ts: "IN_TRASMISSIONE",
+        data_invio_ts: lockTimestamp,
+      },
+      data: { protocollo_ts: protocollo },
+    });
+  } catch (fallbackError) {
+    // ponytail: se il DB è del tutto irraggiungibile il protocollo sopravvive
+    // solo nel log e nel messaggio all'utente; serve un archivio di recupero
+    // esterno al DB se questo caso diventa frequente.
+    console.error("Salvataggio di ripiego del protocollo fallito:", fallbackError);
+  }
+
+  // Prefisso grep-abile, stesso schema di AUDIT_WRITE_FAILED (lib/audit/log.ts).
+  console.error(
+    "TS_PROTOCOLLO_NON_REGISTRATO",
+    { protocollo, fileName, invoiceIds: candidateIds },
+    error
+  );
+
+  return {
+    success: false,
+    error:
+      `Il Sistema TS ha acquisito il lotto (protocollo ${protocollo}), ma il salvataggio nel gestionale non è riuscito. ` +
+      "NON reinviare queste fatture: annota il protocollo e contatta l'assistenza.",
+  };
+}
+
 export async function inviaLottoFattureService(params: {
   userId: number;
   invoiceIds: number[];
@@ -78,7 +132,6 @@ export async function inviaLottoFattureService(params: {
   // Recupero automatico self-healing per lock orfani rimasti in IN_TRASMISSIONE
   // oltre il timeout massimo di chiamata a Sogei (120s). Finestra di sicurezza: 5 minuti.
   // Limita il recupero a DA_INVIARE solo agli invii iniziali (protocollo_ts nullo).
-  const STALE_LOCK_MINUTES = 5;
   const staleThreshold = new Date(Date.now() - STALE_LOCK_MINUTES * 60 * 1000);
   await prisma.pagamento.updateMany({
     where: {
@@ -229,11 +282,14 @@ export async function inviaLottoFattureService(params: {
     documenti,
   };
 
-  let transmissionSuccess = false;
+  // CR-02: valorizzato appena Sogei restituisce il protocollo. Da quel momento
+  // il lotto è acquisito dal Sistema TS e nessun percorso deve più riportare
+  // le fatture a DA_INVIARE: un reinvio creerebbe un lotto duplicato.
+  let protocolloAcquisito: string | null = null;
+  const timestampStr = lockTimestamp.toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+  const fileName = `invio_${timestampStr}.zip`;
   try {
     const xmlString = buildSistemaTsXml(payload);
-    const timestampStr = lockTimestamp.toISOString().replace(/[-:T.]/g, "").slice(0, 14);
-    const fileName = `invio_${timestampStr}.zip`;
     const zipBytes = await createZipArchive(xmlString, "730.xml");
 
     const res = await client.inviaFile(zipBytes, fileName);
@@ -241,6 +297,16 @@ export async function inviaLottoFattureService(params: {
     if (!res.success || !res.protocollo) {
       // Revert dello stato a DA_INVIARE se la trasmissione è stata respinta
       await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
+
+      if (res.esitoIncerto) {
+        return {
+          success: false,
+          error:
+            "Esito della trasmissione incerto: il Sistema TS potrebbe aver ricevuto il file. " +
+            "Prima di reinviare, verifica sul portale Sistema TS che il lotto non risulti già acquisito." +
+            (res.errorMessage ? ` (${res.errorMessage})` : ""),
+        };
+      }
 
       return {
         success: false,
@@ -252,10 +318,11 @@ export async function inviaLottoFattureService(params: {
     }
 
     const protocollo = res.protocollo;
+    protocolloAcquisito = protocollo;
     const now = new Date();
 
     // Registra trasmissione e aggiorna stato delle fatture da IN_TRASMISSIONE a INVIATA
-    await prisma.$transaction(async (tx) => {
+    const registraTrasmissione = () => prisma.$transaction(async (tx) => {
       await tx.trasmissioneTs.create({
         data: {
           id_Utente: userId,
@@ -286,7 +353,24 @@ export async function inviaLottoFattureService(params: {
       });
     });
 
-    transmissionSuccess = true;
+    // Un secondo tentativo copre gli errori transitori del DB. Una violazione
+    // di unicità su `protocollo` al secondo tentativo significa che il primo
+    // era stato salvato nonostante l'errore (es. connessione caduta dopo il
+    // commit): la trasmissione risulta già registrata.
+    try {
+      await registraTrasmissione();
+    } catch (firstError) {
+      try {
+        await registraTrasmissione();
+      } catch (secondError) {
+        if (
+          isUniqueViolationOnField(firstError, "protocollo") ||
+          !isUniqueViolationOnField(secondError, "protocollo")
+        ) {
+          throw secondError;
+        }
+      }
+    }
 
     return {
       success: true,
@@ -295,12 +379,20 @@ export async function inviaLottoFattureService(params: {
       invoicesLabels: invoices.map((i) => `${i.n_fattura}/${i.anno}`),
     };
   } catch (error) {
-    if (!transmissionSuccess) {
-      try {
-        await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
-      } catch (rollbackError) {
-        console.error("Errore durante il rollback dello stato di trasmissione:", rollbackError);
-      }
+    if (protocolloAcquisito) {
+      return gestisciProtocolloNonRegistrato({
+        protocollo: protocolloAcquisito,
+        fileName,
+        candidateIds,
+        userId,
+        lockTimestamp,
+        error,
+      });
+    }
+    try {
+      await rollbackStatoTrasmissione(candidateIds, userId, lockTimestamp);
+    } catch (rollbackError) {
+      console.error("Errore durante il rollback dello stato di trasmissione:", rollbackError);
     }
     const msg = error instanceof Error ? error.message : String(error);
     console.error("inviaLottoFatture error", error);

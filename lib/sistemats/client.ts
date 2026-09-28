@@ -86,6 +86,32 @@ export function isRetryableError(error: unknown): boolean {
   return false;
 }
 
+// Errori che garantiscono che la richiesta NON è stata accettata da Sogei
+// (connessione mai stabilita).
+const PRE_SEND_ERROR_CODES = ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT"];
+
+// CR-01: inviaFile non è idempotente — ogni invio accolto genera un nuovo
+// protocollo. Un timeout, un ECONNRESET o un 502/504 possono arrivare DOPO
+// che Sogei ha già ricevuto il file: ritentare produrrebbe un lotto
+// duplicato. Qui si ritenta solo quando è certo che il file non è arrivato:
+// connessione mai stabilita o rifiuto esplicito del server (429/503).
+export function isSafeToRetrySubmission(error: unknown): boolean {
+  if (error instanceof RetryableHttpError) {
+    return error.statusCode === 429 || error.statusCode === 503;
+  }
+  if (typeof error !== "object" || error === null) return false;
+
+  const code = "code" in error ? String(error.code).toUpperCase() : "";
+  const message = error instanceof Error ? error.message.toUpperCase() : "";
+  if (PRE_SEND_ERROR_CODES.some((c) => code === c || message.includes(c))) {
+    return true;
+  }
+  if ("cause" in error && error.cause) {
+    return isSafeToRetrySubmission(error.cause);
+  }
+  return false;
+}
+
 function formatErrorWithCause(error: unknown, timeoutMs = 120_000): string {
   if (error instanceof RetryableHttpError) {
     return `Server temporaneamente non disponibile (HTTP ${error.statusCode}). Riprova più tardi.`;
@@ -167,7 +193,8 @@ export class SistemaTsClient {
 
   private async executeWithRetry<T>(
     operation: () => Promise<T>,
-    formatError: (error: unknown) => T
+    formatError: (error: unknown) => T,
+    shouldRetry: (error: unknown) => boolean = isRetryableError
   ): Promise<T> {
     const maxRetries = this.getMaxRetries();
     const baseDelay = this.getRetryDelayMs();
@@ -178,7 +205,7 @@ export class SistemaTsClient {
         return await operation();
       } catch (error) {
         lastError = error;
-        if (attempt < maxRetries && isRetryableError(error)) {
+        if (attempt < maxRetries && shouldRetry(error)) {
           const delay = baseDelay * Math.pow(2, attempt);
           if (delay > 0) {
             await new Promise((resolve) => setTimeout(resolve, delay));
@@ -267,7 +294,9 @@ export class SistemaTsClient {
         success: false,
         statusCode: error instanceof RetryableHttpError ? error.statusCode : 0,
         errorMessage: `Errore di rete durante la trasmissione a Sistema TS: ${formatErrorWithCause(error, timeoutMs)}`,
-      })
+        esitoIncerto: !isSafeToRetrySubmission(error),
+      }),
+      isSafeToRetrySubmission
     );
   }
 

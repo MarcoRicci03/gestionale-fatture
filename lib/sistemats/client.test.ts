@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
-import { SistemaTsClient } from "./client";
+import { isSafeToRetrySubmission, RetryableHttpError, SistemaTsClient } from "./client";
 import type { SistemaTsConfig } from "./types";
 
 const mockConfig: SistemaTsConfig = {
@@ -129,7 +129,7 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
     vi.unstubAllEnvs();
   });
 
-  it("esegue retry con successo dopo un errore temporaneo di rete (es. fetch failed)", async () => {
+  it("inviaFile esegue retry con successo se la connessione è stata rifiutata (ECONNREFUSED)", async () => {
     let callCount = 0;
     const okSoapResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
       <soapenv:Body>
@@ -144,7 +144,7 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
     globalThis.fetch = vi.fn(async () => {
       callCount++;
       if (callCount === 1) {
-        throw new TypeError("fetch failed: ECONNRESET");
+        throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
       }
       return {
         ok: true,
@@ -262,7 +262,7 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
 
     globalThis.fetch = vi.fn(async () => {
       callCount++;
-      throw new TypeError("fetch failed: Connection reset by peer");
+      throw new TypeError("fetch failed: connect ECONNREFUSED 127.0.0.1:443");
     }) as unknown as typeof fetch;
 
     const client = new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 5 });
@@ -271,7 +271,9 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
     // 1 tentativo iniziale + 2 retry = 3 chiamate totali
     expect(callCount).toBe(3);
     expect(res.success).toBe(false);
-    expect(res.errorMessage).toContain("Connection reset by peer");
+    expect(res.errorMessage).toContain("ECONNREFUSED");
+    // Connessione mai stabilita: il file certamente non è arrivato a Sogei.
+    expect(res.esitoIncerto).toBe(false);
   });
 
   it("rispetta maxRetries = 0 disabilitando i tentativi successivi", async () => {
@@ -287,6 +289,109 @@ describe("SistemaTsClient — Retry Policy (H4)", () => {
 
     expect(callCount).toBe(1);
     expect(res.success).toBe(false);
+  });
+});
+
+describe("SistemaTsClient — inviaFile non ritenta invii ambigui (CR-01)", () => {
+  const originalFetch = globalThis.fetch;
+  const okInvioResponse = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+    <soapenv:Body><esito><protocollo>PROT_OK</protocollo></esito></soapenv:Body>
+  </soapenv:Envelope>`;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function newClient() {
+    return new SistemaTsClient({ ...mockConfig, maxRetries: 2, retryBaseDelayMs: 1 });
+  }
+
+  it.each([
+    [
+      "TimeoutError",
+      () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
+    ],
+    ["ECONNRESET", () => new TypeError("fetch failed", { cause: { code: "ECONNRESET" } })],
+    ["fetch failed senza causa", () => new TypeError("fetch failed")],
+  ])("%s: una sola chiamata e esitoIncerto = true", async (_label, makeError) => {
+    const fetchMock = vi.fn(async () => {
+      throw makeError();
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await newClient().inviaFile(Buffer.from("zip"), "test.zip");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.success).toBe(false);
+    expect(res.esitoIncerto).toBe(true);
+  });
+
+  it.each([502, 504])("HTTP %i: una sola chiamata e esitoIncerto = true", async (status) => {
+    const fetchMock = vi.fn(async () => ({ ok: false, status, text: async () => "Gateway" }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await newClient().inviaFile(Buffer.from("zip"), "test.zip");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(status);
+    expect(res.esitoIncerto).toBe(true);
+  });
+
+  it("HTTP 503 (rifiuto esplicito) viene ritentato", async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      return callCount === 1
+        ? { ok: false, status: 503, text: async () => "Service Unavailable" }
+        : { ok: true, status: 200, text: async () => okInvioResponse };
+    }) as unknown as typeof fetch;
+
+    const res = await newClient().inviaFile(Buffer.from("zip"), "test.zip");
+
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(true);
+    expect(res.protocollo).toBe("PROT_OK");
+  });
+
+  it("le operazioni di lettura continuano a ritentare su ECONNRESET", async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new TypeError("fetch failed", { cause: { code: "ECONNRESET" } });
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "<esito><stato>2</stato></esito>",
+      };
+    }) as unknown as typeof fetch;
+
+    const res = await newClient().interrogaEsito("PROT_X");
+
+    expect(callCount).toBe(2);
+    expect(res.success).toBe(true);
+  });
+});
+
+describe("isSafeToRetrySubmission", () => {
+  it.each([
+    ["429", new RetryableHttpError(429, ""), true],
+    ["503", new RetryableHttpError(503, ""), true],
+    ["502", new RetryableHttpError(502, ""), false],
+    ["504", new RetryableHttpError(504, ""), false],
+    ["code ECONNREFUSED", Object.assign(new Error("x"), { code: "ECONNREFUSED" }), true],
+    ["messaggio ENOTFOUND", new Error("getaddrinfo ENOTFOUND host"), true],
+    [
+      "causa annidata UND_ERR_CONNECT_TIMEOUT",
+      new TypeError("fetch failed", { cause: new Error("x", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }) }),
+      true,
+    ],
+    ["ECONNRESET", new TypeError("fetch failed", { cause: { code: "ECONNRESET" } }), false],
+    ["TimeoutError", Object.assign(new Error("timeout"), { name: "TimeoutError" }), false],
+    ["non-Error", "boom", false],
+  ])("%s → %s", (_label, error, expected) => {
+    expect(isSafeToRetrySubmission(error)).toBe(expected);
   });
 });
 

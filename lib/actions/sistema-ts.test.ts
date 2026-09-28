@@ -664,6 +664,43 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(payload.documenti[0].vociSpesa).toHaveLength(1);
     expect(payload.documenti[0].vociSpesa[0].importo).toBe(60);
   });
+
+  it("CR-01: su esito incerto avvisa di verificare sul portale prima di reinviare", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      {
+        id: 5,
+        n_fattura: 9,
+        anno: 2026,
+        data: new Date("2026-03-05"),
+        prezzo_totale: new Prisma.Decimal("60.00"),
+        natura_iva: "N2.2",
+        flag_opposizione: false,
+        pagamento_tracciato: true,
+        bolloCodice: null,
+        pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+        paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+      },
+    ]);
+    mockInviaFile.mockResolvedValueOnce({
+      success: false,
+      statusCode: 0,
+      esitoIncerto: true,
+      errorMessage: "Timeout: il server del Sistema TS non ha risposto entro 120 secondi.",
+    });
+
+    const result = await inviaLottoFatture([5]);
+
+    expect(result).toHaveProperty("success", false);
+    expect(result).toHaveProperty("error", expect.stringContaining("Esito della trasmissione incerto"));
+    expect(result).toHaveProperty("error", expect.stringContaining("Timeout"));
+    // Il rollback a DA_INVIARE resta invariato (CR-02/CR-03 fuori scope).
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: [5] } }),
+        data: { stato_ts: "DA_INVIARE", data_invio_ts: null },
+      })
+    );
+  });
 });
 
 describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
@@ -1281,7 +1318,7 @@ describe("lib/actions/sistema-ts — ripristinaFatturaPerReinvio", () => {
       stato_ts: "ANNULLATA_TS",
     });
 
-    mockPagamentoUpdate.mockResolvedValueOnce({ id: 21 });
+    mockPagamentoUpdateMany.mockResolvedValueOnce({ count: 1 });
 
     const result = await ripristinaFatturaPerReinvio(21);
 
@@ -1292,8 +1329,9 @@ describe("lib/actions/sistema-ts — ripristinaFatturaPerReinvio", () => {
       })
     );
 
-    expect(mockPagamentoUpdate).toHaveBeenCalledWith({
-      where: { id: 21 },
+    // CR-03: scrittura condizionata allo stato letto.
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: { id: 21, id_Utente: 1, stato_ts: "ANNULLATA_TS" },
       data: {
         stato_ts: "DA_INVIARE",
         protocollo_ts: null,
@@ -1310,6 +1348,24 @@ describe("lib/actions/sistema-ts — ripristinaFatturaPerReinvio", () => {
 
     expect(mockRevalidatePath).toHaveBeenCalledWith("/invoices");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/sistema-ts");
+  });
+
+  it("CR-03: se lo stato è cambiato nel frattempo (count 0) non ripristina e non scrive l'audit", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({
+      id: 22,
+      n_fattura: 3,
+      anno: 2026,
+      stato_ts: "ANNULLATA_TS",
+    });
+    mockPagamentoUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await ripristinaFatturaPerReinvio(22);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Lo stato della fattura è cambiato nel frattempo: ricarica la pagina.",
+    });
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });
 

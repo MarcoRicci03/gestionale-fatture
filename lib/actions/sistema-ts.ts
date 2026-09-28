@@ -193,8 +193,10 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
 }
 
 /**
- * Ripristina una fattura scartata da Sogei o precedentemente annullata allo stato 'DA_INVIARE'.
+ * Riporta allo stato 'DA_INVIARE' una fattura annullata sul Sistema TS (ANNULLATA_TS) o
+ * rimasta bloccata in un invio iniziale (IN_TRASMISSIONE senza protocollo, lock scaduto).
  * Consente all'utente di correggere eventuali dati errati e ritrasmetterla a Sistema TS.
+ * Le regole sono in ripristinaFatturaPerReinvioService (CR-03).
  */
 export async function ripristinaFatturaPerReinvio(
   invoiceId: number

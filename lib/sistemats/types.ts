@@ -66,6 +66,8 @@ export interface InvioTsResult {
   descrizioneEsito?: string;
   errorMessage?: string;
   rawResponse?: string;
+  // true se l'errore è arrivato quando Sogei potrebbe aver già ricevuto il file (CR-01).
+  esitoIncerto?: boolean;
 }
 
 export interface EsitoTsResult {
