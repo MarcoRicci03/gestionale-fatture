@@ -4,6 +4,7 @@
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
 - **Esito:** 9 rilievi, 6 major e 3 minor. Risolti: `CR-01`…`CR-05`. Gli altri non sono ancora stati verificati sul codice.
+- **Verifica dei fix (2026-09-28):** ricontrollando `CR-01`…`CR-05` sono emersi tre problemi residui, `CR-10`…`CR-12`. Non vengono da CodeRabbit.
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
@@ -16,8 +17,11 @@
 | `CR-07` | Minor | [`lib/sistemats/services/cancellation.service.ts:95-105`](./lib/sistemats/services/cancellation.service.ts#L95-L105) | Il lock di cancellazione (`updateMany`) sovrascrive `data_invio_ts` e fa perdere la data dell'invio originale. | Salvare il timestamp del lock in un campo dedicato, oppure conservare il valore originale e ripristinarlo in ogni percorso di uscita. | ⏳ DA VERIFICARE |
 | `CR-08` | Minor | [`lib/sistemats/crypto.ts:23`](./lib/sistemats/crypto.ts#L23) | In produzione, se manca il certificato di default, `loadPublicKeyFromCert` ripiega in silenzio su `MOCK_CERT_PATH`. | In produzione lanciare un errore esplicito. Mantenere il fallback mock fuori dalla produzione e il comportamento attuale quando `certPath` è passato esplicitamente. | ⏳ DA VERIFICARE |
 | `CR-09` | Minor | [`lib/archive/formatting.ts:29-41`](./lib/archive/formatting.ts#L29-L41) | Testi non corretti: plurale usato anche per una sola fattura collegata e istruzione al plurale sbagliata. | Usare "c'è 1 fattura collegata" quando è una sola e "Archiviali" al plurale. Aggiornare le asserzioni in `formatting.test.ts`. | ⏳ DA VERIFICARE |
+| `CR-10` | **Major** | [`lib/sistemats/services/transmission.service.ts:297-310`](./lib/sistemats/services/transmission.service.ts#L297-L310) | Residuo di CR-01. Con `esitoIncerto` il service esegue comunque `rollbackStatoTrasmissione` e le fatture tornano subito `DA_INVIARE`: se Sogei aveva ricevuto il file, un nuovo clic su "Invia" crea un lotto duplicato. Stesso rischio se il processo muore dopo l'invio: il recupero dei lock orfani le sblocca dopo 5 minuti. | Non sbloccare automaticamente un invio la cui chiamata a Sogei è partita senza un esito certo. Chiedere una verifica esplicita dell'utente sul portale. | ⏳ DA CORREGGERE |
+| `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ⏳ DA CORREGGERE |
+| `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ⏳ DA CORREGGERE |
 
-**Legenda stato:** ⏳ DA VERIFICARE · ❌ FALSO POSITIVO · ✅ RISOLTO
+**Legenda stato:** ⏳ DA VERIFICARE · ⏳ DA CORREGGERE (verificato, fix da fare) · ❌ FALSO POSITIVO · ✅ RISOLTO
 
 ## Fix applicati
 
@@ -112,7 +116,7 @@ Il problema è confermato, con un campo in più rispetto al rilievo. Lo schema d
   - `cfModificato` si confronta con lo snapshot della fattura.
 - `fix-invoice-ts-dialog.tsx` è invariato.
 
-**Rilievo aperto collegato (fuori scope):** l'update della fattura filtra solo per `id` e non ricontrolla `stato_ts`. È la stessa race di CR-04: un invio concorrente tra la `findFirst` e l'update. Il fix possibile è `where: { id, stato_ts: { in: ["DA_INVIARE", "ANNULLATA_TS"] } }` con la gestione di P2025.
+**Rilievo aperto collegato:** la race di CR-04 sull'update della fattura e sulla propagazione alle bozze è tracciata come `CR-12`.
 
 **Test:**
 - `lib/actions/sistema-ts.test.ts`, blocco "CR-05":
