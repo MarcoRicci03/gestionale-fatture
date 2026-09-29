@@ -488,6 +488,42 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
     expect(t.fatture[2].esitoFattura).toBe("ACCOLTA_CON_WARNING");
   });
 
+  it("P009: mostra il pagante dello snapshot trasmesso, non quello live", async () => {
+    const fattura = (id: number, snapshotAnagrafica: unknown) => ({
+      id,
+      n_fattura: id,
+      anno: 2026,
+      data: new Date("2026-03-01"),
+      prezzo_totale: new Prisma.Decimal("50.00"),
+      stato_ts: $Enums.StatoTs.INVIATA,
+      snapshotAnagrafica,
+      pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    });
+    mockTrasmissioneFindMany.mockResolvedValueOnce([
+      {
+        id: 101,
+        protocollo: "PROT_SNAP",
+        nomeFile: "invio_20260301.zip",
+        dataInvio: new Date("2026-03-01"),
+        statoElaborazione: "2",
+        pdfRicevuta: null,
+        csvErrori: null,
+        fatture: [
+          fattura(1, {
+            pagante: { nome: "Mario", cognome: "Rossi Vecchio", via: "V", citta: "C", cap: "0", cf: "VCCMRA85M01H501X", piva: null },
+            paziente: { nome: "P", cognome: "Q" },
+          }),
+          fattura(2, null),
+        ],
+      },
+    ]);
+
+    const [t] = await getStoricoTrasmissioniTs(1);
+
+    expect(t.fatture[0]).toMatchObject({ paganteNome: "Rossi Vecchio Mario", paganteCf: "VCCMRA85M01H501X" });
+    expect(t.fatture[1]).toMatchObject({ paganteNome: "Rossi Mario", paganteCf: "RSSMRA85M01H501Q" });
+  });
+
   it("ricostruisce le trasmissioni di cancellazione collegando le fatture per protocollo_cancellazione_ts", async () => {
     const fakeCancellationTrasmissione = {
       id: 200,
