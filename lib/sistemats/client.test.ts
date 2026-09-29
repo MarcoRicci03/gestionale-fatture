@@ -599,3 +599,39 @@ describe("SistemaTsClient — risposta di invio non interpretabile (P008)", () =
     expect(res.esitoIncerto).toBeFalsy();
   });
 });
+
+describe("SistemaTsClient — endpoint di test riconosciuto dall'hostname (P030)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  function inviaA(endpointInvio: string) {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => "<r><protocollo>P1</protocollo><codiceEsito>000</codiceEsito></r>",
+    })) as unknown as typeof fetch;
+    return new SistemaTsClient({ ...mockConfig, endpointInvio }).inviaFile(Buffer.from("zip"), "t.zip");
+  }
+
+  it.each([
+    "https://invioSS730p.sanita.finanze.it/latest/InvioTelematicoSS730pMtomPort",
+    "https://invioSS730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb?mock=1",
+    "non-una-url-test",
+  ])("blocca un endpoint di produzione anche con 'test' o 'mock' fuori dall'hostname: %s", async (url) => {
+    vi.stubEnv("SISTEMATS_ALLOW_PRODUCTION", "false");
+    await expect(inviaA(url)).rejects.toThrow(/\[BLOCCO DI SICUREZZA\]/);
+  });
+
+  it.each([
+    "https://invioSS730pTest.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort",
+    "http://localhost:4000/invio",
+    "http://127.0.0.1:4000/invio",
+  ])("consente gli endpoint di test: %s", async (url) => {
+    vi.stubEnv("SISTEMATS_ALLOW_PRODUCTION", "false");
+    await expect(inviaA(url)).resolves.toMatchObject({ protocollo: "P1" });
+  });
+});

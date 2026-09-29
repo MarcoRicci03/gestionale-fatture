@@ -35,9 +35,19 @@ const DEFAULT_ENDPOINT_ERRORI =
   "https://invioSS730pTest.sanita.finanze.it/EsitoStatoInviiWEB/DettaglioErrori730Service";
 
 function verifyEndpointSafety(endpoint: string): void {
-  const isSafeTest = ["test", "localhost", "127.0.0.1", "mock"].some((token) =>
-    endpoint.toLowerCase().includes(token)
-  );
+  // P030: il controllo guarda solo l'hostname. Sull'URL intera bastava un
+  // path come ".../latest/..." per far passare un endpoint di produzione.
+  let host = "";
+  try {
+    host = new URL(endpoint).hostname.toLowerCase();
+  } catch {
+    // URL non valida: trattata come non di test.
+  }
+  const isSafeTest =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.includes("test") ||
+    host.includes("mock");
   const allowProd =
     (process.env.SISTEMATS_ALLOW_PRODUCTION || "false").toLowerCase() === "true";
 
