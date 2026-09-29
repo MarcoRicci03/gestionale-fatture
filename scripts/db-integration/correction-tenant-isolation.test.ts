@@ -91,11 +91,10 @@ describe("correggiFatturaTsService: isolamento tra utenti", () => {
     expect(await cfPaganteA()).toBe(CF_ORIGINALE);
   });
 
-  // Difesa in profondità: una fattura di B collegata per errore al pagante di A
-  // (il DB non lo impedisce, la FK non include id_Utente). La lettura iniziale
-  // passa perché la fattura è di B; è il filtro id_Utente sulla scrittura del
-  // pagante a bloccare la modifica e ad annullare la transazione.
-  it("B non modifica il pagante di A neanche tramite una propria fattura collegata ad A", async () => {
+  // Una fattura di B collegata al pagante di A non si può più creare: le FK
+  // composite (id, id_Utente) introdotte con P002 la rifiutano nel DB, quindi
+  // il service non può ricevere una fattura "ponte" verso il pagante di A.
+  it("il DB rifiuta una fattura di B collegata al pagante di A", async () => {
     const pagante = await prisma.pagante.create({
       data: {
         id_Utente: utenteB,
@@ -109,21 +108,10 @@ describe("correggiFatturaTsService: isolamento tra utenti", () => {
     const paziente = await prisma.paziente.create({
       data: { id_Utente: utenteB, id_Pagante: pagante.id, nome: "Bruno", cognome: "Paziente" },
     });
-    const fatturaB = await createPagamento(utenteB, paganteA, paziente.id);
 
-    const result = await correggiFatturaTsService({
-      userId: utenteB,
-      data: {
-        invoiceId: fatturaB.id,
-        paganteCf: CF_NUOVO,
-        aggiornaAnagrafica: true,
-        propagaFattureInAttesa: false,
-      },
-    });
+    const error = await createPagamento(utenteB, paganteA, paziente.id).catch((e: unknown) => e);
 
-    expect(result).toEqual({ success: false, error: "Cliente non trovato." });
+    expect(error).toMatchObject({ code: "P2003" });
     expect(await cfPaganteA()).toBe(CF_ORIGINALE);
-    const fatturaDopo = await prisma.pagamento.findUniqueOrThrow({ where: { id: fatturaB.id } });
-    expect(fatturaDopo.snapshotAnagrafica).toBeNull();
   });
 });
