@@ -104,6 +104,9 @@ export async function getFatturePerInvioTs(
     ];
   }
 
+  // ponytail: con stato=ALL e senza date carica tutte le fatture dell'utente,
+  // senza paginazione (P022). Per uno studio singolo è trascurabile; se
+  // l'elenco supera qualche migliaio di righe, paginare come lib/data/invoices.ts.
   const invoices = await prisma.pagamento.findMany({
     where,
     include: {
