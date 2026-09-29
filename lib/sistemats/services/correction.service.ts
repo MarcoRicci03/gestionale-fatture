@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { propagaPaganteAlleBozze } from "@/lib/invoices/propaga-anagrafica";
 import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
 import type { CorreggiFatturaTsData } from "@/lib/validations/sistema-ts-correction";
@@ -167,36 +168,12 @@ export async function correggiFatturaTsService(params: {
 
       // 4. Se richiesto e un nuovo CF è stato inviato, propaga alle altre fatture DA_INVIARE dello stesso pagante
       if (propagaFattureInAttesa && nuovoCf) {
-        const otherDrafts = await tx.pagamento.findMany({
-          where: {
-            id_Utente: userId,
-            id_Pagante: invoice.id_Pagante,
-            stato_ts: "DA_INVIARE",
-            id: { not: invoice.id },
-          },
-          include: { pagante: true, paziente: true },
+        await propagaPaganteAlleBozze(tx, {
+          userId,
+          idPagante: invoice.id_Pagante,
+          pagante: { cf: nuovoCf },
+          escludiId: invoice.id,
         });
-
-        await Promise.all(
-          otherDrafts.map((draft) => {
-            const draftSnap = resolveAnagrafica(draft);
-            const newDraftSnap = {
-              ...draftSnap,
-              pagante: {
-                ...draftSnap.pagante,
-                cf: nuovoCf,
-              },
-            };
-            // CR-12: una bozza partita per il Sistema TS nel frattempo va
-            // saltata, non modificata (stesso schema di updatePayer, CR-04).
-            return tx.pagamento.updateMany({
-              where: { id: draft.id, id_Utente: userId, stato_ts: "DA_INVIARE" },
-              data: {
-                snapshotAnagrafica: newDraftSnap as unknown as Prisma.InputJsonValue,
-              },
-            });
-          })
-        );
       }
     });
   } catch (error) {
