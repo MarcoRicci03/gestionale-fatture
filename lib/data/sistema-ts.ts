@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { validateImportoSpesa } from "@/lib/sistemats/payload-builder";
 import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
-import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
+import { resolveAnagrafica, isSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { parseDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
 import { Prisma, type $Enums } from "@prisma/client";
 
@@ -212,6 +212,7 @@ export async function getStoricoTrasmissioniTs(userId: number) {
           data: true,
           prezzo_totale: true,
           stato_ts: true,
+          snapshotAnagrafica: true,
           pagante: {
             select: {
               nome: true,
@@ -245,6 +246,7 @@ export async function getStoricoTrasmissioniTs(userId: number) {
             prezzo_totale: true,
             stato_ts: true,
             protocollo_cancellazione_ts: true,
+            snapshotAnagrafica: true,
             pagante: {
               select: {
                 nome: true,
@@ -276,6 +278,10 @@ export async function getStoricoTrasmissioniTs(userId: number) {
 
     const fatture: FatturaInTrasmissioneItem[] = rawFatture.map((f) => {
       const docErrors = getErrorsForInvoice(errorsMap, f);
+      // P009: il pagante con cui la fattura è stata trasmessa, non quello live.
+      const pagante = isSnapshotAnagrafica(f.snapshotAnagrafica)
+        ? f.snapshotAnagrafica.pagante
+        : f.pagante;
       const hasDuplicateS017 = docErrors.some((e) => e.codiceErrore === "S017");
       const hasScarto = docErrors.some((e) => e.tipo === "ERRORE" && e.codiceErrore !== "S017");
       const hasWarning = docErrors.some((e) => e.tipo === "WARNING");
@@ -306,8 +312,8 @@ export async function getStoricoTrasmissioniTs(userId: number) {
         anno: f.anno,
         data: f.data,
         prezzo_totale: f.prezzo_totale.toNumber(),
-        paganteNome: f.pagante ? `${f.pagante.cognome} ${f.pagante.nome}` : "-",
-        paganteCf: f.pagante?.cf ?? null,
+        paganteNome: pagante ? `${pagante.cognome} ${pagante.nome}` : "-",
+        paganteCf: pagante?.cf ?? null,
         esitoFattura,
         stato_ts: f.stato_ts,
         errori: docErrors,
