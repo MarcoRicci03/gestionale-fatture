@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { decryptCredential } from "@/lib/sistemats/vault";
+import { decryptCredential, encryptCredential, needsReencryption } from "@/lib/sistemats/vault";
 import { SistemaTsClient } from "@/lib/sistemats/client";
 import type { ProprietarioPayload } from "@/lib/sistemats/types";
 
@@ -27,6 +27,29 @@ export async function getClientForUser(userId: number): Promise<{
 
   const passwordDecrypted = decryptCredential(settings.passwordEncrypted);
   const pincodeDecrypted = decryptCredential(settings.pincodeEncrypted);
+
+  // P026: credenziali in formato legacy o decifrabili solo con una chiave di
+  // TS_ENCRYPTION_FALLBACK_SECRETS vengono ricifrate con la chiave primaria,
+  // così dopo una rotazione le vecchie chiavi possono essere dismesse.
+  // Best-effort: un errore qui non deve bloccare l'operazione Sistema TS.
+  const ricifrate = {
+    ...(needsReencryption(settings.passwordEncrypted)
+      ? { passwordEncrypted: encryptCredential(passwordDecrypted) }
+      : {}),
+    ...(needsReencryption(settings.pincodeEncrypted)
+      ? { pincodeEncrypted: encryptCredential(pincodeDecrypted) }
+      : {}),
+  };
+  if (Object.keys(ricifrate).length > 0) {
+    try {
+      await prisma.impostazioniSistemaTs.update({
+        where: { id_Utente: userId },
+        data: ricifrate,
+      });
+    } catch (error) {
+      console.error("Ricifratura credenziali Sistema TS fallita", error);
+    }
+  }
 
   const proprietario: ProprietarioPayload = {
     codiceRegione: settings.codiceRegione,

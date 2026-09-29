@@ -25,6 +25,7 @@ vi.mock("@/lib/audit/log", () => ({
 vi.mock("@/lib/sistemats/vault", () => ({
   decryptCredential: vi.fn((v: string) => `decrypted_${v}`),
   encryptCredential: vi.fn((v: string) => `encrypted_${v}`),
+  needsReencryption: vi.fn(() => false),
 }));
 
 // We capture the payload passed to buildSistemaTsXml in inviaLottoFatture
