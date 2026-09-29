@@ -13,6 +13,19 @@ const base = {
 };
 
 describe("invoiceSchema", () => {
+  it.each([
+    ["data", { data: "2026-02-31" }],
+    ["data_pagamento", { data_pagamento: "2026-04-31" }],
+  ])("P012: una %s impossibile fallisce la validazione invece di lanciare", (field, extra) => {
+    const r = invoiceSchema.safeParse({
+      ...base,
+      mesi: [{ mese: "GENNAIO", prezzo: "50" }],
+      ...extra,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].path).toEqual([field]);
+  });
+
   it("accetta una fattura valida sotto soglia bollo", () => {
     const r = invoiceSchema.safeParse({
       ...base,

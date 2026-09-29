@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseDateInput } from "@/lib/utils/date";
+import { parseDateInput, isValidCalendarDateString } from "@/lib/utils/date";
 import { MESI } from "@/lib/constants/mesi";
 import { BOLLO_CODICE_REGEX } from "@/lib/constants/bollo";
 import { roundCurrency } from "@/lib/utils/currency";
@@ -25,6 +25,9 @@ export const invoiceSchema = z
       z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida")
+        // P012: senza questo refine parseDateInput lancia su date come
+        // 2026-02-31 e safeParse propaga l'eccezione invece di fallire.
+        .refine(isValidCalendarDateString, "Data non valida")
         .transform((val) => parseDateInput(val)),
     ]),
     mod_pag: z
@@ -98,6 +101,9 @@ export const invoiceSchema = z
         z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida")
+          // P012: senza questo refine parseDateInput lancia su date come
+          // 2026-02-31 e safeParse propaga l'eccezione invece di fallire.
+          .refine(isValidCalendarDateString, "Data non valida")
           .transform((val) => parseDateInput(val)),
       ])
       .transform((val) => (val === "" || val === undefined || val === null ? null : val))
