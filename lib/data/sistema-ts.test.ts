@@ -518,7 +518,8 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
       },
     ]);
 
-    const [t] = await getStoricoTrasmissioniTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const [t] = await getStoricoTrasmissioniTs();
 
     expect(t.fatture[0]).toMatchObject({ paganteNome: "Rossi Vecchio Mario", paganteCf: "VCCMRA85M01H501X" });
     expect(t.fatture[1]).toMatchObject({ paganteNome: "Rossi Mario", paganteCf: "RSSMRA85M01H501Q" });
@@ -732,7 +733,8 @@ describe("lib/data/sistema-ts — annullamentoInCorso (CR-07)", () => {
       { ...inviata(2, null), stato_ts: $Enums.StatoTs.DA_CANCELLARE_SU_TS, annullamento_incerto_ts: new Date() },
     ]);
 
-    const items = await getFatturePerInvioTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const items = await getFatturePerInvioTs();
 
     expect(items.map((i) => i.annullamentoDaVerificare)).toEqual([false, true]);
   });
