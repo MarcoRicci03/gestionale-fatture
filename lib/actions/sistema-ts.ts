@@ -12,6 +12,7 @@ import {
 } from "@/lib/sistemats/rate-limiters";
 import {
   sistemaTsSettingsSchema,
+  invioLottoSchema,
   type SistemaTsSettingsInput,
 } from "@/lib/validations/sistema-ts";
 import {
@@ -80,7 +81,12 @@ export async function inviaLottoFatture(invoiceIds: number[]): Promise<SistemaTs
     };
   }
 
-  const res = await inviaLottoFattureService({ userId, invoiceIds });
+  const parsed = invioLottoSchema.safeParse({ invoiceIds });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Selezione non valida." };
+  }
+
+  const res = await inviaLottoFattureService({ userId, invoiceIds: parsed.data.invoiceIds });
   if (!res.success) {
     return res;
   }

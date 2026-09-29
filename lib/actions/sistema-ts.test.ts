@@ -314,6 +314,20 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(mockInviaFile).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["un non-array", "12" as unknown as number[]],
+    ["id non numerici", ["abc"] as unknown as number[]],
+    ["id decimali", [1.5]],
+    ["id fuori da INT4", [2_147_483_648]],
+    ["troppe fatture", Array.from({ length: 1001 }, (_, i) => i + 1)],
+  ])("P010: rifiuta %s senza toccare DB né Sogei", async (_label, ids) => {
+    const result = await inviaLottoFatture(ids);
+    expect(result.success).toBe(false);
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    expect(mockPagamentoFindMany).not.toHaveBeenCalled();
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
   it("blocca con errore se si superano le 10 richieste di trasmissione al minuto", async () => {
     mockPagamentoFindMany.mockResolvedValue([]);
     for (let i = 0; i < 10; i++) {
