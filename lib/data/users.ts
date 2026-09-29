@@ -10,21 +10,3 @@ export async function getUsers(): Promise<SafeUtente[]> {
     orderBy: [{ cognome: "asc" }, { nome: "asc" }, { username: "asc" }],
   });
 }
-
-export async function getUserById(id: number): Promise<SafeUtente | null> {
-  await requireAdmin();
-  return prisma.utente.findUnique({
-    where: { id },
-    select: SAFE_USER_SELECT,
-  });
-}
-
-export async function getUserByUsername(
-  username: string
-): Promise<SafeUtente | null> {
-  await requireAdmin();
-  return prisma.utente.findUnique({
-    where: { username },
-    select: SAFE_USER_SELECT,
-  });
-}

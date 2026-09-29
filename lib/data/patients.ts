@@ -42,23 +42,6 @@ export async function getPatients(
   return { patients: effectivePatients, totalCount, page: clampedPage };
 }
 
-export async function getPatientById(id: number) {
-  const userId = await requireUserId();
-  return prisma.paziente.findFirst({
-    where: { id, id_Utente: userId, archiviato: false },
-    include: { pagante: true },
-  });
-}
-
-export async function getPatientsForSelect() {
-  const userId = await requireUserId();
-  return prisma.paziente.findMany({
-    where: { id_Utente: userId, archiviato: false },
-    orderBy: [{ cognome: "asc" }, { nome: "asc" }],
-    select: { id: true, nome: true, cognome: true },
-  });
-}
-
 // Spostato in lib/data/payers.ts (SMELL-05), re-export mantenuto per retrocompatibilità.
 export { getPayersForSelect } from "@/lib/data/payers";
 
