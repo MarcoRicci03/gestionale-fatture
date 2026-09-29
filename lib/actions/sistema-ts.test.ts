@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { FATTURA_ANNULLATA_TS_EDIT_ERROR } from "@/lib/invoices/errors";
 
 // Mock Session & IP
 vi.mock("@/lib/auth/session", () => ({
@@ -1488,6 +1489,16 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     expect(res).toEqual({ success: false, error: "Fattura non trovata." });
   });
 
+  it("P007: blocca la correzione di una fattura annullata su TS", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice, stato_ts: "ANNULLATA_TS" });
+
+    const res = await correggiFatturaTs({ invoiceId: 10, paganteCf: "RSSMRA80A01H501U" });
+
+    expect(res).toEqual({ success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR });
+    expect(mockPagamentoUpdate).not.toHaveBeenCalled();
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
   it("blocca la correzione se la fattura è già stata trasmessa a TS", async () => {
     mockPagamentoFindFirst.mockResolvedValueOnce({
       ...baseInvoice,
@@ -1758,13 +1769,13 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
     });
 
     it("ricontrolla lo stato letto nella where dell'update", async () => {
-      mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice, stato_ts: "ANNULLATA_TS" });
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...baseInvoice });
 
       await correggiFatturaTs({ invoiceId: 10, paganteCf: "RSSMRA80A01H501U", aggiornaAnagrafica: false });
 
       expect(mockPagamentoUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 10, id_Utente: 1, stato_ts: "ANNULLATA_TS" },
+          where: { id: 10, id_Utente: 1, stato_ts: "DA_INVIARE" },
         })
       );
     });
