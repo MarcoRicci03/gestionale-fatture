@@ -317,7 +317,9 @@ describe("Sistema TS Concurrency Lock & State Transitions", () => {
 
     expect("error" in result).toBe(true);
     if ("error" in result) {
-      expect(result.error).toContain("Connection reset by peer");
+      // P018: il dettaglio interno resta nel log, non nel messaggio.
+      expect(result.error).not.toContain("Connection reset by peer");
+      expect(result.error).toContain("nessuna fattura è stata trasmessa");
     }
 
     // inviaFile lancia solo prima del fetch (gli errori di rete tornano come

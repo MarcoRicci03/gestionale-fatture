@@ -427,8 +427,11 @@ export async function inviaLottoFattureService(params: {
     } catch (rollbackError) {
       console.error("Errore durante il rollback dello stato di trasmissione:", rollbackError);
     }
-    const msg = error instanceof Error ? error.message : String(error);
+    // P018: il dettaglio dell'errore (Prisma, XML, rete) resta nel log.
     console.error("inviaLottoFatture error", error);
-    return { success: false, error: `Errore durante la preparazione o trasmissione del lotto: ${msg}` };
+    return {
+      success: false,
+      error: "Errore durante la preparazione del lotto: nessuna fattura è stata trasmessa. Riprova tra poco.",
+    };
   }
 }

@@ -216,8 +216,8 @@ export async function sincronizzaEsitoTrasmissioneService(params: {
       descrizioneEsito: esitoRes.descrizioneEsito,
     };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    // P018: il dettaglio dell'errore resta nel log.
     console.error("sincronizzaEsitoTrasmissione error", error);
-    return { success: false, error: `Errore durante la sincronizzazione dell'esito: ${msg}` };
+    return { success: false, error: "Errore durante la sincronizzazione dell'esito. Riprova tra poco." };
   }
 }
