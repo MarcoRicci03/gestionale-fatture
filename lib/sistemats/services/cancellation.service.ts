@@ -316,14 +316,14 @@ export async function annullaFatturaTsService(params: {
       };
     }
 
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error("annullaFatturaTs network error", error);
+    // P018: il dettaglio dell'errore resta nel log.
+    console.error("annullaFatturaTs error", error);
     await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS" });
 
     return {
       success: false,
       error:
-        `Errore di connessione (${msg}). La fattura è stata contrassegnata come 'DA CANCELLARE SU TS'.`,
+        "Errore durante l'invio dell'annullamento. La fattura è stata contrassegnata come 'DA CANCELLARE SU TS'.",
       fallback: true,
     };
   }

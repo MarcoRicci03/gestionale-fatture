@@ -920,7 +920,7 @@ describe("lib/actions/sistema-ts — sincronizzaEsitoTrasmissione", () => {
 
     expect(result).toEqual({
       success: false,
-      error: "Errore durante la sincronizzazione dell'esito: DB transaction failure",
+      error: "Errore durante la sincronizzazione dell'esito. Riprova tra poco.",
     });
     expect(mockTransaction).toHaveBeenCalled();
   });
@@ -1226,6 +1226,8 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
       })
     );
     expect(result).toHaveProperty("error");
+    // P018: il dettaglio interno dell'errore non arriva all'utente.
+    expect(JSON.stringify(result)).not.toContain("ETIMEDOUT");
 
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
       where: { id: 11, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
