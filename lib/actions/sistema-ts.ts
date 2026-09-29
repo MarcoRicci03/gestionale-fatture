@@ -27,6 +27,7 @@ import {
   ripristinaFatturaPerReinvioService,
 } from "@/lib/sistemats/services/cancellation.service";
 import { correggiFatturaTsService } from "@/lib/sistemats/services/correction.service";
+import { isValidId } from "@/lib/validations/id";
 
 export type SistemaTsActionState =
   | { success: true; protocollo?: string; message?: string }
@@ -120,6 +121,10 @@ export async function sincronizzaEsitoTrasmissione(
 ): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(trasmissioneId)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const rateLimit = sistemaTsSyncLimiter.consume(String(userId));
   if (!rateLimit.allowed) {
     const retryAfter = rateLimit.retryAfterSeconds ?? 1;
@@ -166,6 +171,10 @@ export async function annullaFatturaTs(
   opzioni?: ConfermaEsitoOpzioni
 ): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(invoiceId)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   const rateLimit = sistemaTsTransmissionLimiter.consume(String(userId));
   if (!rateLimit.allowed) {
@@ -220,6 +229,10 @@ export async function ripristinaFatturaPerReinvio(
   opzioni?: ConfermaEsitoOpzioni
 ): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(invoiceId)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   const res = await ripristinaFatturaPerReinvioService({
     userId,

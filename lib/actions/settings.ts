@@ -9,6 +9,7 @@ import type { PdfSettingsInput } from "@/lib/pdf/types";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 export type PdfSettingsActionState = ActionResult;
 
@@ -61,6 +62,10 @@ export async function refreshInvoicePdfLayout(
   invoiceId: number
 ): Promise<PdfSettingsActionState> {
   const session = await requireSession();
+
+  if (!isValidId(invoiceId)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   try {
     await snapshotPdfLayoutForInvoice(invoiceId, session.id);

@@ -15,6 +15,7 @@ import {
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 export type UserActionState = ActionResult;
 
@@ -88,6 +89,10 @@ export async function updateUser(
   data: unknown
 ): Promise<UserActionState> {
   const session = await requireAdmin();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   if (session.id === id) {
     return { success: false, error: "Non puoi modificare il tuo account da qui" };
@@ -187,6 +192,10 @@ export async function resetUserPassword(
 ): Promise<UserActionState> {
   const session = await requireAdmin();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   if (session.id === id) {
     return { success: false, error: "Non puoi resettare la tua password da qui" };
   }
@@ -240,6 +249,10 @@ export async function toggleUserEnabled(
   abilitato: boolean
 ): Promise<UserActionState> {
   const session = await requireAdmin();
+
+  if (!isValidId(id) || typeof abilitato !== "boolean") {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   if (session.id === id) {
     return { success: false, error: "Non puoi disabilitare il tuo account" };

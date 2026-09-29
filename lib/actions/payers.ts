@@ -12,6 +12,7 @@ import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { Prisma } from "@prisma/client";
 import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 export type PayerActionState = ActionResult;
 
@@ -113,6 +114,10 @@ export async function updatePayer(
 ): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const parsed = payerSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: "Dati non validi" };
@@ -211,6 +216,10 @@ export async function updatePayer(
 export async function archivePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   // Stesso controllo di stato di partenza di archivePatient/restorePatient/
   // restorePayer: senza, archiviare un pagante già archiviato "riesce" in
   // silenzio e scrive un evento PAYER_ARCHIVE che non corrisponde ad alcun
@@ -261,6 +270,10 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
 
 export async function restorePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   const payer = await prisma.pagante.findFirst({
     where: { id, id_Utente: userId, archiviato: true },
@@ -343,6 +356,10 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
 
 export async function hardDeletePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   let pazientiArchiviatiCollegati = 0;
 
