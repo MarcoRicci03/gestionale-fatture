@@ -543,3 +543,60 @@ describe("annullaFatturaTs — lock dedicato (CR-07)", () => {
     vi.mocked(console.error).mockRestore();
   });
 });
+
+describe("sincronizzaEsitoTrasmissione — rami del service di riconciliazione (P015)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
+    mockTrasmissioneUpdate.mockReset();
+    mockPagamentoUpdateMany.mockReset().mockResolvedValue({ count: 1 });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  const trasmissioneAnnullamento = {
+    id: 77,
+    id_Utente: 1,
+    protocollo: "PROT_ANN_77",
+    nomeFile: "annulla_9.zip",
+    fatture: [{ id: 9, n_fattura: 9, anno: 2026, data: new Date("2026-02-01") }],
+  };
+
+  it("con fatture collegate aggiorna solo quelle, dell'utente e con quel protocollo", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce(trasmissioneAnnullamento);
+    mockInterrogaEsito.mockResolvedValueOnce({ success: true, statoElaborazione: "2" });
+    mockScaricaRicevutaPdf.mockResolvedValueOnce({ success: false });
+
+    const result = await sincronizzaEsitoTrasmissione(77);
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: [9] }, id_Utente: 1, protocollo_cancellazione_ts: "PROT_ANN_77" },
+      data: { stato_ts: "ANNULLATA_TS" },
+    });
+  });
+
+  it("se l'interrogazione dell'esito fallisce non scrive nulla", async () => {
+    mockTrasmissioneFindFirst.mockResolvedValueOnce(trasmissioneAnnullamento);
+    mockInterrogaEsito.mockResolvedValueOnce({ success: false, errorMessage: "Servizio non disponibile" });
+
+    const result = await sincronizzaEsitoTrasmissione(77);
+
+    expect(result).toEqual({ success: false, error: "Servizio non disponibile" });
+    expect(mockTrasmissioneUpdate).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("se la scrittura dell'esito fallisce restituisce errore e non registra l'audit", async () => {
+    const { logAudit } = await import("@/lib/audit/log");
+    mockTrasmissioneFindFirst.mockResolvedValueOnce(trasmissioneAnnullamento);
+    mockInterrogaEsito.mockResolvedValueOnce({ success: true, statoElaborazione: "4" });
+    mockScaricaDettaglioErrori.mockResolvedValueOnce({ success: false });
+    mockTrasmissioneUpdate.mockRejectedValueOnce(new Error("DB down"));
+
+    const result = await sincronizzaEsitoTrasmissione(77);
+
+    expect(result.success).toBe(false);
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+    expect(logAudit).not.toHaveBeenCalled();
+  });
+});
