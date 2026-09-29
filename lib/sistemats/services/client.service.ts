@@ -10,7 +10,7 @@ export async function getClientForUser(userId: number): Promise<{
 }> {
   const [settings, user] = await Promise.all([
     prisma.impostazioniSistemaTs.findUnique({ where: { id_Utente: userId } }),
-    prisma.utente.findUnique({ where: { id: userId } }),
+    prisma.utente.findUnique({ where: { id: userId }, select: { cf: true, pIva: true } }),
   ]);
 
   if (!settings || !settings.passwordEncrypted || !settings.pincodeEncrypted) {
