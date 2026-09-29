@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { requireUserId } from "@/lib/auth/session";
 import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { validateImportoSpesa } from "@/lib/sistemats/payload-builder";
 import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
@@ -45,7 +46,8 @@ export interface FatturaTsListItem {
   id_Pagante?: number;
 }
 
-export async function getSistemaTsSettings(userId: number) {
+export async function getSistemaTsSettings() {
+  const userId = await requireUserId();
   const settings = await prisma.impostazioniSistemaTs.findUnique({
     where: { id_Utente: userId },
   });
@@ -65,13 +67,13 @@ export async function getSistemaTsSettings(userId: number) {
 }
 
 export async function getFatturePerInvioTs(
-  userId: number,
   params?: {
     dateFrom?: string;
     dateTo?: string;
     stato?: string;
   }
 ): Promise<FatturaTsListItem[]> {
+  const userId = await requireUserId();
   const where: Prisma.PagamentoWhereInput = {
     id_Utente: userId,
   };
@@ -200,7 +202,8 @@ export interface FatturaInTrasmissioneItem {
   errori: ErroreDocumentoTs[];
 }
 
-export async function getStoricoTrasmissioniTs(userId: number) {
+export async function getStoricoTrasmissioniTs() {
+  const userId = await requireUserId();
   const trasmissioni = await prisma.trasmissioneTs.findMany({
     where: { id_Utente: userId },
     include: {

@@ -4,6 +4,11 @@ import { Prisma, $Enums } from "@prisma/client";
 const mockFindUnique = vi.fn();
 const mockPagamentoFindMany = vi.fn();
 const mockTrasmissioneFindMany = vi.fn();
+const mockRequireUserId = vi.fn();
+
+vi.mock("@/lib/auth/session", () => ({
+  requireUserId: () => mockRequireUserId(),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -33,7 +38,8 @@ describe("lib/data/sistema-ts — getSistemaTsSettings", () => {
   it("restituisce null se non esistono impostazioni per l'utente", async () => {
     mockFindUnique.mockResolvedValueOnce(null);
 
-    const result = await getSistemaTsSettings(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getSistemaTsSettings();
 
     expect(result).toBeNull();
     expect(mockFindUnique).toHaveBeenCalledWith({
@@ -53,7 +59,8 @@ describe("lib/data/sistema-ts — getSistemaTsSettings", () => {
       naturaIvaDefault: "N2.2",
     });
 
-    const result = await getSistemaTsSettings(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getSistemaTsSettings();
 
     expect(result).toEqual({
       id: 5,
@@ -79,7 +86,8 @@ describe("lib/data/sistema-ts — getSistemaTsSettings", () => {
       naturaIvaDefault: null,
     });
 
-    const result = await getSistemaTsSettings(2);
+    mockRequireUserId.mockResolvedValueOnce(2);
+    const result = await getSistemaTsSettings();
 
     expect(result).toEqual({
       id: 6,
@@ -94,6 +102,26 @@ describe("lib/data/sistema-ts — getSistemaTsSettings", () => {
   });
 });
 
+describe("lib/data/sistema-ts — sessione (P001)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("ricava l'utente dalla sessione e senza sessione non interroga il DB", async () => {
+    const redirect = new Error("NEXT_REDIRECT");
+    mockRequireUserId.mockRejectedValue(redirect);
+
+    await expect(getSistemaTsSettings()).rejects.toBe(redirect);
+    await expect(getFatturePerInvioTs()).rejects.toBe(redirect);
+    await expect(getStoricoTrasmissioniTs()).rejects.toBe(redirect);
+
+    expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockPagamentoFindMany).not.toHaveBeenCalled();
+    expect(mockTrasmissioneFindMany).not.toHaveBeenCalled();
+    mockRequireUserId.mockReset();
+  });
+});
+
 describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,7 +130,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   it("interroga con ordinamento e include pagante/paziente senza filtri aggiuntivi", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
-    await getFatturePerInvioTs(42);
+    mockRequireUserId.mockResolvedValueOnce(42);
+    await getFatturePerInvioTs();
 
     expect(mockPagamentoFindMany).toHaveBeenCalledWith({
       where: { id_Utente: 42 },
@@ -117,7 +146,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   it("filtra per stato_ts se specificato e diverso da ALL", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
-    await getFatturePerInvioTs(42, { stato: "DA_INVIARE" });
+    mockRequireUserId.mockResolvedValueOnce(42);
+    await getFatturePerInvioTs({ stato: "DA_INVIARE" });
 
     expect(mockPagamentoFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,7 +162,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   it("ignora il filtro stato_ts se impostato su ALL", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
-    await getFatturePerInvioTs(42, { stato: "ALL" });
+    mockRequireUserId.mockResolvedValueOnce(42);
+    await getFatturePerInvioTs({ stato: "ALL" });
 
     expect(mockPagamentoFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -144,7 +175,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   it("applica il range di date con gte (inizio giornata) e lte (fine giornata) secondo il principio di cassa (data_pagamento con fallback su data)", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
-    await getFatturePerInvioTs(42, {
+    mockRequireUserId.mockResolvedValueOnce(42);
+    await getFatturePerInvioTs({
       dateFrom: "2026-03-01",
       dateTo: "2026-03-31",
     });
@@ -175,7 +207,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
   it("applica solo dateFrom o solo dateTo correttamente nel blocco OR", async () => {
     mockPagamentoFindMany.mockResolvedValueOnce([]);
 
-    await getFatturePerInvioTs(42, {
+    mockRequireUserId.mockResolvedValueOnce(42);
+    await getFatturePerInvioTs({
       dateFrom: "2026-01-01",
     });
 
@@ -285,7 +318,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
       fakeInvoice3,
     ]);
 
-    const items = await getFatturePerInvioTs(42);
+    mockRequireUserId.mockResolvedValueOnce(42);
+    const items = await getFatturePerInvioTs();
 
     expect(items).toHaveLength(3);
 
@@ -368,7 +402,8 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
       },
     ]);
 
-    const items = await getFatturePerInvioTs(42);
+    mockRequireUserId.mockResolvedValueOnce(42);
+    const items = await getFatturePerInvioTs();
     expect(items).toHaveLength(1);
     expect(items[0].importoValido).toBe(false);
     expect(items[0].importoErrore).toContain("maggiore di zero");
@@ -429,7 +464,8 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
 
     mockTrasmissioneFindMany.mockResolvedValueOnce([fakeTrasmissione]);
 
-    const result = await getStoricoTrasmissioniTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getStoricoTrasmissioniTs();
 
     expect(result).toHaveLength(1);
     const t = result[0];
@@ -486,7 +522,8 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
       },
     ]);
 
-    const result = await getStoricoTrasmissioniTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getStoricoTrasmissioniTs();
 
     expect(result).toHaveLength(1);
     const t = result[0];
@@ -536,7 +573,8 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
 
     mockTrasmissioneFindMany.mockResolvedValueOnce([fakeTrasmissione]);
 
-    const result = await getStoricoTrasmissioniTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getStoricoTrasmissioniTs();
 
     expect(result[0].fatture[0].esitoFattura).toBe("IN_ELABORAZIONE");
     expect(result[0].fatture[0].paganteNome).toBe("-");
@@ -592,7 +630,8 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
 
     mockTrasmissioneFindMany.mockResolvedValueOnce([t2, t1]);
 
-    const result = await getStoricoTrasmissioniTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const result = await getStoricoTrasmissioniTs();
 
     expect(result).toHaveLength(2);
 
@@ -646,7 +685,8 @@ describe("lib/data/sistema-ts — annullamentoInCorso (CR-07)", () => {
       inviata(3, new Date(Date.now() - 60 * 60 * 1000)),
     ]);
 
-    const items = await getFatturePerInvioTs(1);
+    mockRequireUserId.mockResolvedValueOnce(1);
+    const items = await getFatturePerInvioTs();
 
     expect(items.map((i) => i.annullamentoInCorso)).toEqual([false, true, false]);
   });

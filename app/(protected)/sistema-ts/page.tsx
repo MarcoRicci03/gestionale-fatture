@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { requireSession } from "@/lib/auth/session";
 import {
   getFatturePerInvioTs,
   getSistemaTsSettings,
@@ -22,17 +21,16 @@ export default async function SistemaTsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await requireSession();
   const params = await searchParams;
 
   const [settings, fatture, trasmissioni] = await Promise.all([
-    getSistemaTsSettings(session.id),
-    getFatturePerInvioTs(session.id, {
+    getSistemaTsSettings(),
+    getFatturePerInvioTs({
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
       stato: params.stato || "DA_INVIARE",
     }),
-    getStoricoTrasmissioniTs(session.id),
+    getStoricoTrasmissioniTs(),
   ]);
 
   return (
