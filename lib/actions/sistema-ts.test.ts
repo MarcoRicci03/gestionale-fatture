@@ -120,7 +120,6 @@ import {
   sincronizzaEsitoTrasmissione,
   annullaFatturaTs,
   ripristinaFatturaPerReinvio,
-  getRicevutaPdfBase64,
   correggiFatturaTs,
 } from "./sistema-ts";
 import { resetSistemaTsRateLimiters } from "@/lib/sistemats/rate-limiters";
@@ -1363,55 +1362,6 @@ describe("lib/actions/sistema-ts — ripristinaFatturaPerReinvio", () => {
       error: "Lo stato della fattura è cambiato nel frattempo: ricarica la pagina.",
     });
     expect(mockLogAudit).not.toHaveBeenCalled();
-  });
-});
-
-describe("lib/actions/sistema-ts — getRicevutaPdfBase64", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("restituisce errore se la trasmissione non esiste o è di altro utente", async () => {
-    mockTrasmissioneFindFirst.mockResolvedValueOnce(null);
-
-    const result = await getRicevutaPdfBase64(999);
-
-    expect(result).toEqual({
-      success: false,
-      error: "Ricevuta PDF non trovata per questa trasmissione.",
-    });
-  });
-
-  it("restituisce errore se il record trasmissione non ha memorizzato pdfRicevuta", async () => {
-    mockTrasmissioneFindFirst.mockResolvedValueOnce({
-      id: 30,
-      protocollo: "PROT_30",
-      pdfRicevuta: null,
-    });
-
-    const result = await getRicevutaPdfBase64(30);
-
-    expect(result).toEqual({
-      success: false,
-      error: "Ricevuta PDF non trovata per questa trasmissione.",
-    });
-  });
-
-  it("converte il buffer Uint8Array in Base64 e restituisce il nome file con protocollo", async () => {
-    const rawBuffer = Buffer.from("%PDF-1.4 fake pdf content");
-    mockTrasmissioneFindFirst.mockResolvedValueOnce({
-      id: 31,
-      protocollo: "PROT_2026_ABC",
-      pdfRicevuta: new Uint8Array(rawBuffer),
-    });
-
-    const result = await getRicevutaPdfBase64(31);
-
-    expect(result).toEqual({
-      success: true,
-      base64: rawBuffer.toString("base64"),
-      fileName: "ricevuta_PROT_2026_ABC.pdf",
-    });
   });
 });
 

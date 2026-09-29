@@ -25,7 +25,6 @@ vi.mock("@/lib/actions/sistema-ts", () => ({
   ripristinaFatturaPerReinvio: (...args: unknown[]) => mockRipristinaFatturaPerReinvio(...args),
   correggiFatturaTs: (...args: unknown[]) => mockCorreggiFatturaTs(...args),
   sincronizzaEsitoTrasmissione: vi.fn(),
-  getRicevutaPdfBase64: vi.fn(),
 }));
 
 describe("SistemaTsManager", () => {

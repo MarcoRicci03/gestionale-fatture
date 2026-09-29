@@ -38,8 +38,10 @@ describe("ARCH-08: Analisi statica architetturale Route Handler Ricevuta TS", ()
     expect(source).not.toMatch(/window\.atob/);
   });
 
-  it("la Server Action getRicevutaPdfBase64 è marcata @deprecated", () => {
+  // P023: la Server Action deprecata getRicevutaPdfBase64 è stata rimossa:
+  // restava un endpoint RPC pubblico senza chiamanti.
+  it("la Server Action getRicevutaPdfBase64 non esiste più", () => {
     const source = readFileSync(ACTIONS_PATH, "utf-8");
-    expect(source).toMatch(/@deprecated[\s\S]*?getRicevutaPdfBase64/);
+    expect(source).not.toMatch(/getRicevutaPdfBase64/);
   });
 });
