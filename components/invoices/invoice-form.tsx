@@ -20,7 +20,7 @@ import {
 } from "@/lib/actions/invoices";
 import { MESI, type Mese } from "@/lib/constants/mesi";
 import { SOGLIA_BOLLO, IMPORTO_BOLLO } from "@/lib/constants/bollo";
-import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getTotaleConBollo } from "@/lib/fiscal/bollo";
 import { formatDateInput, parseDateInput } from "@/lib/utils/date";
 import { roundCurrency } from "@/lib/utils/currency";
 import { withCurrentPayer, withCurrentPatient } from "@/lib/invoices/contact-options";

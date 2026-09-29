@@ -42,9 +42,6 @@ export async function getPatients(
   return { patients: effectivePatients, totalCount, page: clampedPage };
 }
 
-// Spostato in lib/data/payers.ts (SMELL-05), re-export mantenuto per retrocompatibilità.
-export { getPayersForSelect } from "@/lib/data/payers";
-
 export type ArchivedPatientRow = Awaited<
   ReturnType<typeof getArchivedPatients>
 >["patients"][number];
@@ -84,7 +81,6 @@ export async function getArchivedPatients(
     clampedPage === page
       ? patients
       : await findArchivedPatientsPage(where, clampedPage, pageSize);
-
 
   if (effectivePatients.length === 0) {
     return { patients: [], totalCount, page: clampedPage };

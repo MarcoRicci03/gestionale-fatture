@@ -8,7 +8,7 @@ import type {
 import { formatDateDisplay } from "@/lib/utils/date";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { getBolloImporto, getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getBolloImporto, getTotaleConBollo } from "@/lib/fiscal/bollo";
 
 export const STATO_TS_LABELS: Record<StatoTs, string> = {
   DA_INVIARE: "Da inviare",

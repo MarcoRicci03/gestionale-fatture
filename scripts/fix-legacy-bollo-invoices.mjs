@@ -8,7 +8,7 @@
 // codice non è mai stato digitalizzato. Nel gestionale attuale
 // prezzo_totale è invece sempre l'importo puro, e i 2€ vengono sommati solo
 // in visualizzazione quando bolloCodice è valorizzato
-// (lib/invoices/bollo-total.ts) — queste righe storiche sono quindi oggi
+// (lib/fiscal/bollo.ts) — queste righe storiche sono quindi oggi
 // strutturalmente incoerenti col resto dei dati.
 //
 // Questo script, per ogni fattura storica interessata: sottrae 2€ sia da

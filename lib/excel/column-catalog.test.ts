@@ -137,7 +137,7 @@ describe("column-catalog — bollo_importo / prezzo_totale_con_bollo", () => {
   it("bollo_importo/prezzo_totale_con_bollo non dipendono dalla soglia SOGLIA_BOLLO (a differenza di bollo_dovuto)", () => {
     // Totale sotto soglia ma con bolloCodice comunque inserito: il bollo va
     // comunque sommato, perché la regola è "codice presente", non "soglia
-    // superata" (vedi lib/invoices/bollo-total.ts).
+    // superata" (vedi lib/fiscal/bollo.ts).
     const invoice = baseInvoice({ prezzo_totale: 10, bolloCodice: "01234567890123" });
 
     expect(getExportColumn("bollo_dovuto")!.getValue(invoice)).toBe("No");

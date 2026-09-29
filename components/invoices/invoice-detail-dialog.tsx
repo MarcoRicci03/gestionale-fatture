@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getTotaleConBollo } from "@/lib/fiscal/bollo";
 import type { Pagante, Paziente } from "@prisma/client";
 import type { InvoiceListItem } from "./types";
 
