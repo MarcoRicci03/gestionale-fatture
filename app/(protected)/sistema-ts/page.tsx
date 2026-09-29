@@ -6,16 +6,13 @@ import {
   getStoricoTrasmissioniTs,
 } from "@/lib/data/sistema-ts";
 import { SistemaTsManager } from "@/components/sistema-ts/sistema-ts-manager";
+import { parseSistemaTsListQuery } from "@/lib/validations/sistema-ts-list-query";
 
 export const metadata: Metadata = {
   title: "Sistema TS — Invio Spese Sanitarie",
 };
 
-type SearchParams = Promise<{
-  dateFrom?: string;
-  dateTo?: string;
-  stato?: string;
-}>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function SistemaTsPage({
   searchParams,
@@ -23,7 +20,7 @@ export default async function SistemaTsPage({
   searchParams: SearchParams;
 }) {
   const session = await requireSession();
-  const params = await searchParams;
+  const params = parseSistemaTsListQuery(await searchParams);
 
   const [settings, fatture, trasmissioni] = await Promise.all([
     getSistemaTsSettings(session.id),

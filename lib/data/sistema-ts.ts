@@ -6,6 +6,7 @@ import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { parseDateInput, isDataPagamentoFutura } from "@/lib/utils/date";
 import { Prisma, type $Enums } from "@prisma/client";
+import type { SistemaTsStatoFiltro } from "@/lib/validations/sistema-ts-list-query";
 
 export interface FatturaTsListItem {
   id: number;
@@ -69,7 +70,7 @@ export async function getFatturePerInvioTs(
   params?: {
     dateFrom?: string;
     dateTo?: string;
-    stato?: string;
+    stato?: SistemaTsStatoFiltro;
   }
 ): Promise<FatturaTsListItem[]> {
   const where: Prisma.PagamentoWhereInput = {
@@ -77,7 +78,7 @@ export async function getFatturePerInvioTs(
   };
 
   if (params?.stato && params.stato !== "ALL") {
-    where.stato_ts = params.stato as $Enums.StatoTs;
+    where.stato_ts = params.stato;
   }
 
   if (params?.dateFrom || params?.dateTo) {
