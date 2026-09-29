@@ -44,8 +44,21 @@ export const getSession = cache(async (): Promise<Session | null> => {
     return null;
   }
 
+  // select esplicito (P003): passwordHash non serve qui e non deve entrare
+  // in memoria a ogni richiesta.
   const user = await prisma.utente.findUnique({
     where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      nome: true,
+      cognome: true,
+      isAdmin: true,
+      abilitato: true,
+      specializzazione: true,
+      mustChangePassword: true,
+      tokenVersion: true,
+    },
   });
 
   if (!user || !user.abilitato) {

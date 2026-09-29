@@ -1,4 +1,6 @@
 import { it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { SAFE_USER_SELECT } from "../lib/data/user-select";
 import { INVOICE_MITTENTE_SELECT } from "../lib/data/invoice-mittente-select";
 
@@ -45,3 +47,19 @@ it("INVOICE_MITTENTE_SELECT contiene esattamente i campi letti da lib/pdf/placeh
   ].sort();
   expect(Object.keys(INVOICE_MITTENTE_SELECT).sort()).toEqual(expectedFields);
 });
+
+// P003: getSession gira a ogni richiesta e getClientForUser a ogni operazione
+// Sistema TS; nessuno dei due usa passwordHash, quindi le loro letture di
+// Utente devono avere un select esplicito invece di caricare l'intera riga.
+it.each(["lib/auth/session.ts", "lib/sistemats/services/client.service.ts"])(
+  "%s legge Utente solo con un select esplicito",
+  (file) => {
+    const source = readFileSync(join(__dirname, "..", file), "utf-8");
+    const calls = source.match(/prisma\.utente\.findUnique\(\{[\s\S]*?\}\)/g) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call).toMatch(/select:/);
+      expect(call).not.toMatch(/passwordHash/);
+    }
+  }
+);
