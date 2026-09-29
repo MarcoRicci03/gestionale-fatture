@@ -1,41 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { isValidInvoiceId } from "./invoice-id";
+import { isValidId } from "./id";
 
 // Number.isNaN da solo non basta: Number("Infinity") -> Infinity (non NaN,
 // non intero), Number("1e12") -> un intero fuori dal range int4 di Postgres.
 // In entrambi i casi Prisma lanciava un'eccezione non catturata e il client
 // riceveva un 500 generico invece del 400 corretto (LOG-08).
-describe("isValidInvoiceId", () => {
+describe("isValidId", () => {
   it("accetta un intero positivo valido", () => {
-    expect(isValidInvoiceId(Number("42"))).toBe(true);
+    expect(isValidId(Number("42"))).toBe(true);
   });
 
   it("rifiuta NaN", () => {
-    expect(isValidInvoiceId(Number("abc"))).toBe(false);
+    expect(isValidId(Number("abc"))).toBe(false);
   });
 
   it("rifiuta Infinity", () => {
-    expect(isValidInvoiceId(Number("Infinity"))).toBe(false);
+    expect(isValidId(Number("Infinity"))).toBe(false);
   });
 
   it("rifiuta un numero fuori dal range int4 di Postgres", () => {
-    expect(isValidInvoiceId(Number("1e12"))).toBe(false);
+    expect(isValidId(Number("1e12"))).toBe(false);
   });
 
   it("rifiuta zero e i negativi", () => {
-    expect(isValidInvoiceId(0)).toBe(false);
-    expect(isValidInvoiceId(-1)).toBe(false);
+    expect(isValidId(0)).toBe(false);
+    expect(isValidId(-1)).toBe(false);
   });
 
   it("rifiuta un decimale non intero", () => {
-    expect(isValidInvoiceId(Number("1.5"))).toBe(false);
+    expect(isValidId(Number("1.5"))).toBe(false);
   });
 
   it("accetta il limite superiore int4", () => {
-    expect(isValidInvoiceId(2_147_483_647)).toBe(true);
+    expect(isValidId(2_147_483_647)).toBe(true);
   });
 
   it("rifiuta un valore appena oltre il limite superiore int4", () => {
-    expect(isValidInvoiceId(2_147_483_648)).toBe(false);
+    expect(isValidId(2_147_483_648)).toBe(false);
+  });
+
+  it("rifiuta valori non numerici passati come argomento RPC (P016)", () => {
+    expect(isValidId("42")).toBe(false);
+    expect(isValidId(null)).toBe(false);
+    expect(isValidId({ id: 1 })).toBe(false);
   });
 });

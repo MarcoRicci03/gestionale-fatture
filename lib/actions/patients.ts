@@ -10,6 +10,7 @@ import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePatient } from "@/lib/archive/guards";
 import { isForeignKeyViolation } from "@/lib/prisma-errors";
 import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 export type PatientActionState = ActionResult;
 
@@ -76,6 +77,10 @@ export async function updatePatient(
 ): Promise<PatientActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const parsed = patientSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: "Dati non validi" };
@@ -124,6 +129,10 @@ export async function updatePatient(
 export async function archivePatient(id: number): Promise<PatientActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   try {
     // archiviatoInCascata: false esplicito (non solo il default): questa è
     // un'archiviazione manuale del singolo paziente, mai una cascata da
@@ -156,6 +165,10 @@ export async function archivePatient(id: number): Promise<PatientActionState> {
 
 export async function restorePatient(id: number): Promise<PatientActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   try {
     // archiviatoInCascata: false esplicito (LOG-09): ripristino manuale del
@@ -190,6 +203,10 @@ export async function hardDeletePatient(
   id: number
 ): Promise<PatientActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   let idPagante: number | null = null;
 

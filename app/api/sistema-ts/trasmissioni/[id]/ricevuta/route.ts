@@ -1,6 +1,7 @@
 import { getUserIdOrNull } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
+import { isValidId } from "@/lib/validations/id";
 
 const ricevutaDownloadLimiter = createRateLimiter({
   maxRequests: 30,
@@ -29,11 +30,7 @@ export async function GET(
   const { id } = await params;
   const trasmissioneId = Number(id);
 
-  if (
-    !Number.isInteger(trasmissioneId) ||
-    trasmissioneId <= 0 ||
-    trasmissioneId > 2_147_483_647
-  ) {
+  if (!isValidId(trasmissioneId)) {
     return new Response("ID trasmissione non valido", { status: 400 });
   }
 

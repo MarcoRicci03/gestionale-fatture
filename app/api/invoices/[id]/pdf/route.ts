@@ -2,7 +2,7 @@ import { getUserIdOrNull } from "@/lib/auth/session";
 import { getInvoiceById } from "@/lib/data/invoices";
 import { generateInvoicePdf } from "@/lib/pdf/invoices";
 import { createRateLimiter } from "@/lib/auth/rate-limiter";
-import { isValidInvoiceId } from "@/lib/validations/invoice-id";
+import { isValidId } from "@/lib/validations/id";
 
 // La generazione PDF (@react-pdf/renderer) è costosa in CPU: senza un
 // limite, un client autenticato può saturare il processo Node richiedendo
@@ -36,7 +36,7 @@ export async function GET(
   const { id } = await params;
   const invoiceId = Number(id);
 
-  if (!isValidInvoiceId(invoiceId)) {
+  if (!isValidId(invoiceId)) {
     return new Response("ID fattura non valido", { status: 400 });
   }
 

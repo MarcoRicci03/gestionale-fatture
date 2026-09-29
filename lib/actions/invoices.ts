@@ -33,6 +33,7 @@ import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import { annullaFatturaTs } from "./sistema-ts";
 import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 function isInvoiceNumberUniqueViolation(error: unknown): boolean {
   return isUniqueViolationOnField(error, "n_fattura");
@@ -127,6 +128,11 @@ export async function getNextInvoiceNumberForYear(
   excludeId?: number
 ): Promise<number> {
   const userId = await requireUserId();
+  // P016: restituisce un numero, non un ActionResult: parametri non validi
+  // diventano un errore, gestito dal .catch del form fattura.
+  if (!Number.isInteger(year) || (excludeId !== undefined && !isValidId(excludeId))) {
+    throw new Error("Parametri non validi");
+  }
   return getNextInvoiceNumberForUserYear(userId, year, excludeId);
 }
 
@@ -266,6 +272,10 @@ export async function updateInvoice(
   data: InvoiceFormData
 ): Promise<InvoiceActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   const parsed = invoiceSchema.safeParse(data);
   if (!parsed.success) {
@@ -479,6 +489,10 @@ export async function updateInvoice(
 export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   // La riga sparisce fisicamente: i dati della fattura vengono conservati nel
   // meta dell'evento di audit, unica traccia superstite. Niente anagrafica di
   // pagante/paziente (SEC-04): un admin multi-studio non è titolare del
@@ -574,6 +588,10 @@ export async function refreshInvoiceAnagrafica(
   id: number
 ): Promise<InvoiceActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   const invoice = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
