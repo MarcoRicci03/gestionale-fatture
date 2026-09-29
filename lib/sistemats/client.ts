@@ -538,6 +538,25 @@ export class SistemaTsClient {
     const codiceEsito = findTagValue(parsed, "codiceEsito");
     const descrizioneEsito = findTagValue(parsed, "descrizioneEsito");
 
+    // P008: una risposta 2xx senza fault, protocollo né esito non si può
+    // interpretare (XML troncato o malformato: parseXml restituisce {}).
+    // Sogei potrebbe aver acquisito il file, quindi non è un rifiuto certo.
+    if (
+      statusCode >= 200 &&
+      statusCode < 300 &&
+      !protocollo &&
+      !codiceEsito &&
+      !esitoChiamata
+    ) {
+      return {
+        success: false,
+        statusCode,
+        errorMessage: "Risposta del Sistema TS non interpretabile",
+        esitoIncerto: true,
+        rawResponse: responseText,
+      };
+    }
+
     // Successo se protocollo presente e codiceEsito non è errore bloccante ("000" = accolto in elaborazione, "00", "0", "WS11")
     const isSuccess =
       !!protocollo &&
