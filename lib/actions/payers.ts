@@ -9,8 +9,7 @@ import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
-import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { Prisma } from "@prisma/client";
+import { propagaPaganteAlleBozze } from "@/lib/invoices/propaga-anagrafica";
 import type { ActionResult } from "@/lib/types/actions";
 import { isValidId } from "@/lib/validations/id";
 
@@ -149,41 +148,19 @@ export async function updatePayer(
       });
 
       if (parsed.data.propagaFattureInAttesa) {
-        const drafts = await tx.pagamento.findMany({
-          where: {
-            id_Utente: userId,
-            id_Pagante: id,
-            stato_ts: "DA_INVIARE",
+        await propagaPaganteAlleBozze(tx, {
+          userId,
+          idPagante: id,
+          pagante: {
+            nome: parsed.data.nome,
+            cognome: parsed.data.cognome,
+            via: parsed.data.via,
+            citta: parsed.data.citta,
+            cap: parsed.data.cap,
+            cf: parsed.data.cf ?? null,
+            piva: parsed.data.piva ?? null,
           },
-          include: { pagante: true, paziente: true },
         });
-
-        await Promise.all(
-          drafts.map((draft) => {
-            const snap = resolveAnagrafica(draft);
-            const newSnap = {
-              ...snap,
-              pagante: {
-                ...snap.pagante,
-                nome: parsed.data.nome,
-                cognome: parsed.data.cognome,
-                via: parsed.data.via,
-                citta: parsed.data.citta,
-                cap: parsed.data.cap,
-                cf: parsed.data.cf ?? null,
-                piva: parsed.data.piva ?? null,
-              },
-            };
-            // CR-04: una bozza partita per il Sistema TS nel frattempo va
-            // saltata, non modificata (updateMany non lancia se non trova righe).
-            return tx.pagamento.updateMany({
-              where: { id: draft.id, id_Utente: userId, stato_ts: "DA_INVIARE" },
-              data: {
-                snapshotAnagrafica: newSnap as unknown as Prisma.InputJsonValue,
-              },
-            });
-          })
-        );
       }
     });
   } catch (error) {
