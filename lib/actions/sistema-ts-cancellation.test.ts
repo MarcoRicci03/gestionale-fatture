@@ -24,6 +24,7 @@ vi.mock("@/lib/audit/log", () => ({
 vi.mock("@/lib/sistemats/vault", () => ({
   decryptCredential: vi.fn((v: string) => v),
   encryptCredential: vi.fn((v: string) => v),
+  needsReencryption: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/sistemats/xml-builder", () => ({
