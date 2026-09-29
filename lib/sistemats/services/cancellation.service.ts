@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { buildSistemaTsXml, createZipArchive } from "@/lib/sistemats/xml-builder";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildVociSpesa } from "@/lib/sistemats/payload-builder";
+import { isUniqueViolationOnField } from "@/lib/prisma-errors";
 import { getClientForUser } from "./client.service";
 import { STALE_LOCK_MINUTES } from "@/lib/sistemats/lock-timing";
 import type {
@@ -77,6 +78,24 @@ export async function annullaFatturaTsService(params: {
       success: false,
       error: "Solo le fatture inviate o in attesa di cancellazione possono essere annullate sul Sistema TS.",
     };
+  }
+
+  // P004: un protocollo di cancellazione senza la sua TrasmissioneTs indica un
+  // annullamento acquisito da Sogei ma non registrato nel gestionale. Un nuovo
+  // invio creerebbe un secondo 'C' per lo stesso documento.
+  if (invoice.protocollo_cancellazione_ts) {
+    const registrata = await prisma.trasmissioneTs.findFirst({
+      where: { protocollo: invoice.protocollo_cancellazione_ts, id_Utente: userId },
+      select: { id: true },
+    });
+    if (!registrata) {
+      return {
+        success: false,
+        error:
+          `Il Sistema TS ha già acquisito un annullamento per questa fattura (protocollo ${invoice.protocollo_cancellazione_ts}), ` +
+          "ma non è stato registrato nel gestionale: non ripeterlo. Contatta l'assistenza indicando il protocollo.",
+      };
+    }
   }
 
   // CR-07: lock dedicato all'annullamento. La fattura resta INVIATA o
@@ -155,17 +174,23 @@ export async function annullaFatturaTsService(params: {
     documenti: [docCancellazione],
   };
 
+  // P004 (come CR-02 per l'invio): valorizzato appena Sogei restituisce il
+  // protocollo. Da lì l'annullamento è acquisito e il catch non deve più
+  // presentarlo come un errore di connessione da ripetere.
+  let protocolloAcquisito: string | null = null;
+  const fileName = `annulla_${invoice.n_fattura}.zip`;
+
   try {
     const xmlString = buildSistemaTsXml(payload);
     const zipBytes = await createZipArchive(xmlString, "730.xml");
-    const res = await client.inviaFile(zipBytes, `annulla_${invoice.n_fattura}.zip`);
+    const res = await client.inviaFile(zipBytes, fileName);
 
     if (res.success && res.protocollo) {
       const now = new Date();
       const protocollo = res.protocollo;
-      const fileName = `annulla_${invoice.n_fattura}.zip`;
+      protocolloAcquisito = protocollo;
 
-      await prisma.$transaction(async (tx) => {
+      const registraAnnullamento = () => prisma.$transaction(async (tx) => {
         await tx.trasmissioneTs.create({
           data: {
             id_Utente: userId,
@@ -193,6 +218,24 @@ export async function annullaFatturaTsService(params: {
         });
       });
 
+      // Stesso schema di inviaLottoFattureService: un secondo tentativo copre
+      // gli errori transitori; un unique su `protocollo` al secondo tentativo
+      // vuol dire che il primo era già stato salvato.
+      try {
+        await registraAnnullamento();
+      } catch (firstError) {
+        try {
+          await registraAnnullamento();
+        } catch (secondError) {
+          if (
+            isUniqueViolationOnField(firstError, "protocollo") ||
+            !isUniqueViolationOnField(secondError, "protocollo")
+          ) {
+            throw secondError;
+          }
+        }
+      }
+
       return {
         success: true,
         protocollo,
@@ -214,6 +257,32 @@ export async function annullaFatturaTsService(params: {
       };
     }
   } catch (error) {
+    if (protocolloAcquisito) {
+      // Ripiego: salva almeno il protocollo, così la guardia in testa a
+      // questa funzione blocca un secondo annullamento. Il lock resta
+      // rilasciato solo se questa scrittura riesce.
+      try {
+        await rilasciaLock({
+          stato_ts: "DA_CANCELLARE_SU_TS",
+          protocollo_cancellazione_ts: protocolloAcquisito,
+        });
+      } catch (fallbackError) {
+        console.error("Salvataggio di ripiego del protocollo di annullamento fallito:", fallbackError);
+      }
+      // Prefisso grep-abile, stesso di transmission.service.ts.
+      console.error(
+        "TS_PROTOCOLLO_NON_REGISTRATO",
+        { protocollo: protocolloAcquisito, fileName, invoiceIds: [invoiceId] },
+        error
+      );
+      return {
+        success: false,
+        error:
+          `Il Sistema TS ha acquisito l'annullamento (protocollo ${protocolloAcquisito}), ma il salvataggio nel gestionale non è riuscito. ` +
+          "NON ripetere l'annullamento: annota il protocollo e contatta l'assistenza.",
+      };
+    }
+
     const msg = error instanceof Error ? error.message : String(error);
     console.error("annullaFatturaTs network error", error);
     await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS" });

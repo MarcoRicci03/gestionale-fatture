@@ -543,3 +543,106 @@ describe("annullaFatturaTs — lock dedicato (CR-07)", () => {
     vi.mocked(console.error).mockRestore();
   });
 });
+
+describe("annullaFatturaTs — protocollo acquisito ma non registrato (P004)", () => {
+  const fatturaInviata = (extra: Record<string, unknown> = {}) => ({
+    id: 50,
+    id_Utente: 1,
+    n_fattura: 11,
+    anno: 2026,
+    data: new Date("2026-02-01"),
+    prezzo_totale: new Prisma.Decimal(100),
+    pagamento_tracciato: true,
+    natura_iva: "N2.2",
+    flag_opposizione: false,
+    stato_ts: "INVIATA",
+    protocollo_cancellazione_ts: null,
+    pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    ...extra,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
+    mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
+    mockInviaFile.mockResolvedValue({
+      success: true,
+      protocollo: "PROT_ANN_PERSO",
+      codiceEsito: "000",
+    });
+    mockTrasmissioneCreate.mockReset();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("se la registrazione fallisce due volte salva il protocollo e chiede di non ripetere", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(fatturaInviata());
+    mockTrasmissioneCreate.mockRejectedValue(new Error("Connection terminated unexpectedly"));
+
+    const result = await annullaFatturaTs(50);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toContain("PROT_ANN_PERSO");
+    expect(!result.success && result.error).toContain("NON ripetere");
+    expect(!result.success && result.error).not.toContain("Errore di connessione");
+    expect(mockTrasmissioneCreate).toHaveBeenCalledTimes(2);
+    expect(mockPagamentoUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: 50, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
+      data: {
+        stato_ts: "DA_CANCELLARE_SU_TS",
+        protocollo_cancellazione_ts: "PROT_ANN_PERSO",
+        annullamento_avviato_ts: null,
+      },
+    });
+  });
+
+  it("unique su protocollo al secondo tentativo: l'annullamento risulta già registrato", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(fatturaInviata());
+    mockTrasmissioneCreate
+      .mockRejectedValueOnce(new Error("Connection terminated unexpectedly"))
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+          code: "P2002",
+          clientVersion: "test",
+          meta: { target: ["protocollo"] },
+        })
+      );
+
+    const result = await annullaFatturaTs(50);
+
+    expect(result).toEqual(
+      expect.objectContaining({ success: true, protocollo: "PROT_ANN_PERSO" })
+    );
+  });
+
+  it("blocca un nuovo annullamento se il protocollo salvato non ha una trasmissione registrata", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(
+      fatturaInviata({ stato_ts: "DA_CANCELLARE_SU_TS", protocollo_cancellazione_ts: "PROT_ANN_PERSO" })
+    );
+    mockTrasmissioneFindFirst.mockResolvedValueOnce(null);
+
+    const result = await annullaFatturaTs(50);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toContain("PROT_ANN_PERSO");
+    expect(mockTrasmissioneFindFirst).toHaveBeenCalledWith({
+      where: { protocollo: "PROT_ANN_PERSO", id_Utente: 1 },
+      select: { id: true },
+    });
+    expect(mockInviaFile).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("consente un nuovo annullamento se il protocollo precedente è registrato (es. scartato da Sogei)", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(
+      fatturaInviata({ protocollo_cancellazione_ts: "PROT_ANN_SCARTATO" })
+    );
+    mockTrasmissioneFindFirst.mockResolvedValueOnce({ id: 9 });
+
+    const result = await annullaFatturaTs(50);
+
+    expect(result).toEqual(
+      expect.objectContaining({ success: true, protocollo: "PROT_ANN_PERSO" })
+    );
+  });
+});
