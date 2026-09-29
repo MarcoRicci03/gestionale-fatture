@@ -378,6 +378,28 @@ describe("lib/data/sistema-ts — getFatturePerInvioTs", () => {
 describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // La seconda findMany (P013) restituisce gli id con ricevuta PDF.
+    mockTrasmissioneFindMany.mockReset().mockResolvedValue([]);
+  });
+
+  it("P013: non carica i blob delle ricevute e ricava hasPdfRicevuta dagli id", async () => {
+    mockTrasmissioneFindMany
+      .mockResolvedValueOnce([
+        { id: 7, protocollo: "P7", nomeFile: "invio_1.zip", dataInvio: new Date(), statoElaborazione: "2", csvErrori: null, fatture: [] },
+        { id: 8, protocollo: "P8", nomeFile: "invio_2.zip", dataInvio: new Date(), statoElaborazione: "2", csvErrori: null, fatture: [] },
+      ])
+      .mockResolvedValueOnce([{ id: 8 }]);
+
+    const result = await getStoricoTrasmissioniTs(1);
+
+    const [mainQuery, pdfQuery] = mockTrasmissioneFindMany.mock.calls.map((c) => c[0]);
+    expect(mainQuery).not.toHaveProperty("include");
+    expect(mainQuery.select).not.toHaveProperty("pdfRicevuta");
+    expect(pdfQuery).toEqual({
+      where: { id_Utente: 1, pdfRicevuta: { not: null } },
+      select: { id: true },
+    });
+    expect(result.map((t) => t.hasPdfRicevuta)).toEqual([false, true]);
   });
 
   it("ricostruisce lo storico delle trasmissioni di invio e riconcilia gli esiti dei documenti", async () => {
@@ -427,7 +449,9 @@ describe("lib/data/sistema-ts — getStoricoTrasmissioniTs", () => {
       ],
     };
 
-    mockTrasmissioneFindMany.mockResolvedValueOnce([fakeTrasmissione]);
+    mockTrasmissioneFindMany
+      .mockResolvedValueOnce([fakeTrasmissione])
+      .mockResolvedValueOnce([{ id: fakeTrasmissione.id }]);
 
     const result = await getStoricoTrasmissioniTs(1);
 

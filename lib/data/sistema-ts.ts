@@ -201,30 +201,51 @@ export interface FatturaInTrasmissioneItem {
 }
 
 export async function getStoricoTrasmissioniTs(userId: number) {
-  const trasmissioni = await prisma.trasmissioneTs.findMany({
-    where: { id_Utente: userId },
-    include: {
-      fatture: {
-        select: {
-          id: true,
-          n_fattura: true,
-          anno: true,
-          data: true,
-          prezzo_totale: true,
-          stato_ts: true,
-          pagante: {
-            select: {
-              nome: true,
-              cognome: true,
-              cf: true,
+  // P013: select esplicito, senza pdfRicevuta: `include` caricava il blob
+  // della ricevuta di ogni trasmissione a ogni apertura di /sistema-ts. La
+  // presenza della ricevuta si legge con una query che restituisce solo gli id.
+  const [trasmissioni, conRicevuta] = await Promise.all([
+    prisma.trasmissioneTs.findMany({
+      where: { id_Utente: userId },
+      select: {
+        id: true,
+        protocollo: true,
+        nomeFile: true,
+        dataInvio: true,
+        statoElaborazione: true,
+        codiceEsito: true,
+        descrizioneEsito: true,
+        numRicevuti: true,
+        numAccolti: true,
+        numScartati: true,
+        csvErrori: true,
+        fatture: {
+          select: {
+            id: true,
+            n_fattura: true,
+            anno: true,
+            data: true,
+            prezzo_totale: true,
+            stato_ts: true,
+            pagante: {
+              select: {
+                nome: true,
+                cognome: true,
+                cf: true,
+              },
             },
           },
+          orderBy: [{ anno: "asc" }, { n_fattura: "asc" }],
         },
-        orderBy: [{ anno: "asc" }, { n_fattura: "asc" }],
       },
-    },
-    orderBy: { dataInvio: "desc" },
-  });
+      orderBy: { dataInvio: "desc" },
+    }),
+    prisma.trasmissioneTs.findMany({
+      where: { id_Utente: userId, pdfRicevuta: { not: null } },
+      select: { id: true },
+    }),
+  ]);
+  const idConRicevuta = new Set(conRicevuta.map((t) => t.id));
 
   const cancellationProtocols = trasmissioni
     .filter((t) => t.nomeFile.startsWith("annulla_"))
@@ -326,7 +347,7 @@ export async function getStoricoTrasmissioniTs(userId: number) {
       numRicevuti: t.numRicevuti,
       numAccolti: t.numAccolti,
       numScartati: t.numScartati,
-      hasPdfRicevuta: !!t.pdfRicevuta,
+      hasPdfRicevuta: idConRicevuta.has(t.id),
       hasCsvErrori: !!t.csvErrori,
       csvErrori: t.csvErrori,
       totaleFatture: rawFatture.length,
