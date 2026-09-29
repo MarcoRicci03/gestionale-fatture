@@ -59,9 +59,6 @@ export async function getPatientsForSelect() {
   });
 }
 
-// Spostato in lib/data/payers.ts (SMELL-05), re-export mantenuto per retrocompatibilità.
-export { getPayersForSelect } from "@/lib/data/payers";
-
 export type ArchivedPatientRow = Awaited<
   ReturnType<typeof getArchivedPatients>
 >["patients"][number];

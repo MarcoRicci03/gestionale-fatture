@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBolloImporto, getTotaleConBollo } from "./bollo-total";
+import { getBolloImporto, getTotaleConBollo } from "./bollo";
 
 describe("getBolloImporto", () => {
   it("bolloCodice presente: 2,00€", () => {

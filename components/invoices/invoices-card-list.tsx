@@ -3,7 +3,7 @@
 import { AlertTriangle, Clock } from "lucide-react";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import { formatDateDisplay, isDataPagamentoFutura } from "@/lib/utils/date";
-import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getTotaleConBollo } from "@/lib/fiscal/bollo";
 import { InvoiceRowActions } from "./invoice-row-actions";
 import type { InvoiceListItem } from "./types";
 
