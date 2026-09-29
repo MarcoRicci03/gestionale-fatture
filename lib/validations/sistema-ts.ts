@@ -56,10 +56,16 @@ export const sistemaTsSettingsSchema = z.object({
 export type SistemaTsSettingsInput = z.input<typeof sistemaTsSettingsSchema>;
 export type SistemaTsSettingsData = z.output<typeof sistemaTsSettingsSchema>;
 
+// P010: tetto sul numero di fatture per lotto, come MAX_EXPORT_INVOICES per
+// l'export: protegge la clausola IN() e la generazione dell'XML da un
+// payload arbitrario inviato direttamente all'endpoint RPC.
+export const MAX_FATTURE_PER_LOTTO = 1000;
+
 export const invioLottoSchema = z.object({
   invoiceIds: z
-    .array(z.coerce.number().int().positive())
-    .min(1, "Seleziona almeno una fattura da trasmettere"),
+    .array(z.number().int().positive().max(2_147_483_647))
+    .min(1, "Nessuna fattura selezionata per l'invio.")
+    .max(MAX_FATTURE_PER_LOTTO, `Non è possibile trasmettere più di ${MAX_FATTURE_PER_LOTTO} fatture in un lotto`),
 });
 
 export type InvioLottoInput = z.input<typeof invioLottoSchema>;
