@@ -48,13 +48,6 @@ export async function getPayers(
   return { payers: effectivePayers, totalCount, page: clampedPage };
 }
 
-export async function getPayerById(id: number) {
-  const userId = await requireUserId();
-  return prisma.pagante.findFirst({
-    where: { id, id_Utente: userId, archiviato: false },
-  });
-}
-
 export type ArchivedPayerRow = Awaited<
   ReturnType<typeof getArchivedPayers>
 >["payers"][number];
@@ -172,4 +165,3 @@ export async function getPayersForSelect() {
     orderBy: [{ cognome: "asc" }, { nome: "asc" }],
   });
 }
-
