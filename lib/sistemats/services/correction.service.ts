@@ -4,6 +4,7 @@ import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
 import type { CorreggiFatturaTsData } from "@/lib/validations/sistema-ts-correction";
+import { FATTURA_ANNULLATA_TS_EDIT_ERROR } from "@/lib/invoices/errors";
 
 export type CorrectionResult =
   | {
@@ -61,6 +62,12 @@ export async function correggiFatturaTsService(params: {
     invoice.stato_ts === "DA_CANCELLARE_SU_TS"
   ) {
     return { success: false, error: FATTURA_TRASMESSA_ERROR };
+  }
+
+  // P007: stessa regola di updateInvoice, una fattura annullata su TS va
+  // prima ripristinata.
+  if (invoice.stato_ts === "ANNULLATA_TS") {
+    return { success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR };
   }
 
   // CR-05: i campi omessi valgono come "invariati". L'opposizione effettiva è
