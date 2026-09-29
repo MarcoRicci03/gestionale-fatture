@@ -69,6 +69,7 @@ export function makeInvoice(
     data_invio_ts: null,
     invio_avviato_ts: null,
     annullamento_avviato_ts: null,
+    annullamento_incerto_ts: null,
     flag_opposizione: false,
     pagamento_tracciato: true,
     natura_iva: "N2.2",

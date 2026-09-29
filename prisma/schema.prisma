@@ -167,6 +167,12 @@ model Pagamento {
   // CR-07: lock dell'annullamento in corso verso Sogei. L'annullamento non
   // usa IN_TRASMISSIONE né data_invio_ts, che resta la data dell'invio originale.
   annullamento_avviato_ts     DateTime?
+  // P005: istante dell'ultimo annullamento partito verso Sogei senza esito
+  // certo. Finché è valorizzato un nuovo annullamento richiede la conferma
+  // dell'utente di aver verificato sul portale che il precedente non è stato
+  // acquisito: un secondo 'C' su un documento già annullato verrebbe scartato
+  // e la riconciliazione riporterebbe la fattura su INVIATA.
+  annullamento_incerto_ts     DateTime?
   // Relazione molti-a-molti con TrasmissioneTs tramite tabella ponte _FattureTrasmissioni.
   // Conserva lo storico completo di ogni trasmissione (invio, reinvio e cancellazione).
   trasmissioniTs              TrasmissioneTs[] @relation("FattureTrasmissioni")

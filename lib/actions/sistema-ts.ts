@@ -148,10 +148,17 @@ export async function sincronizzaEsitoTrasmissione(
   };
 }
 
+// Tipo con nome, non inline: i test di invarianti (verify-actions-auth,
+// verify-audit-log-coverage) leggono il corpo dalla prima "{" dopo la firma.
+type ConfermaEsitoOpzioni = { confermaEsitoVerificato?: boolean };
+
 /**
  * Annulla una fattura già trasmessa al Sistema TS (invio sincrono con flagOperazione = 'C').
  */
-export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActionState> {
+export async function annullaFatturaTs(
+  invoiceId: number,
+  opzioni?: ConfermaEsitoOpzioni
+): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
 
   const rateLimit = sistemaTsTransmissionLimiter.consume(String(userId));
@@ -163,7 +170,9 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
     };
   }
 
-  const res = await annullaFatturaTsService({ userId, invoiceId });
+  // Endpoint RPC pubblico: vale solo un `true` esplicito (P005).
+  const confermaEsitoVerificato = opzioni?.confermaEsitoVerificato === true;
+  const res = await annullaFatturaTsService({ userId, invoiceId, confermaEsitoVerificato });
   if (!res.success) {
     revalidatePath("/invoices");
     revalidatePath("/sistema-ts");
@@ -180,6 +189,7 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
       n_fattura: res.invoice.n_fattura,
       anno: res.invoice.anno,
       protocolloCancellazione: res.protocollo,
+      ...(confermaEsitoVerificato ? { esitoIncertoConfermato: true } : {}),
     },
   });
 
@@ -192,10 +202,6 @@ export async function annullaFatturaTs(invoiceId: number): Promise<SistemaTsActi
   };
 }
 
-// Tipo con nome, non inline: i test di invarianti (verify-actions-auth,
-// verify-audit-log-coverage) leggono il corpo dalla prima "{" dopo la firma.
-type RipristinaOpzioni = { confermaEsitoVerificato?: boolean };
-
 /**
  * Riporta allo stato 'DA_INVIARE' una fattura annullata sul Sistema TS (ANNULLATA_TS) o
  * rimasta bloccata in un invio iniziale (IN_TRASMISSIONE senza protocollo, lock scaduto).
@@ -205,7 +211,7 @@ type RipristinaOpzioni = { confermaEsitoVerificato?: boolean };
  */
 export async function ripristinaFatturaPerReinvio(
   invoiceId: number,
-  opzioni?: RipristinaOpzioni
+  opzioni?: ConfermaEsitoOpzioni
 ): Promise<SistemaTsActionState> {
   const userId = await requireUserId();
 

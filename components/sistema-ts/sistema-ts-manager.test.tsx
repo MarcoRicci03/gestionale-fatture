@@ -52,6 +52,7 @@ describe("SistemaTsManager", () => {
       data_invio_ts: null,
       esitoDaVerificare: false,
       annullamentoInCorso: false,
+      annullamentoDaVerificare: false,
       paganteNomeCompleto: "Luigi Bianchi",
       paganteCf: "BNCLGI75C12F205E",
       pazienteNomeCompleto: "Luigi Bianchi",
@@ -82,6 +83,7 @@ describe("SistemaTsManager", () => {
       data_invio_ts: null,
       esitoDaVerificare: false,
       annullamentoInCorso: false,
+      annullamentoDaVerificare: false,
       paganteNomeCompleto: "Mario Rossi",
       paganteCf: "INVALID_CF",
       pazienteNomeCompleto: "Mario Rossi",
@@ -113,6 +115,7 @@ describe("SistemaTsManager", () => {
       data_invio_ts: new Date("2026-03-02T10:00:00Z"),
       esitoDaVerificare: false,
       annullamentoInCorso: false,
+      annullamentoDaVerificare: false,
       paganteNomeCompleto: "Anna Verdi",
       paganteCf: "VRDNNA80A41H501Z",
       pazienteNomeCompleto: "Anna Verdi",
@@ -144,6 +147,7 @@ describe("SistemaTsManager", () => {
       data_invio_ts: null,
       esitoDaVerificare: false,
       annullamentoInCorso: false,
+      annullamentoDaVerificare: false,
       paganteNomeCompleto: "Marco Neri",
       paganteCf: "NRIMRC85M01H501U",
       pazienteNomeCompleto: "Marco Neri",
@@ -642,5 +646,36 @@ describe("SistemaTsManager", () => {
     for (const button of screen.getAllByRole("button", { name: /Annulla TS/i })) {
       expect(button).toBeDisabled();
     }
+  });
+  it("P005: dopo un annullamento incerto richiede la verifica sul portale e la inoltra all'action", async () => {
+    const user = userEvent.setup();
+    mockAnnullaFatturaTs.mockResolvedValueOnce({ success: true, protocollo: "CANC-OK" });
+    const inviata = mockFatture.find((f) => f.stato_ts === "INVIATA")!;
+
+    render(
+      <SistemaTsManager
+        {...defaultProps}
+        fatture={[{ ...inviata, stato_ts: "DA_CANCELLARE_SU_TS", annullamentoDaVerificare: true }]}
+        filters={{ ...defaultProps.filters, stato: "DA_CANCELLARE_SU_TS" }}
+      />
+    );
+
+    expect(screen.getAllByText(/Annullamento da verificare/i).length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole("button", { name: /Annulla TS/i })[0]);
+
+    await user.type(screen.getByLabelText(/Numero fattura/i), String(inviata.n_fattura));
+    await user.type(screen.getByLabelText(/Data emissione/i), "01032026");
+    await user.type(screen.getByLabelText(/Intestatario fattura/i), "Anna Verdi");
+
+    const confirm = screen.getByRole("button", { name: /Conferma Cancellazione/i });
+    expect(confirm).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox", { name: /precedente annullamento non risulta acquisito/i }));
+    expect(confirm).not.toBeDisabled();
+    await user.click(confirm);
+
+    await waitFor(() =>
+      expect(mockAnnullaFatturaTs).toHaveBeenCalledWith(inviata.id, { confermaEsitoVerificato: true })
+    );
   });
 });

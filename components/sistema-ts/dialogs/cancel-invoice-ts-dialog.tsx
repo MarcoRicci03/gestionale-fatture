@@ -19,14 +19,14 @@ import { formatDate, type CancelInvoiceData } from "../types";
 export type CancelInvoiceTsDialogProps = {
   cancellingInvoice: CancelInvoiceData | null;
   onClose: () => void;
-  onConfirm: (invoiceId: number) => void;
+  onConfirm: (invoiceId: number, confermaEsitoVerificato: boolean) => void;
   isPending: boolean;
 };
 
 type CancelInvoiceFormContentProps = {
   cancellingInvoice: CancelInvoiceData;
   onClose: () => void;
-  onConfirm: (invoiceId: number) => void;
+  onConfirm: (invoiceId: number, confermaEsitoVerificato: boolean) => void;
   isPending: boolean;
 };
 
@@ -39,6 +39,10 @@ function CancelInvoiceFormContent({
   const [cancelConfirmNumero, setCancelConfirmNumero] = useState("");
   const [cancelConfirmData, setCancelConfirmData] = useState("");
   const [cancelConfirmIntestatario, setCancelConfirmIntestatario] = useState("");
+  // P005: con un annullamento precedente dall'esito incerto serve anche la
+  // conferma della verifica sul portale.
+  const [esitoVerificato, setEsitoVerificato] = useState(false);
+  const richiedeVerificaEsito = cancellingInvoice.esitoDaVerificare === true;
 
   const isCancelNumeroValid = useMemo(() => {
     const clean = cancelConfirmNumero.trim().replace(/^#/, "").trim();
@@ -104,7 +108,10 @@ function CancelInvoiceFormContent({
   }, [cancellingInvoice, cancelConfirmIntestatario]);
 
   const isCancelConfirmationValid =
-    isCancelNumeroValid && isCancelDataValid && isCancelIntestatarioValid;
+    isCancelNumeroValid &&
+    isCancelDataValid &&
+    isCancelIntestatarioValid &&
+    (!richiedeVerificaEsito || esitoVerificato);
 
   return (
     <>
@@ -120,6 +127,29 @@ function CancelInvoiceFormContent({
       </DialogHeader>
 
       <div className="space-y-4 py-2 text-xs">
+        {richiedeVerificaEsito && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-50/60 dark:bg-amber-950/30 p-3 space-y-2 text-amber-900 dark:text-amber-200">
+            <p className="font-semibold">Esito del precedente annullamento incerto</p>
+            <p>
+              Il Sistema TS potrebbe aver già ricevuto la richiesta. Controlla sul portale: se
+              l&apos;annullamento <strong>risulta acquisito</strong>, NON ripeterlo e contatta
+              l&apos;assistenza.
+            </p>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={esitoVerificato}
+                onChange={(e) => setEsitoVerificato(e.target.checked)}
+                disabled={isPending}
+                className="h-4 w-4 mt-0.5 rounded border-input text-primary focus:ring-primary"
+              />
+              <span className="text-foreground">
+                Ho verificato sul portale Sistema TS che il precedente annullamento non risulta acquisito.
+              </span>
+            </label>
+          </div>
+        )}
+
         <div className="rounded-lg bg-destructive/10 p-3 text-destructive border border-destructive/20 space-y-1">
           <p className="font-semibold">Cosa comporta questa operazione:</p>
           <p>• La spesa sanitaria verrà <strong>eliminata dal 730 precompilato</strong> dell&apos;assistito.</p>
@@ -235,7 +265,7 @@ function CancelInvoiceFormContent({
           variant="destructive"
           onClick={() => {
             if (isCancelConfirmationValid) {
-              onConfirm(cancellingInvoice.id);
+              onConfirm(cancellingInvoice.id, richiedeVerificaEsito && esitoVerificato);
             }
           }}
           disabled={isPending || !isCancelConfirmationValid}

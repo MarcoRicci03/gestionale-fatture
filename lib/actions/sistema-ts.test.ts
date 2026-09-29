@@ -1167,7 +1167,11 @@ describe("lib/actions/sistema-ts — annullaFatturaTs fallback & error handling"
     // CR-07: rilascio del proprio lock, data_invio_ts non viene toccata
     expect(mockPagamentoUpdateMany).toHaveBeenCalledWith({
       where: { id: 10, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
-      data: { stato_ts: "DA_CANCELLARE_SU_TS", annullamento_avviato_ts: null },
+      data: {
+        stato_ts: "DA_CANCELLARE_SU_TS",
+        annullamento_incerto_ts: null,
+        annullamento_avviato_ts: null,
+      },
     });
   });
 

@@ -34,6 +34,9 @@ export interface FatturaTsListItem {
   esitoDaVerificare: boolean;
   // CR-07: annullamento verso Sogei in corso (lock recente).
   annullamentoInCorso: boolean;
+  // P005: ultimo annullamento partito senza esito certo, da verificare sul
+  // portale prima di riprovare.
+  annullamentoDaVerificare: boolean;
   paganteNomeCompleto: string;
   paganteCf: string | null;
   pazienteNomeCompleto: string;
@@ -161,6 +164,7 @@ export async function getFatturePerInvioTs(
       annullamentoInCorso:
         inv.annullamento_avviato_ts !== null &&
         inv.annullamento_avviato_ts.getTime() >= staleThresholdMs,
+      annullamentoDaVerificare: inv.annullamento_incerto_ts !== null,
       paganteNomeCompleto: `${anagrafica.pagante.cognome} ${anagrafica.pagante.nome}`,
       paganteCf: cf,
       pazienteNomeCompleto: `${anagrafica.paziente.cognome} ${anagrafica.paziente.nome}`,

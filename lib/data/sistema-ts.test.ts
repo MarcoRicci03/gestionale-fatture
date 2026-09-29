@@ -690,4 +690,14 @@ describe("lib/data/sistema-ts — annullamentoInCorso (CR-07)", () => {
 
     expect(items.map((i) => i.annullamentoInCorso)).toEqual([false, true, false]);
   });
+  it("annullamentoDaVerificare segue annullamento_incerto_ts (P005)", async () => {
+    mockPagamentoFindMany.mockResolvedValueOnce([
+      { ...inviata(1, null), annullamento_incerto_ts: null },
+      { ...inviata(2, null), stato_ts: $Enums.StatoTs.DA_CANCELLARE_SU_TS, annullamento_incerto_ts: new Date() },
+    ]);
+
+    const items = await getFatturePerInvioTs(1);
+
+    expect(items.map((i) => i.annullamentoDaVerificare)).toEqual([false, true]);
+  });
 });

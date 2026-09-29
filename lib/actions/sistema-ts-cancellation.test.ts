@@ -165,6 +165,7 @@ describe("annullaFatturaTs — Creazione TrasmissioneTs e stato pending", () => 
         stato_ts: "DA_CANCELLARE_SU_TS",
         protocollo_cancellazione_ts: "PROT_ANN_12345",
         annullamento_avviato_ts: null,
+        annullamento_incerto_ts: null,
       },
     });
   });
@@ -484,6 +485,7 @@ describe("annullaFatturaTs — lock dedicato (CR-07)", () => {
         id: 50,
         id_Utente: 1,
         stato_ts: { in: ["INVIATA", "DA_CANCELLARE_SU_TS"] },
+        annullamento_incerto_ts: null,
         OR: [
           { annullamento_avviato_ts: null },
           { annullamento_avviato_ts: { lt: expect.any(Date) } },
@@ -644,5 +646,102 @@ describe("annullaFatturaTs — protocollo acquisito ma non registrato (P004)", (
     expect(result).toEqual(
       expect.objectContaining({ success: true, protocollo: "PROT_ANN_PERSO" })
     );
+  });
+});
+
+describe("annullaFatturaTs — esito incerto (P005)", () => {
+  const fattura = (extra: Record<string, unknown> = {}) => ({
+    id: 60,
+    id_Utente: 1,
+    n_fattura: 12,
+    anno: 2026,
+    data: new Date("2026-02-01"),
+    prezzo_totale: new Prisma.Decimal(100),
+    pagamento_tracciato: true,
+    natura_iva: "N2.2",
+    flag_opposizione: false,
+    stato_ts: "INVIATA",
+    protocollo_cancellazione_ts: null,
+    annullamento_incerto_ts: null,
+    pagante: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    paziente: { nome: "Mario", cognome: "Rossi", cf: "RSSMRA85M01H501Q" },
+    ...extra,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSistemaTsRateLimiters();
+    mockTrasmissioneCreate.mockReset();
+    mockInviaFile.mockReset();
+    mockPagamentoUpdateMany.mockResolvedValue({ count: 1 });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("con esito incerto registra annullamento_incerto_ts e non lo presenta come retry sicuro", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(fattura());
+    mockInviaFile.mockResolvedValueOnce({
+      success: false,
+      esitoIncerto: true,
+      errorMessage: "timeout",
+    });
+
+    const result = await annullaFatturaTs(60);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toContain("incerto");
+    expect(result).not.toHaveProperty("fallback");
+    expect(mockTrasmissioneCreate).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: 60, id_Utente: 1, annullamento_avviato_ts: expect.any(Date) },
+      data: {
+        stato_ts: "DA_CANCELLARE_SU_TS",
+        annullamento_incerto_ts: expect.any(Date),
+        annullamento_avviato_ts: null,
+      },
+    });
+  });
+
+  it("senza conferma blocca un nuovo annullamento dopo un esito incerto", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(
+      fattura({ stato_ts: "DA_CANCELLARE_SU_TS", annullamento_incerto_ts: new Date() })
+    );
+
+    const result = await annullaFatturaTs(60);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toContain("verifica sul portale");
+    expect(mockInviaFile).not.toHaveBeenCalled();
+    expect(mockPagamentoUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("con conferma riprova, non vincola il lock al flag e lo azzera al successo", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(
+      fattura({ stato_ts: "DA_CANCELLARE_SU_TS", annullamento_incerto_ts: new Date() })
+    );
+    mockInviaFile.mockResolvedValueOnce({ success: true, protocollo: "PROT_ANN_OK" });
+
+    const result = await annullaFatturaTs(60, { confermaEsitoVerificato: true });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, protocollo: "PROT_ANN_OK" }));
+    const lock = mockPagamentoUpdateMany.mock.calls[0][0] as { where: object };
+    expect(lock.where).not.toHaveProperty("annullamento_incerto_ts");
+    expect(mockPagamentoUpdateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ annullamento_incerto_ts: null }),
+      })
+    );
+  });
+
+  it("accetta come conferma solo un true esplicito", async () => {
+    mockPagamentoFindFirst.mockResolvedValueOnce(
+      fattura({ stato_ts: "DA_CANCELLARE_SU_TS", annullamento_incerto_ts: new Date() })
+    );
+
+    const result = await annullaFatturaTs(60, {
+      confermaEsitoVerificato: "true" as unknown as boolean,
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockInviaFile).not.toHaveBeenCalled();
   });
 });

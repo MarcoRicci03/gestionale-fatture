@@ -439,7 +439,11 @@ export function LottiTab({
                         {f.stato_ts === "DA_CANCELLARE_SU_TS" && !f.annullamentoInCorso && (
                           <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/30 dark:text-amber-400">
                             <AlertTriangle className="mr-1 h-3 w-3" />
-                            {f.protocollo_cancellazione_ts ? "Canc. in corso" : "Da cancellare"}
+                            {f.annullamentoDaVerificare
+                              ? "Annullamento da verificare"
+                              : f.protocollo_cancellazione_ts
+                                ? "Canc. in corso"
+                                : "Da cancellare"}
                           </span>
                         )}
                         {f.stato_ts === "ANNULLATA_TS" && (
@@ -477,6 +481,7 @@ export function LottiTab({
                                   anno: f.anno,
                                   data: f.data,
                                   paganteNome: f.paganteNomeCompleto,
+                                  esitoDaVerificare: f.annullamentoDaVerificare,
                                 })
                               }
                               disabled={isPending || f.annullamentoInCorso}
@@ -633,7 +638,11 @@ export function LottiTab({
                         )}
                         {f.stato_ts === "DA_CANCELLARE_SU_TS" && !f.annullamentoInCorso && (
                           <span className="text-amber-600 font-medium">
-                            {f.protocollo_cancellazione_ts ? "Canc. in corso" : "Da cancellare"}
+                            {f.annullamentoDaVerificare
+                              ? "Annullamento da verificare"
+                              : f.protocollo_cancellazione_ts
+                                ? "Canc. in corso"
+                                : "Da cancellare"}
                           </span>
                         )}
                         {f.stato_ts === "ANNULLATA_TS" && (
@@ -672,6 +681,7 @@ export function LottiTab({
                               anno: f.anno,
                               data: f.data,
                               paganteNome: f.paganteNomeCompleto,
+                              esitoDaVerificare: f.annullamentoDaVerificare,
                             })
                           }
                           disabled={isPending || f.annullamentoInCorso}
