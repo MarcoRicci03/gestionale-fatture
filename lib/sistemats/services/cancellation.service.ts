@@ -40,8 +40,11 @@ export type ReissueResult =
 export async function annullaFatturaTsService(params: {
   userId: number;
   invoiceId: number;
+  // P005: l'utente dichiara di aver verificato sul portale Sistema TS che il
+  // precedente annullamento con esito incerto non è stato acquisito.
+  confermaEsitoVerificato?: boolean;
 }): Promise<CancellationResult> {
-  const { userId, invoiceId } = params;
+  const { userId, invoiceId, confermaEsitoVerificato = false } = params;
 
   const invoice = await prisma.pagamento.findFirst({
     where: { id: invoiceId, id_Utente: userId },
@@ -98,6 +101,14 @@ export async function annullaFatturaTsService(params: {
     }
   }
 
+  if (invoice.annullamento_incerto_ts && !confermaEsitoVerificato) {
+    return {
+      success: false,
+      error:
+        "Esito del precedente annullamento incerto: verifica sul portale Sistema TS che non sia stato acquisito, poi conferma per riprovare.",
+    };
+  }
+
   // CR-07: lock dedicato all'annullamento. La fattura resta INVIATA o
   // DA_CANCELLARE_SU_TS (stati già protetti da modifica e cancellazione) e
   // data_invio_ts, la data dell'invio originale, non viene toccata. Un lock più
@@ -110,6 +121,9 @@ export async function annullaFatturaTsService(params: {
       id: invoiceId,
       id_Utente: userId,
       stato_ts: { in: ["INVIATA", "DA_CANCELLARE_SU_TS"] },
+      // P005: senza conferma non si scavalca un esito incerto registrato nel
+      // frattempo da un'altra richiesta.
+      ...(confermaEsitoVerificato ? {} : { annullamento_incerto_ts: null }),
       OR: [
         { annullamento_avviato_ts: null },
         { annullamento_avviato_ts: { lt: staleThreshold } },
@@ -214,6 +228,7 @@ export async function annullaFatturaTsService(params: {
             stato_ts: "DA_CANCELLARE_SU_TS",
             protocollo_cancellazione_ts: protocollo,
             annullamento_avviato_ts: null,
+            annullamento_incerto_ts: null,
           },
         });
       });
@@ -245,8 +260,26 @@ export async function annullaFatturaTsService(params: {
         },
       };
     } else {
-      // Errore di connessione o scarto MEF: contrassegna come DA_CANCELLARE_SU_TS
-      await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS" });
+      if (res.esitoIncerto) {
+        // P005 (come CR-10 per l'invio): Sogei potrebbe aver ricevuto il file.
+        // Un nuovo annullamento richiederà la conferma dell'utente.
+        await rilasciaLock({
+          stato_ts: "DA_CANCELLARE_SU_TS",
+          annullamento_incerto_ts: new Date(),
+        });
+        console.error("TS_ESITO_INCERTO", { fileName, invoiceIds: [invoiceId] });
+        return {
+          success: false,
+          error:
+            "Esito dell'annullamento incerto: il Sistema TS potrebbe aver ricevuto la richiesta. " +
+            "Verifica sul portale Sistema TS se l'annullamento risulta acquisito prima di riprovare." +
+            (res.errorMessage ? ` (${res.errorMessage})` : ""),
+        };
+      }
+
+      // Rifiuto certo: il file non è stato acquisito. Un eventuale esito
+      // incerto precedente era già stato verificato dall'utente.
+      await rilasciaLock({ stato_ts: "DA_CANCELLARE_SU_TS", annullamento_incerto_ts: null });
 
       return {
         success: false,

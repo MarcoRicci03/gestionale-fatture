@@ -25,6 +25,8 @@ export type CancelInvoiceData = {
   anno: number;
   data: Date;
   paganteNome: string;
+  // P005: l'ultimo annullamento è partito senza esito certo.
+  esitoDaVerificare?: boolean;
 };
 
 export type ReadinessFilter = "pronte" | "da_correggere" | "future" | "tutte";

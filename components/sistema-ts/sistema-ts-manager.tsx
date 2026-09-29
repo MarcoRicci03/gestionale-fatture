@@ -148,12 +148,14 @@ export function SistemaTsManager({
     });
   };
 
-  const handleAnnullaTs = (invoiceId: number) => {
+  const handleAnnullaTs = (invoiceId: number, confermaEsitoVerificato: boolean) => {
     setActionError(null);
     setActionSuccess(null);
 
     startTransition(async () => {
-      const res = await annullaFatturaTs(invoiceId);
+      const res = confermaEsitoVerificato
+        ? await annullaFatturaTs(invoiceId, { confermaEsitoVerificato: true })
+        : await annullaFatturaTs(invoiceId);
       setCancellingInvoice(null);
       if ("error" in res) {
         setActionError(res.error);
