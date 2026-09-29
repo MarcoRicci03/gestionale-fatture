@@ -82,6 +82,7 @@ model Pagante {
   // schema. È atteso, non un'indicazione di rigenerare la migration. Se in
   // futuro si usa `prisma db push` in dev, questi indici andrebbero
   // ricreati manualmente (db push non replica migration SQL custom).
+  @@unique([id, id_Utente])
   @@index([id_Utente, archiviato])
   @@map("paganti")
 }
@@ -114,7 +115,8 @@ model Paziente {
   // lib/archive/guards.ts) — a quel punto i soli pazienti ancora collegati
   // sono già archiviati e senza fatture, ed è corretto cancellarli insieme
   // al pagante invece di lasciarli con un id_Pagante orfano.
-  pagante    Pagante?    @relation(fields: [id_Pagante], references: [id], onDelete: Cascade)
+  // P002: FK composita con id_Utente (stesso tenant del pagante).
+  pagante    Pagante?    @relation(fields: [id_Pagante, id_Utente], references: [id, id_Utente], onDelete: Cascade)
   pagamenti  Pagamento[]
 
   @@index([id_Utente, archiviato])
@@ -123,6 +125,7 @@ model Paziente {
   // (lib/actions/payers.ts) e l'ON DELETE CASCADE da Pagante fanno seq scan
   // su questa tabella.
   @@index([id_Pagante])
+  @@unique([id, id_Utente])
   @@map("pazienti")
 }
 
@@ -173,8 +176,10 @@ model Pagamento {
   bollo                       Decimal         @default(0.00) @db.Decimal(5, 2)
 
   utente              Utente         @relation(fields: [id_Utente], references: [id])
-  pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
-  paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
+  // P002: FK composite con id_Utente, così il DB rifiuta una fattura
+  // collegata a pagante/paziente di un altro utente.
+  pagante             Pagante        @relation(fields: [id_Pagante, id_Utente], references: [id, id_Utente])
+  paziente            Paziente       @relation(fields: [id_Paziente, id_Utente], references: [id, id_Utente])
   mesi                FatturaMese[]
 
   @@unique([id_Utente, n_fattura, anno])
