@@ -205,7 +205,13 @@ export async function inviaLottoFattureService(params: {
     if (error instanceof ConcurrencyLockError) {
       return { success: false, error: error.message };
     }
-    throw error;
+    // P017: la transazione è stata annullata, quindi nessuna fattura è
+    // rimasta bloccata e nulla è partito verso Sogei.
+    console.error("inviaLottoFatture lock error", error);
+    return {
+      success: false,
+      error: "Impossibile preparare l'invio: errore del database. Nessuna fattura è stata trasmessa, riprova tra poco.",
+    };
   }
 
   if (invoices.length === 0) {

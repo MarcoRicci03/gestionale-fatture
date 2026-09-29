@@ -328,6 +328,20 @@ describe("lib/actions/sistema-ts — inviaLottoFatture", () => {
     expect(mockInviaFile).not.toHaveBeenCalled();
   });
 
+  it("P017: un errore del DB durante il lock diventa un errore gestito, senza chiamare Sogei", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockPagamentoUpdateMany
+      .mockResolvedValueOnce({ count: 0 }) // recupero dei lock orfani
+      .mockRejectedValueOnce(new Error("Connection terminated unexpectedly")); // lock
+
+    const result = await inviaLottoFatture([1]);
+
+    expect(result.success).toBe(false);
+    expect(!result.success && result.error).toContain("Nessuna fattura è stata trasmessa");
+    expect(!result.success && result.error).not.toContain("Connection terminated");
+    expect(mockInviaFile).not.toHaveBeenCalled();
+  });
+
   it("blocca con errore se si superano le 10 richieste di trasmissione al minuto", async () => {
     mockPagamentoFindMany.mockResolvedValue([]);
     for (let i = 0; i < 10; i++) {
