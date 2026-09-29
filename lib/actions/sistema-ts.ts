@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUserId } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { getClientIp } from "@/lib/auth/client-ip";
@@ -32,10 +31,6 @@ import { isValidId } from "@/lib/validations/id";
 export type SistemaTsActionState =
   | { success: true; protocollo?: string; message?: string }
   | { success: false; error: string; fallback?: boolean };
-
-export type RicevutaPdfActionResult =
-  | { success: true; base64: string; fileName: string }
-  | { success: false; error: string };
 
 /**
  * Salva o aggiorna le credenziali e impostazioni del Sistema TS per l'utente corrente.
@@ -273,32 +268,6 @@ export async function ripristinaFatturaPerReinvio(
   return {
     success: true,
     message: `Fattura n. ${res.invoice.n_fattura}/${res.invoice.anno} ripristinata su "Da Inviare".`,
-  };
-}
-
-/**
- * Restituisce i byte Base64 del file PDF ricevuta memorizzato per una trasmissione.
- * @deprecated Utilizzare il Route Handler HTTP dedicato `GET /api/sistema-ts/trasmissioni/[id]/ricevuta` (ARCH-08)
- * per lo streaming binario nativo senza overhead Base64 né frammentazione della memoria.
- */
-export async function getRicevutaPdfBase64(
-  trasmissioneId: number
-): Promise<RicevutaPdfActionResult> {
-  const userId = await requireUserId();
-
-  const trasmissione = await prisma.trasmissioneTs.findFirst({
-    where: { id: trasmissioneId, id_Utente: userId },
-    select: { pdfRicevuta: true, protocollo: true },
-  });
-
-  if (!trasmissione || !trasmissione.pdfRicevuta) {
-    return { success: false, error: "Ricevuta PDF non trovata per questa trasmissione." };
-  }
-
-  return {
-    success: true,
-    base64: Buffer.from(trasmissione.pdfRicevuta).toString("base64"),
-    fileName: `ricevuta_${trasmissione.protocollo}.pdf`,
   };
 }
 

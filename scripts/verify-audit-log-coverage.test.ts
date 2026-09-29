@@ -17,7 +17,6 @@ const AUDIT_CALLS = ["logAudit(", "logAuditOrThrow("];
 // mutano nulla): esentate perché non hanno nulla da auditare.
 const READ_ONLY_ACTIONS = new Set([
   "getNextInvoiceNumberForYear",
-  "getRicevutaPdfBase64",
 ]);
 
 function extractFunctionBody(source: string, startIndex: number): string {
