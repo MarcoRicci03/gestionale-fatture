@@ -3,6 +3,7 @@ import { validateCodiceFiscale } from "@/lib/sistemats/cf-validator";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import { Prisma } from "@prisma/client";
+import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
 import type { CorreggiFatturaTsData } from "@/lib/validations/sistema-ts-correction";
 
 export type CorrectionResult =
@@ -161,6 +162,14 @@ export async function correggiFatturaTsService(params: {
           flag_opposizione: flagOpposizione,
           pagamento_tracciato: pagamentoTracciato,
           bolloCodice,
+          // P006: `bollo` segue sempre bolloCodice, come in create/updateInvoice.
+          ...(bolloCodice !== undefined
+            ? {
+                bollo: new Prisma.Decimal(
+                  calcolaTotaliFattura(invoice.prezzo_totale.toNumber(), bolloCodice).bolloImporto
+                ),
+              }
+            : {}),
           snapshotAnagrafica: updatedSnap as unknown as Prisma.InputJsonValue,
         },
       });

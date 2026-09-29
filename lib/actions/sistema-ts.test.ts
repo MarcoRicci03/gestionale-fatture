@@ -1818,6 +1818,7 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       expect(data.flag_opposizione).toBeUndefined();
       expect(data.pagamento_tracciato).toBeUndefined();
       expect(data.bolloCodice).toBeUndefined();
+      expect(data.bollo).toBeUndefined();
       expect(data.snapshotAnagrafica).toEqual(
         expect.objectContaining({
           pagante: expect.objectContaining({ cf: "WRONG_CF" }),
@@ -1838,6 +1839,19 @@ describe("lib/actions/sistema-ts — correggiFatturaTs", () => {
       const data = lastInvoiceUpdateData();
       expect(data.data_pagamento).toBeNull();
       expect(data.bolloCodice).toBeNull();
+      // P006: senza codice il bollo applicato torna a 0.
+      expect(data.bollo).toEqual(new Prisma.Decimal(0));
+    });
+
+    it("P006: con un nuovo codice bollo ricalcola l'importo del bollo", async () => {
+      mockPagamentoFindFirst.mockResolvedValueOnce({ ...savedInvoice, bolloCodice: null });
+
+      const res = await correggiFatturaTs({ invoiceId: 10, bolloCodice: "01234567890123" });
+
+      expect(res).toHaveProperty("success", true);
+      const data = lastInvoiceUpdateData();
+      expect(data.bolloCodice).toBe("01234567890123");
+      expect(data.bollo).toEqual(new Prisma.Decimal(2));
     });
 
     it("usa l'opposizione già salvata se flagOpposizione non è inviato", async () => {
