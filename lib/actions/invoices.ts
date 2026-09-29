@@ -251,6 +251,7 @@ export async function createInvoice(
         error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
       };
     }
+    console.error("createInvoice error", error);
     return { success: false, error: "Errore durante la creazione della fattura" };
   }
 
@@ -442,6 +443,7 @@ export async function updateInvoice(
     if (isBolloCodiceUniqueViolation(error)) {
       return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
     }
+    console.error("updateInvoice error", error);
     return { success: false, error: "Errore durante l'aggiornamento della fattura" };
   }
 
