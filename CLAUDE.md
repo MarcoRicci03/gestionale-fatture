@@ -47,7 +47,7 @@ npm run test:db                                # integrazione su Postgres reale 
 npm run test:e2e                               # Playwright (chromium, 1 worker; avvia o riusa npm run dev su :3000)
 npx playwright test e2e/login.spec.ts          # singolo spec
 ```
-La CI (`.github/workflows/ci.yml`) esegue `prisma generate`, `tsc --noEmit`, `lint` e `npm test`. Non esegue `test:db` né `test:e2e`.
+La CI (`.github/workflows/ci.yml`) esegue `prisma generate`, `tsc --noEmit`, `lint` e `npm test` e, in un job separato con un servizio Postgres usa e getta, `npm run test:db`. Non esegue `test:e2e`.
 Il global setup e2e si rifiuta di partire se `NODE_ENV=production` o se `DATABASE_URL` non punta a localhost (`e2e/safe-test-environment.ts`).
 
 ### Build e produzione
