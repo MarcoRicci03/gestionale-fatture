@@ -252,6 +252,38 @@ describe("CR-04: race tra controllo di stato e scrittura", () => {
     expect(mockAuditLogCreate).not.toHaveBeenCalled();
   });
 
+  it("P019: updateInvoice registra nel log un errore non riconosciuto", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFindFirst
+      .mockResolvedValueOnce({
+        id: 10,
+        n_fattura: 1,
+        anno: validFormData.data.getFullYear(),
+        stato_ts: "DA_INVIARE",
+        id_Pagante: 1,
+        id_Paziente: 1,
+        data: validFormData.data,
+        mod_pag: "BONIFICO",
+        sedute: null,
+        commento: null,
+        citta: "Roma",
+        cap: "00100",
+        bolloCodice: null,
+        mesi: [{ mese: "GENNAIO", prezzo: new Prisma.Decimal(100) }],
+      })
+      .mockResolvedValue(null);
+    mockPaganteFindFirst.mockResolvedValueOnce({ id: 1, nome: "Mario", cognome: "Rossi" });
+    mockPazienteFindFirst.mockResolvedValueOnce({ id: 1, id_Pagante: 1, nome: "Luigi", cognome: "Rossi" });
+    const guasto = new Error("deadlock detected");
+    mockUpdate.mockRejectedValueOnce(guasto);
+
+    const result = await updateInvoice(10, validFormData);
+
+    expect(result).toEqual({ success: false, error: "Errore durante l'aggiornamento della fattura" });
+    expect(consoleError).toHaveBeenCalledWith("updateInvoice error", guasto);
+    consoleError.mockRestore();
+  });
+
   it("refreshInvoiceAnagrafica: scrive solo se ancora DA_INVIARE e, se non lo è più, restituisce ANAGRAFICA_FATTURA_TS_ERROR", async () => {
     mockFindFirst.mockResolvedValueOnce({
       id: 10,
