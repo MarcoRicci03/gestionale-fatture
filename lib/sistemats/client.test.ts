@@ -552,3 +552,50 @@ describe("SistemaTsClient — XML Parsing Robustness (ERR-01)", () => {
     expect(res.rawCsv).toBeUndefined();
   });
 });
+
+describe("SistemaTsClient — risposta di invio non interpretabile (P008)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function rispondeCon(status: number, body: string) {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      text: async () => body,
+    })) as unknown as typeof fetch;
+  }
+
+  it("una risposta 200 illeggibile è un esito incerto, non un rifiuto", async () => {
+    rispondeCon(200, "<soapenv:Envelope><soapenv:Body><inv:inviaFileMtomRespo");
+
+    const res = await new SistemaTsClient(mockConfig).inviaFile(Buffer.from("zip"), "t.zip");
+
+    expect(res.success).toBe(false);
+    expect(res.esitoIncerto).toBe(true);
+  });
+
+  it("un codice esito di errore senza protocollo resta un rifiuto certo", async () => {
+    rispondeCon(
+      200,
+      "<soapenv:Envelope><soapenv:Body><r><codiceEsito>E01</codiceEsito><descrizioneEsito>File non valido</descrizioneEsito></r></soapenv:Body></soapenv:Envelope>"
+    );
+
+    const res = await new SistemaTsClient(mockConfig).inviaFile(Buffer.from("zip"), "t.zip");
+
+    expect(res.success).toBe(false);
+    expect(res.esitoIncerto).toBeFalsy();
+    expect(res.errorMessage).toBe("File non valido");
+  });
+
+  it("una risposta 4xx illeggibile resta un rifiuto certo (es. credenziali errate)", async () => {
+    rispondeCon(401, "Unauthorized");
+
+    const res = await new SistemaTsClient(mockConfig).inviaFile(Buffer.from("zip"), "t.zip");
+
+    expect(res.success).toBe(false);
+    expect(res.esitoIncerto).toBeFalsy();
+  });
+});
