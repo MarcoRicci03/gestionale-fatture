@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default async function SistemaTsSettingsPage() {
   const session = await requireSession();
   const [settings, user] = await Promise.all([
-    getSistemaTsSettings(session.id),
+    getSistemaTsSettings(),
     prisma.utente.findUnique({
       where: { id: session.id },
       select: { cf: true, pIva: true },
