@@ -45,7 +45,7 @@ test.describe("Sistema TS — E2E Browser Tests", () => {
     await page.screenshot({ path: "test-results/screenshots/03-sistema-ts-table.png" });
   });
 
-  test("utente admin: tabella fatture, selezione bloccata con CF errato e sblocco con CF valido", async ({ page }) => {
+  test("utente admin: le fatture con CF errato non sono selezionabili per l'invio", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Username").fill("admin");
     await page.getByLabel("Password").fill("change-me-min-12-caratteri");
@@ -58,31 +58,34 @@ test.describe("Sistema TS — E2E Browser Tests", () => {
     // Screenshot tabella fatture admin con CF validi e non validi
     await page.screenshot({ path: "test-results/screenshots/07-admin-sistema-ts-invoices.png" });
 
-    // 1. Seleziona tutte le fatture tramite checkbox nell'intestazione (include fattura con CF errato)
-    const selectAllCheckbox = page.locator('thead input[type="checkbox"]');
-    if (await selectAllCheckbox.count() > 0) {
-      await selectAllCheckbox.check();
-      // Screenshot della selezione con blocco del pulsante per CF errato
-      await page.screenshot({ path: "test-results/screenshots/08-admin-selection-blocked.png" });
+    // Le fatture con anomalie non sono selezionabili: la loro checkbox è
+    // disabilitata, quindi "seleziona tutte" prende solo quelle pronte e il
+    // pulsante di invio resta attivo. La fattura del seed con CF errato
+    // (RSSGPP90A01H501X, carattere di controllo sbagliato) deve restare fuori.
+    // Il filtro predefinito mostra solo le fatture pronte: con "Tutte" compare
+    // anche quella da correggere.
+    await page.getByRole("button", { name: /^Tutte\s*\d+$/ }).click();
+    const rigaCfErrato = page.locator("tbody tr", { hasText: "RSSGPP90A01H501X" });
+    const checkboxCfErrato = rigaCfErrato.getByRole("checkbox");
+    await expect(checkboxCfErrato).toBeDisabled();
 
-      // Verifica che il pulsante sia disabilitato
-      const sendButton = page.getByRole("button", { name: /Invia a Sistema TS/i });
-      await expect(sendButton).toBeDisabled();
-      await expect(page.getByText(/con Codice Fiscale errato/i)).toBeVisible();
+    // 1. "Seleziona tutte" esclude la fattura con CF errato
+    const selectAllCheckbox = page.getByRole("checkbox", { name: "Seleziona tutte le fatture" });
+    await selectAllCheckbox.check();
+    await page.screenshot({ path: "test-results/screenshots/08-admin-selection-blocked.png" });
 
-      // Deseleziona tutto
-      await selectAllCheckbox.uncheck();
-      await expect(sendButton).toBeHidden();
-    }
+    const sendButton = page.getByRole("button", { name: /Invia a Sistema TS/i });
+    await expect(sendButton).toBeEnabled();
+    await expect(checkboxCfErrato).not.toBeChecked();
+    await expect(page.getByText(/con Codice Fiscale errato/i)).toHaveCount(0);
 
-    // 2. Seleziona solo una fattura valida (es. prima riga con checkbox)
-    const firstRowCheckbox = page.locator('tbody tr input[type="checkbox"]').first();
-    if (await firstRowCheckbox.count() > 0) {
-      await firstRowCheckbox.check();
-      // Il pulsante deve essere ora abilitato per l'invio
-      const sendButton = page.getByRole("button", { name: /Invia a Sistema TS/i });
-      await expect(sendButton).toBeVisible();
-    }
+    // Deseleziona tutto
+    await selectAllCheckbox.uncheck();
+    await expect(sendButton).toBeHidden();
+
+    // 2. Una singola fattura valida rende di nuovo disponibile l'invio
+    await page.locator('tbody tr input[type="checkbox"]:not([disabled])').first().check();
+    await expect(sendButton).toBeEnabled();
   });
 
   test("utente admin: verifica modale di sicurezza per cancellazione telematica (Annulla TS)", async ({ page }) => {
@@ -215,8 +218,10 @@ test.describe("Sistema TS — E2E Browser Tests", () => {
 
     await page.screenshot({ path: "test-results/screenshots/scrolled-table-header.png" });
 
-    // Test sticky header on /invoices as well
-    await page.goto("/invoices");
+    // Test sticky header on /invoices as well. `f=1` senza date mostra tutte
+    // le fatture: senza, /invoices filtra sul mese corrente e le fatture del
+    // seed (febbraio 2026) non comparirebbero.
+    await page.goto("/invoices?f=1");
     await page.waitForSelector("table");
 
     const invoicesScrollMetrics = await page.evaluate(() => {
