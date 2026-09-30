@@ -97,6 +97,7 @@ export async function sincronizzaEsitoTrasmissioneService(params: {
       });
 
       // Gestione automatica dello stato fatture in base all'esito Sogei:
+      // Il tipo si ricava dal nome del file (P020, vedi cancellation.service.ts).
       const isCancellazione = trasmissione.nomeFile.startsWith("annulla_");
       const fattureCollegate = trasmissione.fatture ?? [];
 

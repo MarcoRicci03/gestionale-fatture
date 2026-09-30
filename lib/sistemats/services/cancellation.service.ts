@@ -192,6 +192,10 @@ export async function annullaFatturaTsService(params: {
   // protocollo. Da lì l'annullamento è acquisito e il catch non deve più
   // presentarlo come un errore di connessione da ripetere.
   let protocolloAcquisito: string | null = null;
+  // ponytail: il prefisso "annulla_" è l'unico modo in cui riconciliazione
+  // (reconciliation.service.ts) e storico (lib/data/sistema-ts.ts) riconoscono
+  // un annullamento (P020). Se cambia il prefisso, cambiarlo anche lì; se
+  // servono altri tipi di trasmissione, aggiungere una colonna `tipo`.
   const fileName = `annulla_${invoice.n_fattura}.zip`;
 
   try {

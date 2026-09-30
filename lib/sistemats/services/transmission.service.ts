@@ -302,6 +302,8 @@ export async function inviaLottoFattureService(params: {
   // le fatture a DA_INVIARE: un reinvio creerebbe un lotto duplicato.
   let protocolloAcquisito: string | null = null;
   const timestampStr = lockTimestamp.toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+  // Non deve mai iniziare con "annulla_": quel prefisso identifica gli
+  // annullamenti (vedi il commento in cancellation.service.ts, P020).
   const fileName = `invio_${timestampStr}.zip`;
   try {
     const xmlString = buildSistemaTsXml(payload);
