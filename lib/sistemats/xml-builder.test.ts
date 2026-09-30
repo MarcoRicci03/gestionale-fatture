@@ -1,9 +1,9 @@
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildSistemaTsXml, createZipArchive } from "./xml-builder";
+import { creaCertificatoMock } from "./test-mock-cert";
 import type { SpesaSanitariaPayload } from "./types";
 
-const MOCK_CERT = path.join(process.cwd(), "certs", "mock_sanitelcf.cer");
+const { cert: MOCK_CERT } = creaCertificatoMock();
 
 describe("xml-builder — generazione XML e ZIP v2.5", () => {
   const samplePayload: SpesaSanitariaPayload = {

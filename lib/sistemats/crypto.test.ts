@@ -7,9 +7,9 @@ import {
   loadPublicKeyFromCert,
   clearPublicKeyCache,
 } from "./crypto";
+import { creaCertificatoMock } from "./test-mock-cert";
 
-const MOCK_CERT = path.join(process.cwd(), "certs", "mock_sanitelcf.cer");
-const MOCK_KEY = path.join(process.cwd(), "certs", "mock_sanitelcf.key");
+const { cert: MOCK_CERT, key: MOCK_KEY } = creaCertificatoMock();
 const SANITEL_CERT = path.join(process.cwd(), "certs", "SanitelCF.cer");
 
 describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
@@ -85,6 +85,9 @@ describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
 
 describe("crypto — scelta del certificato (CR-08)", () => {
   const DEFAULT_CERT = path.join(process.cwd(), "certs", "SanitelCF.cer");
+  // Percorso su cui crypto.ts ripiega fuori dalla produzione. Non è
+  // versionato: il test lo simula servendo il certificato generato (CR-14).
+  const FALLBACK_CERT = path.join(process.cwd(), "certs", "mock_sanitelcf.cer");
 
   beforeEach(() => {
     clearPublicKeyCache();
@@ -94,9 +97,14 @@ describe("crypto — scelta del certificato (CR-08)", () => {
 
   function senzaCertificatoUfficiale() {
     const realExists = fs.existsSync;
+    const realRead = fs.readFileSync;
     vi.spyOn(fs, "existsSync").mockImplementation((p) =>
-      p === DEFAULT_CERT ? false : realExists(p)
+      p === DEFAULT_CERT ? false : p === FALLBACK_CERT ? true : realExists(p)
     );
+    vi.spyOn(fs, "readFileSync").mockImplementation(((p: fs.PathOrFileDescriptor, ...args: unknown[]) =>
+      p === FALLBACK_CERT
+        ? realRead(MOCK_CERT)
+        : (realRead as (...a: unknown[]) => unknown)(p, ...args)) as typeof fs.readFileSync);
   }
 
   it("in produzione, senza certificato ufficiale, blocca invece di usare il mock", () => {
@@ -122,7 +130,10 @@ describe("crypto — scelta del certificato (CR-08)", () => {
     const key2 = loadPublicKeyFromCert();
 
     expect(key1).toBe(key2);
-    expect(key1).toBe(loadPublicKeyFromCert(MOCK_CERT));
+    // È la chiave del certificato di test, letta dal percorso di ripiego.
+    const pem = (k: { export(o: { type: "spki"; format: "pem" }): string | Buffer }) =>
+      k.export({ type: "spki", format: "pem" }).toString();
+    expect(pem(key1)).toBe(pem(loadPublicKeyFromCert(MOCK_CERT)));
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
