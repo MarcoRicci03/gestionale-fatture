@@ -1,7 +1,50 @@
 import { test, expect } from "@playwright/test";
 import { loginAsTestUser } from "./fixtures/login";
+import {
+  createTestInvoice,
+  createTestPatient,
+  createTestPayer,
+  deleteTestPayerCascade,
+  ensureTestTsSettings,
+  uniqueSuffix,
+} from "./fixtures/prisma-test-fixtures";
 
 test.describe("Sistema TS — E2E Browser Tests", () => {
+  // Dati propri dell'utente e2e, senza dipendere da `npm run seed:dev`:
+  // - una fattura pronta (opposizione: il CF non è richiesto);
+  // - una fattura da correggere (pagante senza CF);
+  // - una fattura già inviata, per il dialog di annullamento.
+  const suffix = uniqueSuffix();
+  const nomePronta = `E2E${suffix}P`;
+  const nomeDaCorreggere = `E2E${suffix}C`;
+  const protocolloInviata = `E2E-${suffix}`;
+  const paganti: number[] = [];
+
+  test.beforeAll(async () => {
+    await ensureTestTsSettings();
+
+    const pronto = await createTestPayer(`${suffix}P`);
+    const pazientePronto = await createTestPatient(pronto.id, `${suffix}P`);
+    await createTestInvoice(pronto.id, pazientePronto.id, { prezzo_totale: 50, flag_opposizione: true });
+    await createTestInvoice(pronto.id, pazientePronto.id, {
+      prezzo_totale: 50,
+      flag_opposizione: true,
+      stato_ts: "INVIATA",
+      protocollo_ts: protocolloInviata,
+      data_invio_ts: new Date(),
+    });
+
+    const senzaCf = await createTestPayer(`${suffix}C`);
+    const pazienteSenzaCf = await createTestPatient(senzaCf.id, `${suffix}C`);
+    await createTestInvoice(senzaCf.id, pazienteSenzaCf.id, { prezzo_totale: 50 });
+
+    paganti.push(pronto.id, senzaCf.id);
+  });
+
+  test.afterAll(async () => {
+    for (const id of paganti) await deleteTestPayerCascade(id);
+  });
+
   test("mostra il Top Banner di sviluppo sia nella login che nell'area protetta", async ({ page }) => {
     // 1. Pagina di Login
     await page.goto("/login");
@@ -45,76 +88,57 @@ test.describe("Sistema TS — E2E Browser Tests", () => {
     await page.screenshot({ path: "test-results/screenshots/03-sistema-ts-table.png" });
   });
 
-  test("utente admin: le fatture con CF errato non sono selezionabili per l'invio", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Username").fill("admin");
-    await page.getByLabel("Password").fill("change-me-min-12-caratteri");
-    await page.getByRole("button", { name: "Accedi" }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
-
+  test("le fatture con CF errato non sono selezionabili per l'invio", async ({ page }) => {
+    await loginAsTestUser(page);
     await page.goto("/sistema-ts?stato=DA_INVIARE");
     await expect(page.getByRole("heading", { name: /Sistema Tessera Sanitaria/i, level: 1 })).toBeVisible();
 
-    // Screenshot tabella fatture admin con CF validi e non validi
-    await page.screenshot({ path: "test-results/screenshots/07-admin-sistema-ts-invoices.png" });
-
-    // Le fatture con anomalie non sono selezionabili: la loro checkbox è
-    // disabilitata, quindi "seleziona tutte" prende solo quelle pronte e il
-    // pulsante di invio resta attivo. La fattura del seed con CF errato
-    // (RSSGPP90A01H501X, carattere di controllo sbagliato) deve restare fuori.
     // Il filtro predefinito mostra solo le fatture pronte: con "Tutte" compare
     // anche quella da correggere.
     await page.getByRole("button", { name: /^Tutte\s*\d+$/ }).click();
-    const rigaCfErrato = page.locator("tbody tr", { hasText: "RSSGPP90A01H501X" });
-    const checkboxCfErrato = rigaCfErrato.getByRole("checkbox");
-    await expect(checkboxCfErrato).toBeDisabled();
+    const checkboxPronta = page.locator("tbody tr", { hasText: nomePronta }).getByRole("checkbox");
+    const checkboxDaCorreggere = page.locator("tbody tr", { hasText: nomeDaCorreggere }).getByRole("checkbox");
 
-    // 1. "Seleziona tutte" esclude la fattura con CF errato
+    // Le fatture con anomalie hanno la checkbox disabilitata.
+    await expect(checkboxPronta).toBeEnabled();
+    await expect(checkboxDaCorreggere).toBeDisabled();
+    await page.screenshot({ path: "test-results/screenshots/07-sistema-ts-invoices.png" });
+
+    // 1. "Seleziona tutte" prende la pronta e lascia fuori quella da correggere
     const selectAllCheckbox = page.getByRole("checkbox", { name: "Seleziona tutte le fatture" });
     await selectAllCheckbox.check();
-    await page.screenshot({ path: "test-results/screenshots/08-admin-selection-blocked.png" });
+    await page.screenshot({ path: "test-results/screenshots/08-sistema-ts-selection.png" });
 
     const sendButton = page.getByRole("button", { name: /Invia a Sistema TS/i });
     await expect(sendButton).toBeEnabled();
-    await expect(checkboxCfErrato).not.toBeChecked();
-    await expect(page.getByText(/con Codice Fiscale errato/i)).toHaveCount(0);
+    await expect(checkboxPronta).toBeChecked();
+    await expect(checkboxDaCorreggere).not.toBeChecked();
 
     // Deseleziona tutto
     await selectAllCheckbox.uncheck();
     await expect(sendButton).toBeHidden();
 
-    // 2. Una singola fattura valida rende di nuovo disponibile l'invio
-    await page.locator('tbody tr input[type="checkbox"]:not([disabled])').first().check();
+    // 2. Una singola fattura pronta rende di nuovo disponibile l'invio
+    await checkboxPronta.check();
     await expect(sendButton).toBeEnabled();
   });
 
-  test("utente admin: verifica modale di sicurezza per cancellazione telematica (Annulla TS)", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("Username").fill("admin");
-    await page.getByLabel("Password").fill("change-me-min-12-caratteri");
-    await page.getByRole("button", { name: "Accedi" }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
-
-    // Naviga alle fatture già inviate
+  test("verifica modale di sicurezza per cancellazione telematica (Annulla TS)", async ({ page }) => {
+    await loginAsTestUser(page);
     await page.goto("/sistema-ts?stato=INVIATA");
     await expect(page.getByRole("heading", { name: /Sistema Tessera Sanitaria/i, level: 1 })).toBeVisible();
 
-    // Trova il pulsante Annulla TS se presente
-    const cancelBtn = page.getByRole("button", { name: /Annulla TS/i }).first();
-    if (await cancelBtn.count() > 0) {
-      await cancelBtn.click();
+    const rigaInviata = page.locator("tbody tr", { hasText: nomePronta });
+    await rigaInviata.getByRole("button", { name: /Annulla TS/i }).click();
 
-      // Verifica apertura modale di conferma
-      await expect(page.getByRole("heading", { name: /Annullamento Spesa su Sistema TS/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Annullamento Spesa su Sistema TS/i })).toBeVisible();
+    await page.screenshot({ path: "test-results/screenshots/04-cancel-modal.png" });
 
-      // Il pulsante di conferma deve essere inizialmente disabilitato finché i campi di sicurezza non corrispondono
-      const confirmCancelBtn = page.getByRole("button", { name: /Conferma Cancellazione/i });
-      await expect(confirmCancelBtn).toBeDisabled();
-
-      // Chiudi la modale in sicurezza senza eseguire cancellazioni
-      await page.getByRole("button", { name: "Indietro" }).click();
-      await expect(page.getByRole("heading", { name: /Annullamento Spesa su Sistema TS/i })).toBeHidden();
-    }
+    // Il pulsante di conferma resta disabilitato finché i campi di sicurezza
+    // non corrispondono. Il test chiude senza annullare: nulla parte verso Sogei.
+    await expect(page.getByRole("button", { name: /Conferma Cancellazione/i })).toBeDisabled();
+    await page.getByRole("button", { name: "Indietro" }).click();
+    await expect(page.getByRole("heading", { name: /Annullamento Spesa su Sistema TS/i })).toBeHidden();
   });
 
   test("pagina impostazioni Sistema TS: credenziali cifrate e toggle visibilità password e pincode", async ({ page }) => {
@@ -173,11 +197,7 @@ test.describe("Sistema TS — E2E Browser Tests", () => {
 
   test("verifica che l'header della tabella rimane visibile durante lo scroll", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/login");
-    await page.getByLabel("Username").fill("admin");
-    await page.getByLabel("Password").fill("change-me-min-12-caratteri");
-    await page.getByRole("button", { name: "Accedi" }).click();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await loginAsTestUser(page);
     await page.goto("/sistema-ts?stato=ALL");
     await page.waitForSelector("table");
 
