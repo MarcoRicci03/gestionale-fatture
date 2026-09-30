@@ -4,7 +4,7 @@
 - **Branch:** `feature/sistema-ts-integrato`, confrontato con `master`
 - **Ambito:** `lib/`, 97 file (`coderabbit review --agent --dir lib`)
 - **Esito:** 9 rilievi, 6 major e 3 minor. Risolti tutti: `CR-01`…`CR-09`.
-- **Rilievi emersi durante i fix (2026-09-28):** non vengono da CodeRabbit. `CR-10`…`CR-12` sono i residui trovati ricontrollando `CR-01`…`CR-05`, `CR-13` è il limiter del login (collegato a CR-06). Sono tutti risolti. `CR-14` (test che dipendono da certificati mock non versionati) è da verificare.
+- **Rilievi emersi durante i fix (2026-09-28):** non vengono da CodeRabbit. `CR-10`…`CR-12` sono i residui trovati ricontrollando `CR-01`…`CR-05`, `CR-13` è il limiter del login (collegato a CR-06). Sono tutti risolti, compreso `CR-14` (test che dipendevano da certificati mock non versionati).
 
 | ID | Gravità | Posizione | Problema | Correzione suggerita | Stato |
 | :--- | :--- | :--- | :--- | :--- | :---: |
@@ -21,7 +21,7 @@
 | `CR-11` | Minor | [`lib/sistemats/services/transmission.service.ts:17`](./lib/sistemats/services/transmission.service.ts#L17) | `STALE_LOCK_MINUTES = 5` presume che una chiamata a Sogei non superi i 120 s. Con i retry di `inviaFile` si arriva a circa 6 minuti, e `SISTEMATS_TIMEOUT_MS` non ha limiti: un lock può risultare scaduto mentre la chiamata è ancora in volo. | Limitare la durata complessiva di `inviaFile` a un tempo massimo inferiore alla soglia di stallo, con un limite anche sul timeout configurabile. | ✅ RISOLTO |
 | `CR-12` | Minor | [`lib/sistemats/services/correction.service.ts:149-187`](./lib/sistemats/services/correction.service.ts#L149-L187) | Stessa race di CR-04 nella correzione Sistema TS. L'update della fattura e la propagazione del CF alle bozze filtrano solo per `id`: una fattura partita nel frattempo verrebbe modificata. | `where` condizionata sullo stato letto e gestione di P2025 per la fattura; `updateMany` con `stato_ts: "DA_INVIARE"` per le bozze. | ✅ RISOLTO |
 | `CR-13` | **Major** | [`lib/auth/rate-limit.ts:82-88`](./lib/auth/rate-limit.ts#L82-L88) | Stesso difetto di CR-06 nel limiter del login, ed è l'unico punto in cui è sfruttabile: lo username lo sceglie l'attaccante. Circa 10.000 login falliti su username inventati espellono dalla Map i record bloccati della vittima e ne azzerano il lockout. | Espellere la voce più vecchia non bloccata. Non rifiutare le chiavi nuove, perché al login impedirebbe l'accesso all'utente legittimo. | ✅ RISOLTO |
-| `CR-14` | Minor | [`lib/sistemats/crypto.test.ts:11-12`](./lib/sistemats/crypto.test.ts#L11-L12) | `crypto.test.ts` e `xml-builder.test.ts` usano `certs/mock_sanitelcf.cer`/`.key` senza `skipIf`, ma quei file non sono versionati e nessuno script li genera. In CI, con un checkout pulito, quei test dovrebbero fallire. Non è stato verificato perché `gh` non era disponibile. | Generare la coppia mock in un setup di vitest dentro una cartella temporanea (`openssl` è disponibile sui runner) invece di leggerla da `certs/`. | ⏳ DA VERIFICARE |
+| `CR-14` | Minor | [`lib/sistemats/crypto.test.ts:11-12`](./lib/sistemats/crypto.test.ts#L11-L12) | `crypto.test.ts` e `xml-builder.test.ts` usano `certs/mock_sanitelcf.cer`/`.key` senza `skipIf`, ma quei file non sono versionati e nessuno script li genera. In CI, con un checkout pulito, quei test dovrebbero fallire. Non è stato verificato perché `gh` non era disponibile. | Generare la coppia mock in un setup di vitest dentro una cartella temporanea (`openssl` è disponibile sui runner) invece di leggerla da `certs/`. | ✅ RISOLTO |
 
 **Legenda stato:** ⏳ DA VERIFICARE · ⏳ DA CORREGGERE (verificato, fix da fare) · ❌ FALSO POSITIVO · ✅ RISOLTO
 
@@ -293,3 +293,14 @@ Il problema è confermato, con un aggravante che CodeRabbit non ha visto. Nessun
   - in sviluppo ripiega sul mock con un solo avviso.
 - `scripts/verify-docker-build-config.test.ts`: `.dockerignore` esclude `certs/*` e riammette solo i due file.
 - Risultato di `npm test`: 1205/1205 passati.
+
+### CR-14 — test che dipendevano da certificati mock non versionati
+
+**Verifica:** confermato dalla CI su GitHub e riprodotto con un clone pulito del repository. Senza `certs/mock_sanitelcf.cer` e `.key` falliscono 10 test, tutti in `lib/sistemats/crypto.test.ts` e `lib/sistemats/xml-builder.test.ts`.
+
+**Correzione:**
+- **`lib/sistemats/test-mock-cert.ts`:** genera con `openssl` una coppia certificato/chiave di prova in una cartella temporanea. I due file di test la usano al posto di `certs/`.
+- **Test del ripiego fuori produzione (CR-08):** `crypto.ts` ripiega sul percorso fisso `certs/mock_sanitelcf.cer`. Il test lo simula servendo il certificato generato, e confronta la chiave ottenuta con quella del certificato di prova.
+- I test che usano `SanitelCF.cer` restano con `skipIf`: il certificato ufficiale è versionato, quindi girano anche in CI.
+
+**Risultato:** in un clone pulito `npm test` passa 1288/1288.
