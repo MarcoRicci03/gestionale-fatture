@@ -136,3 +136,22 @@ export async function deleteTestPayerCascade(id_Pagante: number): Promise<void> 
   await prisma.paziente.deleteMany({ where: { id_Pagante } });
   await prisma.pagante.delete({ where: { id: id_Pagante } });
 }
+
+// Utente usa e getta, per i test che ne cambiano password o stato. `nome`
+// univoco permette di trovarlo nella tabella /users.
+export async function createTempUser(suffix: string, password: string) {
+  const { hashPassword } = await import("@/lib/auth/password");
+  return prisma.utente.create({
+    data: {
+      username: `e2e_tmp_${suffix}`,
+      nome: `E2ETmp${suffix}`,
+      cognome: "Sessione",
+      passwordHash: await hashPassword(password),
+    },
+  });
+}
+
+export async function deleteTempUser(id: number): Promise<void> {
+  // Le righe dell'audit restano, con id_Utente a NULL (ON DELETE SET NULL).
+  await prisma.utente.delete({ where: { id } });
+}
