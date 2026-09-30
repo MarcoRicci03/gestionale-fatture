@@ -87,25 +87,3 @@ export function encryptRsaPkcs1(data: string, certPath?: string): string {
 
   return ciphertext.toString("base64");
 }
-
-/**
- * Decifra un payload Base64 con la chiave privata RSA specificata (usata nei test unitari).
- */
-export function decryptRsaPkcs1(b64Ciphertext: string, privateKeyPemOrPath: string): string {
-  if (!b64Ciphertext) return "";
-
-  let keyData = privateKeyPemOrPath;
-  if (fs.existsSync(privateKeyPemOrPath)) {
-    keyData = fs.readFileSync(privateKeyPemOrPath, "utf8");
-  }
-
-  const decrypted = crypto.privateDecrypt(
-    {
-      key: keyData,
-      padding: crypto.constants.RSA_PKCS1_PADDING,
-    },
-    Buffer.from(b64Ciphertext, "base64")
-  );
-
-  return decrypted.toString("utf8");
-}

@@ -1,8 +1,8 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
-  decryptRsaPkcs1,
   encryptRsaPkcs1,
   loadPublicKeyFromCert,
   clearPublicKeyCache,
@@ -32,8 +32,18 @@ describe("crypto — cifratura RSA PKCS#1 v1.5", () => {
     expect(typeof encryptedB64).toBe("string");
     expect(encryptedB64).not.toBe(cf);
 
-    const decrypted = decryptRsaPkcs1(encryptedB64, MOCK_KEY);
-    expect(decrypted).toBe(cf);
+    // Node 20 non consente più la decifratura con padding PKCS#1 v1.5
+    // (CVE-2023-46809): si decifra senza padding e si controlla il formato a
+    // mano. Blocco PKCS#1 v1.5 di cifratura: 0x00 0x02 <padding non nullo> 0x00 <dati>.
+    const blocco = crypto.privateDecrypt(
+      { key: fs.readFileSync(MOCK_KEY, "utf8"), padding: crypto.constants.RSA_NO_PADDING },
+      Buffer.from(encryptedB64, "base64")
+    );
+    expect(blocco[0]).toBe(0x00);
+    expect(blocco[1]).toBe(0x02);
+    const separatore = blocco.indexOf(0x00, 2);
+    expect(separatore).toBeGreaterThanOrEqual(10); // almeno 8 byte di padding
+    expect(blocco.subarray(separatore + 1).toString("utf8")).toBe(cf);
   });
 
   it.skipIf(!fs.existsSync(SANITEL_CERT))("cifra con successo con il certificato ministeriale SanitelCF.cer", () => {
