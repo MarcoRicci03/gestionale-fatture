@@ -2,13 +2,25 @@ import { describe, expect, it } from "vitest";
 import { parsePayerListQuery } from "./payer-list-query";
 
 describe("parsePayerListQuery", () => {
-  it("nessun parametro: ricerca vuota, entrambe le pagine a 1", () => {
+  it("nessun parametro: ricerca vuota, entrambe le pagine a 1, pageSize di default a 25", () => {
     expect(parsePayerListQuery({})).toEqual({
       search: "",
       page: 1,
       archivedPage: 1,
+      pageSize: 25,
     });
   });
+
+  it("pageSize valido impostato", () => {
+    expect(parsePayerListQuery({ pageSize: "10" }).pageSize).toBe(10);
+    expect(parsePayerListQuery({ pageSize: "50" }).pageSize).toBe(50);
+  });
+
+  it("pageSize non valido o non ammesso: fallback a 25", () => {
+    expect(parsePayerListQuery({ pageSize: "15" }).pageSize).toBe(25);
+    expect(parsePayerListQuery({ pageSize: "invalid" }).pageSize).toBe(25);
+  });
+
 
   it("q impostato: usato così com'è", () => {
     expect(parsePayerListQuery({ q: "Rossi" }).search).toBe("Rossi");

@@ -22,12 +22,14 @@ model Utente {
   specializzazione String?
   isAdmin          Boolean          @default(false)
   abilitato        Boolean          @default(true)
-  // Incrementato ad ogni cambio/reset password (lib/actions/account.ts,
-  // lib/actions/users.ts). Il JWT di sessione porta il valore letto al momento
-  // della firma (lib/auth/jwt.ts): se non coincide più con quello corrente in
-  // DB, getSession() tratta la sessione come invalidata (lib/auth/session.ts).
-  // Così un cambio password revoca immediatamente ogni sessione firmata prima
-  // (es. un cookie rubato), anche se il JWT non è ancora scaduto.
+  // Incrementato ad ogni cambio/reset password, disabilitazione account,
+  // revoca permessi admin, cambio username o logout (lib/actions/account.ts,
+  // lib/actions/users.ts, lib/actions/auth.ts). Il JWT di sessione porta il
+  // valore letto al momento della firma (lib/auth/jwt.ts): se non coincide più
+  // con quello corrente in DB, getSession() tratta la sessione come invalidata
+  // (lib/auth/session.ts). Così qualsiasi evento di sicurezza revoca
+  // immediatamente ogni sessione firmata prima (es. un cookie rubato o
+  // riabilitazione account sospeso), anche se il JWT non è ancora scaduto.
   tokenVersion     Int              @default(0)
   // Impostato a true quando la password è stata scelta da un admin
   // (createUser, resetUserPassword, seed del primo admin): è una credenziale
@@ -40,8 +42,10 @@ model Utente {
   paganti          Pagante[]
   pazienti         Paziente[]
   pagamenti        Pagamento[]
-  impostazioniPdf  ImpostazioniPdf?
-  auditLogs        AuditLog[]
+  impostazioniPdf      ImpostazioniPdf?
+  impostazioniSistemaTs ImpostazioniSistemaTs?
+  trasmissioniTs       TrasmissioneTs[]
+  auditLogs            AuditLog[]
 
   @@map("utenti")
 }
@@ -78,6 +82,7 @@ model Pagante {
   // schema. È atteso, non un'indicazione di rigenerare la migration. Se in
   // futuro si usa `prisma db push` in dev, questi indici andrebbero
   // ricreati manualmente (db push non replica migration SQL custom).
+  @@unique([id, id_Utente])
   @@index([id_Utente, archiviato])
   @@map("paganti")
 }
@@ -110,7 +115,8 @@ model Paziente {
   // lib/archive/guards.ts) — a quel punto i soli pazienti ancora collegati
   // sono già archiviati e senza fatture, ed è corretto cancellarli insieme
   // al pagante invece di lasciarli con un id_Pagante orfano.
-  pagante    Pagante?    @relation(fields: [id_Pagante], references: [id], onDelete: Cascade)
+  // P002: FK composita con id_Utente (stesso tenant del pagante).
+  pagante    Pagante?    @relation(fields: [id_Pagante, id_Utente], references: [id, id_Utente], onDelete: Cascade)
   pagamenti  Pagamento[]
 
   @@index([id_Utente, archiviato])
@@ -119,6 +125,7 @@ model Paziente {
   // (lib/actions/payers.ts) e l'ON DELETE CASCADE da Pagante fanno seq scan
   // su questa tabella.
   @@index([id_Pagante])
+  @@unique([id, id_Utente])
   @@map("pazienti")
 }
 
@@ -134,6 +141,9 @@ model Pagamento {
   n_fattura           Int
   anno                Int
   data                DateTime
+  // Data in cui il compenso è stato effettivamente percepito (principio di cassa).
+  // Se NULL, coincide con la data di emissione (`data`).
+  data_pagamento      DateTime?
   citta               String
   cap                 String
   pdfLayoutSnapshot   Json?
@@ -145,13 +155,42 @@ model Pagamento {
   // gestito con fallback sulle relazioni live in quel caso.
   snapshotAnagrafica  Json?
 
+  // Sistema Tessera Sanitaria (v2.5)
+  stato_ts                    StatoTs         @default(DA_INVIARE)
+  protocollo_ts               String?
+  protocollo_cancellazione_ts String?
+  data_invio_ts               DateTime?
+  // CR-10: istante in cui è partita la chiamata di invio a Sogei. Con
+  // stato_ts IN_TRASMISSIONE e protocollo_ts nullo significa "esito incerto":
+  // Sogei potrebbe aver ricevuto il file, quindi niente sblocco automatico.
+  invio_avviato_ts            DateTime?
+  // CR-07: lock dell'annullamento in corso verso Sogei. L'annullamento non
+  // usa IN_TRASMISSIONE né data_invio_ts, che resta la data dell'invio originale.
+  annullamento_avviato_ts     DateTime?
+  // P005: istante dell'ultimo annullamento partito verso Sogei senza esito
+  // certo. Finché è valorizzato un nuovo annullamento richiede la conferma
+  // dell'utente di aver verificato sul portale che il precedente non è stato
+  // acquisito: un secondo 'C' su un documento già annullato verrebbe scartato
+  // e la riconciliazione riporterebbe la fattura su INVIATA.
+  annullamento_incerto_ts     DateTime?
+  // Relazione molti-a-molti con TrasmissioneTs tramite tabella ponte _FattureTrasmissioni.
+  // Conserva lo storico completo di ogni trasmissione (invio, reinvio e cancellazione).
+  trasmissioniTs              TrasmissioneTs[] @relation("FattureTrasmissioni")
+  flag_opposizione            Boolean         @default(false)
+  pagamento_tracciato         Boolean         @default(true)
+  natura_iva                  String          @default("N2.2")
+  bollo                       Decimal         @default(0.00) @db.Decimal(5, 2)
+
   utente              Utente         @relation(fields: [id_Utente], references: [id])
-  pagante             Pagante        @relation(fields: [id_Pagante], references: [id])
-  paziente            Paziente       @relation(fields: [id_Paziente], references: [id])
+  // P002: FK composite con id_Utente, così il DB rifiuta una fattura
+  // collegata a pagante/paziente di un altro utente.
+  pagante             Pagante        @relation(fields: [id_Pagante, id_Utente], references: [id, id_Utente])
+  paziente            Paziente       @relation(fields: [id_Paziente, id_Utente], references: [id, id_Utente])
   mesi                FatturaMese[]
 
   @@unique([id_Utente, n_fattura, anno])
   @@index([id_Utente, data])
+  @@index([id_Utente, stato_ts])
   @@unique([id_Utente, bolloCodice])
   // DB-01: mancavano indici sulle foreign key id_Pagante/id_Paziente.
   // Interrogate spesso (getArchivedPayers/getArchivedPatients con
@@ -244,4 +283,54 @@ model AuditLog {
   // (lib/audit/list-query.ts) fanno seq scan senza questo.
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model ImpostazioniSistemaTs {
+  id                Int      @id @default(autoincrement())
+  id_Utente         Int      @unique
+  username          String
+  passwordEncrypted String
+  pincodeEncrypted  String
+  codiceRegione     String?  @default("000")
+  codiceAsl         String?  @default("000")
+  codiceStruttura   String?
+  naturaIvaDefault  String   @default("N2.2")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  utente            Utente   @relation(fields: [id_Utente], references: [id], onDelete: Cascade)
+
+  @@map("impostazioni_sistema_ts")
+}
+
+model TrasmissioneTs {
+  id                Int         @id @default(autoincrement())
+  id_Utente         Int
+  protocollo        String      @unique
+  nomeFile          String
+  dataInvio         DateTime    @default(now())
+  statoElaborazione String?     // '0' = In elaborazione, '2' = Accolto, '3' = Accolto con segnalazioni, '4'/'5' = Scartato
+  codiceEsito       String?
+  descrizioneEsito  String?
+  numRicevuti       Int?
+  numAccolti        Int?
+  numScartati       Int?
+  pdfRicevuta       Bytes?
+  csvErrori         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  utente            Utente      @relation(fields: [id_Utente], references: [id], onDelete: Cascade)
+  fatture           Pagamento[] @relation("FattureTrasmissioni")
+
+  @@index([id_Utente, dataInvio])
+  @@map("trasmissioni_ts")
+}
+
+enum StatoTs {
+  DA_INVIARE
+  IN_TRASMISSIONE
+  INVIATA
+  DA_CANCELLARE_SU_TS
+  ANNULLATA_TS
 }

@@ -1,8 +1,27 @@
+/**
+ * Verifica che una stringa in formato AAAA-MM-GG corrisponda a un giorno reale
+ * del calendario gregoriano (evita rollover silenziosi di JS, es. 2026-04-31 -> 2026-05-01).
+ */
+export function isValidCalendarDateString(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const date = new Date(y, m - 1, d, 12, 0, 0);
+  return (
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  );
+}
+
 // Le date sono costruite a mezzogiorno in ora locale DEL PROCESSO. Il fuso è
 // pinnato a Europe/Rome (Dockerfile ENV TZ + prefisso TZ sugli script npm)
 // così client e server concordano; il mezzogiorno dà comunque margine
 // contro lo scivolamento di giorno ai confini del fuso.
 export function parseDateInput(value: string): Date {
+  if (!isValidCalendarDateString(value)) {
+    throw new Error(`Data non valida sul calendario: ${value}`);
+  }
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day, 12, 0, 0);
 }
@@ -31,3 +50,96 @@ export function formatDateDisplay(
   if (!date) return "-";
   return toLocalDate(date).toLocaleDateString("it-IT");
 }
+
+/**
+ * Inserisce automaticamente i separatori '/' per date nel formato GG/MM/AAAA durante la digitazione.
+ * Gestisce cancellazioni (backspace), immissione progressiva di sole cifre e formati incollati.
+ */
+export function maskDateInput(rawValue: string, prevValue = ""): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return "";
+
+  // Supporto copia-incolla formato ISO YYYY-MM-DD o YYYY/MM/DD
+  const isoMatch = trimmed.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})$/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+
+  // Supporto copia-incolla formato D/M/YYYY o DD-MM-YYYY / DD.MM.YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})$/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+
+  // Se l'utente preme Backspace su uno slash finale (es. "01/" -> "01" o "01/03/" -> "01/03")
+  let val = rawValue;
+  if (prevValue.endsWith("/") && val === prevValue.slice(0, -1)) {
+    val = val.slice(0, -1);
+  }
+
+  // Se l'utente digita manualmente uno slash dopo 1 cifra del giorno (es. "1/" -> "01/")
+  if (/^\d\/$/.test(val)) {
+    return `0${val}`;
+  }
+  // Se l'utente digita manualmente uno slash dopo 1 cifra del mese (es. "01/3/" -> "01/03/")
+  if (/^\d{2}\/\d\/$/.test(val)) {
+    return `${val.slice(0, 3)}0${val.slice(3)}`;
+  }
+
+  // Estrae solo le cifre numeriche (massimo 8: 2 giorno, 2 mese, 4 anno)
+  const digits = val.replace(/\D/g, "").slice(0, 8);
+  if (!digits) return "";
+
+  if (digits.length <= 2) {
+    if (digits.length === 2 && val.length >= prevValue.length) {
+      return `${digits}/`;
+    }
+    return digits;
+  }
+
+  if (digits.length <= 4) {
+    const day = digits.slice(0, 2);
+    const month = digits.slice(2);
+    if (digits.length === 4 && val.length >= prevValue.length) {
+      return `${day}/${month}/`;
+    }
+    return `${day}/${month}`;
+  }
+
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Determina se la data di effettivo incasso (o data emissione se pagamento non valorizzato)
+ * è successiva alla data odierna di trasmissione.
+ * Il confronto avviene sui giorni di calendario solari (anno, mese, giorno) in ora locale
+ * per garantire consistenza assoluta e prevenire scarti Sogei [S036].
+ */
+export function isDataPagamentoFutura(
+  dataPagamento: Date | string | null | undefined,
+  dataFattura: Date | string,
+  now: Date = new Date()
+): boolean {
+  const raw = dataPagamento || dataFattura;
+  const d = toLocalDate(raw);
+
+  const dYear = d.getFullYear();
+  const dMonth = d.getMonth();
+  const dDay = d.getDate();
+
+  const nYear = now.getFullYear();
+  const nMonth = now.getMonth();
+  const nDay = now.getDate();
+
+  if (dYear > nYear) return true;
+  if (dYear < nYear) return false;
+  if (dMonth > nMonth) return true;
+  if (dMonth < nMonth) return false;
+  return dDay > nDay;
+}
+

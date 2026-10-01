@@ -24,6 +24,7 @@ export const payerSchema = z
       ])
       .transform((val) => (val === "" || val === null ? null : val))
       .optional(),
+    propagaFattureInAttesa: z.boolean().default(false).optional(),
   })
   .refine(
     (data) => {

@@ -18,12 +18,12 @@ export default async function InvoicesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const rawParams = await searchParams;
-  const { filters, page: requestedPage } = parseInvoiceListQuery(rawParams, new Date());
+  const { filters, page: requestedPage, pageSize } = parseInvoiceListQuery(rawParams, new Date());
   const currentYear = new Date().getFullYear();
 
   const [{ invoices, totalCount, page }, years, { payers, patients }, nextInvoiceNumber] =
     await Promise.all([
-      getInvoices(filters, requestedPage),
+      getInvoices(filters, requestedPage, pageSize),
       getInvoiceYears(),
       getPayersAndPatients(),
       getNextInvoiceNumber(currentYear),
@@ -34,6 +34,7 @@ export default async function InvoicesPage({
       invoices={invoices}
       totalCount={totalCount}
       page={page}
+      pageSize={pageSize}
       years={years}
       filters={filters}
       payers={payers}
@@ -42,3 +43,4 @@ export default async function InvoicesPage({
     />
   );
 }
+

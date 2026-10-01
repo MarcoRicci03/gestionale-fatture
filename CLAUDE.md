@@ -2,34 +2,145 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-@AGENTS.md
+## 1. Panoramica
 
-## Comandi
+Gestionale fatture per studio professionale sanitario (logopedia) con invio al **Sistema Tessera Sanitaria** (Sogei). Codice, commenti, messaggi UI e nomi di dominio sono **in italiano**.
 
-- `npm run dev` — avvia il dev server (Next.js 16, Turbopack).
-- `npm run build` / `npm run start` — build di produzione e avvio.
-- `npm run lint` — ESLint (flat config in `eslint.config.mjs`).
-- `npx tsc --noEmit` — type-check (nessuno script dedicato in `package.json`).
-- `npm test` — esegue l'intera suite Vitest, inclusi i test di regressione di sicurezza/logica in `scripts/verify-*.test.ts` (uno per ogni rilievo storico di audit, es. `verify-rich-text-bridge.test.ts` per il round-trip testo↔rich-content dell'editor blocchi PDF, o `verify-actions-auth.test.ts` che verifica che ogni Server Action esportata da `lib/actions/*.ts` chiami `requireUserId`/`requireSession`/`requireAdmin`; vedi nota su `proxy.ts` sotto). `npm run test:watch` per la modalità watch, `npm run test:e2e` per la suite Playwright in `e2e/`.
-- `npm run test:db` — test di integrazione contro un Postgres reale (`scripts/db-integration/`, QUA-04): a differenza dei `verify-*.test.ts` (statici/puri), questi eseguono transazioni, vincoli DB (indici unique parziali, `onDelete: Cascade`) e alcune Server Action vere (con solo `requireUserId`/`getClientIp`/`revalidatePath` mockati, essendo legati a `next/headers`/`next/cache`) contro il database `gestionale_test`, creato e distrutto a ogni run da `scripts/db-integration/global-setup.ts` (richiede `docker compose -f docker-compose.dev.yml up -d` avviato). Escluso da `npm test`/CI (nessun Postgres disponibile lì) tramite `vitest.config.ts` e gira con una config Vitest dedicata, `vitest.integration.config.ts`.
-- `npx prisma generate` / `npx prisma migrate dev` / `npx prisma studio` — gestione schema/DB, nessuno script npm dedicato.
-- `docker compose -f docker-compose.dev.yml up -d` — avvia Postgres locale (container `postgres-dev`, db `gestionale`, utente `admin`).
-- Variabili d'ambiente richieste (in `.env`, non versionato): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`. Opzionale: `TRUSTED_PROXY=true` per fidarsi di `X-Forwarded-For`/`X-Real-IP` nello scoping per IP del rate limit di login (`lib/auth/client-ip.ts`) — impostarla SOLO se davanti all'app c'è un reverse proxy che sovrascrive lui stesso quegli header; di default (`false`/assente) vengono ignorati perché falsificabili dal client. Opzionale: `DEV_ALLOWED_ORIGINS` (lista separata da virgole, es. `192.168.0.56`) per testare il dev server da un altro dispositivo sulla LAN (`allowedDevOrigins` in `next.config.ts`) — specifico della macchina di chi sviluppa, per questo letto da env invece che cablato nel file versionato.
+- **Stack:** Next.js 16 (App Router, Turbopack, `output: "standalone"`), React 19, TypeScript strict, Tailwind v4 + shadcn (`@base-ui/react`), Prisma 7 + PostgreSQL 16, Zod 4, Vitest, Playwright.
+- **Prisma 7 con driver adapter:** client singleton in `lib/prisma.ts` (`PrismaPg` su un `pg.Pool` con limiti espliciti). L'URL del DB sta in `prisma.config.ts`, non in `schema.prisma`. Il client si importa da `@prisma/client`.
+- **Multi-tenant applicativo:** ogni utente vede solo i propri dati. Ogni query filtra per `id_Utente: userId` (non c'è RLS nel DB).
+- **Auth custom:** JWT (`jose`) nel cookie `session_token`. `getSession()` (`lib/auth/session.ts`) controlla `abilitato` e `tokenVersion` a ogni richiesta, deduplicato con `React.cache`.
+- **Fuso orario fisso `Europe/Rome`:** impostato dagli script npm (`cross-env TZ=...`) e dal Dockerfile.
 
-## Architettura
+## 2. Comandi
 
-**Multi-tenancy per utente singolo studio.** Ogni `Utente` (il professionista) possiede i propri `Pagante` (chi paga la fattura), `Paziente`, `Pagamento` (fattura) e `ImpostazioniPdf` (template PDF), tutti collegati via FK `id_Utente`. Ogni query in `lib/data/*.ts` e `lib/actions/*.ts` deve filtrare esplicitamente per `id_Utente` (vedi `requireUserId()` in `lib/auth/session.ts`) — non c'è un livello di row-level-security nel DB, l'isolamento tra utenti è responsabilità del codice applicativo. `Pagante`/`Paziente` usano soft-delete (`eliminato: boolean`), mai cancellazione fisica. `Pagamento` (fattura) usa invece hard-delete, con numerazione successiva calcolata come `max(n_fattura) + 1` per `(id_Utente, anno)`: cancellare una fattura può quindi lasciare un buco nella numerazione o, se una nuova fattura viene creata subito dopo, far riassegnare lo stesso numero a un documento diverso. Decisione di dominio presa e confermata (non un bug): per questo gestionale — uso a singolo professionista, cancellazioni previste solo su errori pre-consegna — il rischio è accettato invece di introdurre un annullamento logico. Vedi la chiusura di LOG-02/LOG-01 in `ROADMAP.md`/`ROADMAP-ANALISI-2026-07-31.md` per il dettaglio delle alternative valutate e scartate.
+### Sviluppo e Docker
+```sh
+docker compose -f docker-compose.dev.yml up -d   # Postgres dev (container postgres-dev, 127.0.0.1:5432, admin/password_dev, db gestionale)
+npm run dev                                      # dev server su :3000
+```
+`.env` minimo: `DATABASE_URL`, `JWT_SECRET` (≥32 byte), `JWT_EXPIRES_IN`. Opzionali:
+- `TRUSTED_PROXY=true`: solo dietro un reverse proxy che imposta lui stesso `X-Forwarded-*`/`cf-connecting-ip`. Senza, gli IP collassano su "unknown" (vale per rate limit e same-origin).
+- `DEV_ALLOWED_ORIGINS`: origini LAN separate da virgola, passate a `allowedDevOrigins`.
+- `TS_ENCRYPTION_SECRET`: cifratura delle credenziali Sistema TS. È obbligatorio in produzione.
+- `SISTEMATS_*`: vedi la sezione Sistema TS.
 
-**Separazione data/actions/validations.** `lib/data/*.ts` contiene solo query di lettura (Server Components), sempre scoped all'utente corrente. `lib/actions/*.ts` contiene le Server Action (`"use server"`) per le mutazioni, che validano l'input con gli schema Zod condivisi in `lib/validations/*.ts` (usati anche lato client da `react-hook-form` via `@hookform/resolvers/zod`).
+### Database e Prisma
+```sh
+npx prisma migrate dev --name <nome>   # crea e applica una migration dopo una modifica a schema.prisma
+npx prisma generate                    # rigenera il client (gira anche in postinstall)
+npx prisma studio
+npx prisma migrate deploy              # produzione: il container app lo esegue già all'avvio (CMD del Dockerfile)
+SEED_ADMIN_USERNAME=admin SEED_ADMIN_PASSWORD='...(≥12 caratteri)' npm run seed   # primo admin, idempotente
+npm run seed:dev   # dataset di prova Sistema TS (casi limite bollo/CF)
+npm run seed:ui    # ~100 fatture per testare paginazione e filtri
+```
 
-**Autenticazione custom via JWT in cookie.** Nessun provider esterno (no NextAuth): `lib/auth/jwt.ts` firma/verifica un JWT (jose) con `sub` (id utente) e `tokenVersion` (per poter revocare le sessioni al cambio password, vedi `Utente.tokenVersion` in `schema.prisma`); `lib/auth/session.ts` lo legge dal cookie httpOnly `session_token` ed espone `getSession`/`requireSession`/`requireUserId`/`requireAdmin`/`getUserIdOrNull`. Il login/logout sono Server Action in `lib/actions/auth.ts`. La route protection per le richieste GET è centralizzata in **`proxy.ts`** nella root — **non `middleware.ts`**: in questa versione di Next.js il file convention si chiama `proxy.ts` ed esporta una funzione `proxy` (vedi `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`). Le Server Action (richieste non-GET) non passano dal proxy e verificano la sessione autonomamente tramite `requireUserId`/`requireSession`. Poiché ogni funzione esportata da un file `"use server"` è un endpoint RPC richiamabile dal client indipendentemente dall'intento del suo autore, `scripts/verify-actions-auth.test.ts` (sotto `npm test`) verifica automaticamente che questa invariante non venga dimenticata in una nuova action.
+### Test, lint, typecheck
+```sh
+npx tsc --noEmit                               # typecheck (non esiste uno script npm "typecheck")
+npm run lint                                   # ESLint 9 flat config (next core-web-vitals + typescript)
+npm test                                       # Vitest (jsdom): unit + scripts/verify-*.test.ts
+npx vitest run lib/fiscal/bollo.test.ts        # singolo file
+npx vitest run -t "nome del test"              # singolo test per nome
+npm run test:db                                # integrazione su Postgres reale (DB gestionale_test creato e distrutto); richiede il container dev
+npm run test:e2e                               # Playwright (chromium, 1 worker; avvia o riusa npm run dev su :3000)
+npx playwright test e2e/login.spec.ts          # singolo spec
+```
+La CI (`.github/workflows/ci.yml`) esegue `prisma generate`, `tsc --noEmit`, `lint` e `npm test` e, in un job separato con un servizio Postgres usa e getta, `npm run test:db`. Non esegue `test:e2e`.
+Il global setup e2e si rifiuta di partire se `NODE_ENV=production` o se `DATABASE_URL` non punta a localhost (`e2e/safe-test-environment.ts`).
 
-Lo stesso vale per le route in `app/api/**/route.ts`: il matcher di `proxy.ts` esclude anche `api`, quindi ogni handler HTTP esportato deve verificare la sessione direttamente — con `requireUserId`/`requireSession`/`requireAdmin` (redirect a `/login`) oppure, preferibile per una route API che non deve rispondere con un 307/HTML a un client non-browser, con `getUserIdOrNull()` seguito da un controllo esplicito `=== null` che risponda `401` — invariante garantita da `scripts/verify-api-routes-auth.test.ts` (i predicati che riconoscono entrambi i pattern sono in `scripts/lib/api-route-auth-checks.ts`, testati a loro volta da `scripts/verify-api-route-auth-checker.test.ts`).
+### Build e produzione
+```sh
+npm run build && npm run start
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build   # app + db + backup cifrato + retention audit log
+```
+Le variabili di produzione sono documentate in `.env.prod.example`, backup e restore in `README-BACKUP.md`. In produzione il cookie è `Secure`: senza TLS davanti il login fallisce in silenzio.
 
-**Prisma con adapter `pg`, non l'engine di default.** `lib/prisma.ts` istanzia `PrismaClient` con `@prisma/adapter-pg` sopra un `Pool` di `pg`, con singleton su `globalThis` in sviluppo per evitare di esaurire le connessioni con l'hot-reload.
+## 3. Architettura e convenzioni
 
-**Motore di template PDF custom (la parte più complessa del codebase).** `components/settings/pdf-editor.tsx` è un editor WYSIWYG drag-and-drop (canvas a dimensione fissa A4, 595×842pt) che produce un layout `Blocco[]` (posizione, dimensione, tipo, testo con placeholder `{{...}}`) salvato come JSON in `ImpostazioniPdf.blocchi`. Tipi di blocco (`mittente`, `intestatario`, `paziente`, `pagamento`, `testo`, `mesi`) e placeholder disponibili sono in `lib/pdf/types.ts` e `lib/pdf/placeholder-catalog.ts`. Al momento della generazione, `lib/pdf/placeholders.ts` risolve i placeholder sui dati reali della fattura e `lib/pdf/invoices.tsx` (via `@react-pdf/renderer`) renderizza il PDF, esposto da `app/api/invoices/[id]/pdf/route.ts`. Ogni fattura salva uno **snapshot** del layout al momento della creazione (`Pagamento.pdfLayoutSnapshot`), così le fatture già emesse non cambiano se l'utente modifica il template in seguito — per riallinearle esplicitamente esiste l'azione "Aggiorna layout PDF" (`refreshInvoicePdfLayout` in `lib/actions/settings.ts`).
+### Flusso di una richiesta
+- **`proxy.ts`** (in Next 16 sostituisce `middleware.ts`): sulle richieste GET/HEAD reindirizza a `/login` se manca la sessione e, **solo in produzione**, genera il nonce CSP per richiesta (`lib/security/csp.ts`). Esclude `/api/*` e tutte le richieste non-GET: **Server Actions e route API si autenticano da sole.**
+- **Pagine** `app/(protected)/<area>/page.tsx`: sono Server Component async.
+  1. Leggono `searchParams` con `parseXxxListQuery` (`lib/validations/*-list-query.ts`).
+  2. Caricano i dati da `lib/data/*`.
+  3. Passano tutto a un `XxxManager` client in `components/<area>/`.
 
-Il testo dei blocchi ha una doppia rappresentazione che deve restare sincronizzata: `Blocco.testo` (stringa con placeholder, l'unica letta dalla pipeline di generazione PDF) e `Blocco.richContent` (stato Tiptap per l'editing WYSIWYG). Il ponte tra le due è in `lib/pdf/rich-text.ts` (`parseTestoToRichContent`/`serializeRichContentToTesto`); `scripts/verify-rich-text-bridge.test.ts` (sotto `npm test`) verifica il round-trip su un set di fixture prima di modificare quel bridge.
+  Il layout `(protected)` chiama `requireSession()`.
+- **`lib/data/*`** (lettura): ogni funzione chiama `requireUserId()` e filtra per `id_Utente`. Per i campi utente si usano select esplicite (`SAFE_USER_SELECT`, `INVOICE_MITTENTE_SELECT`), così `passwordHash` non arriva mai al client. Per la paginazione si usa `lib/utils/pagination.ts` (`calculatePagination`/`clampPage`).
+- **`lib/actions/*`** (mutazioni, file `"use server"`). Pattern fisso (vedi `lib/actions/payers.ts`):
+  1. `requireUserId()` / `requireAdmin()`
+  2. `schema.safeParse()` (Zod)
+  3. Prisma (`$transaction` se sono coinvolte più righe), con mappatura degli errori tramite `lib/prisma-errors.ts`
+  4. `await logAudit({ azione: AUDIT_ACTIONS.X, ... })`
+  5. `revalidatePath(...)`
+  6. ritorno di un `ActionResult` (`lib/types/actions.ts`: `{ success, error?, fieldErrors?, data? }`)
 
-**UI: Tailwind v4 + shadcn/ui, nessun file `tailwind.config.*`.** La config è CSS-based in `app/globals.css` (`@theme inline`). `components.json` usa lo style `base-nova` su `@base-ui/react` (non Radix) — i primitivi sono in `components/ui/`. Convenzioni responsive (breakpoint, pattern griglia, pattern tabella/card) sono documentate in `AGENTS.md`.
+  La logica complessa sta nei service (es. `lib/sistemats/services/*.service.ts`) e l'action resta sottile.
+- **`app/api/**/route.ts`**: solo per risposte binarie (PDF fattura, export Excel, ricevuta TS). Pattern:
+  1. `getUserIdOrNull()`, che risponde 401 invece di reindirizzare
+  2. rate limiter (`lib/auth/rate-limiter.ts`)
+  3. validazione dell'id
+  4. `Cache-Control: private, no-store`
+- **Form client**: `react-hook-form` + `zodResolver` con **lo stesso schema** di `lib/validations/`, poi chiamata diretta all'action e gestione di `ActionResult`.
+
+### Invarianti verificate da `npm test` (`scripts/verify-*.test.ts`)
+Sono test statici sul sorgente e falliscono se violi:
+- Ogni `export async function` in un file `"use server"` è un endpoint RPC pubblico e deve chiamare `requireUserId(`, `requireSession(` o `requireAdmin(`. Le eccezioni vanno in `PUBLIC_ACTIONS`. **Non esportare helper da file `"use server"`.**
+- Ogni action mutante chiama `logAudit(` o `logAuditOrThrow(`. Le eccezioni vanno in `READ_ONLY_ACTIONS`. `logAuditOrThrow` si usa solo dentro una transazione, quando l'audit è l'unica traccia rimasta.
+- Il `meta` dell'audit **non contiene mai PII** (nome, CF, P.IVA, indirizzo) né segreti. Si usano solo id e conteggi.
+- Ogni handler in `app/api/**/route.ts` verifica la sessione. Le eccezioni vanno in `PUBLIC_ROUTES` (oggi solo `/api/health`).
+- Altri test controllano security header, limiti di input, arrotondamento valuta, bollo, rate limit e configurazione Docker. Se uno fallisce, leggi il commento del test prima di "correggerlo".
+
+### Dominio (modelli Prisma in italiano, tabelle con `@@map`)
+- `Utente`, `Pagante` (chi paga), `Paziente`, `Pagamento` (= **fattura**), `FatturaMese`, `AuditLog`, `ImpostazioniPdf`, `ImpostazioniSistemaTs`, `TrasmissioneTs` (relazione m:n con le fatture).
+- **Archiviazione, non cancellazione:**
+  - `archiviato` ha `@map("eliminato")`.
+  - Archiviare un pagante archivia a cascata i suoi pazienti con `archiviatoInCascata=true`. Il flag serve al ripristino.
+  - Le guardie stanno in `lib/archive/guards.ts`.
+- **Snapshot immutabili sulla fattura:** `snapshotAnagrafica` e `pdfLayoutSnapshot`. Leggi l'anagrafica sempre tramite `resolveAnagrafica()` (`lib/invoices/anagrafica-snapshot.ts`), che ricade sulle relazioni live se lo snapshot è NULL.
+- Numerazione univoca su `(id_Utente, n_fattura, anno)`. Il bollo segue `lib/fiscal/bollo.ts`.
+- **Date:** usa `parseDateInput`/helper di `lib/utils/date.ts`, che costruiscono le date a mezzogiorno in ora locale. Mai `new Date("yyyy-mm-dd")`.
+
+### Sistema TS (`lib/sistemats/`)
+- **Componenti:**
+  - client SOAP/MTOM con retry in `client.ts`
+  - XML conforme a `schemas/730_precompilata.xsd` in `xml-builder.ts`
+  - cifratura RSA dei CF con il certificato `certs/SanitelCF.cer` in `crypto.ts`
+  - credenziali utente in AES-256-GCM in `vault.ts`
+  - parser CSV degli esiti in `csv-parser.ts`
+  - orchestrazione in `services/`
+- **Stato della fattura:** enum `StatoTs` su `Pagamento`, con i valori `DA_INVIARE`, `IN_TRASMISSIONE`, `INVIATA`, `DA_CANCELLARE_SU_TS`, `ANNULLATA_TS`.
+- **Endpoint:** per default puntano all'ambiente **di test** Sogei. Un endpoint non di test viene bloccato se manca `SISTEMATS_ALLOW_PRODUCTION=true`.
+
+### Struttura cartelle
+- `app/`: route (`(protected)/`, `login/`, `api/`).
+- `components/<area>/`: UI client per dominio. `components/ui/` contiene i primitivi shadcn.
+- `lib/`: `actions/` (scrittura), `data/` (lettura), `validations/` (schemi Zod), `auth/`, `audit/`, `security/`, `pdf/` (`@react-pdf/renderer`), `excel/` (exceljs, con sanitizzazione contro formula injection), `sistemats/`, `constants/`, `utils/`, `hooks/`.
+- `schemas/`: **non** contiene schemi Zod, solo l'XSD ministeriale del Sistema TS. Gli schemi Zod stanno in `lib/validations/`.
+- `scripts/`: test di invarianti `verify-*`, `db-integration/`, script operativi `.mjs` (retention audit, backup, fix legacy).
+- `e2e/`: spec Playwright con fixtures.
+
+### TypeScript
+- `strict: true`, alias `@/*` verso la root.
+- I tipi dei form si derivano da Zod (`z.input`/`z.output<typeof schema>`) e i tipi DB da `@prisma/client`. Non duplicare interfacce a mano.
+- I test stanno accanto al file (`*.test.ts(x)`), con `globals: true` e i matcher `jest-dom`.
+
+## 4. Regole per l'agente
+
+- **Dopo modifiche non banali esegui `npx tsc --noEmit`**, poi `npm run lint` e `npm test`. È la stessa sequenza della CI.
+- **Non modificare a mano `prisma/migrations/**` né il client generato.** Modifica `schema.prisma` e usa `npx prisma migrate dev --name ...` / `npx prisma generate`.
+- **Indici parziali su `paganti.cf`/`piva`:** stanno nell'SQL della migration `init`. **Non** aggiungere `@@unique([id_Utente, cf/piva])` allo schema. Il drift segnalato da `migrate dev` su questi indici è atteso. Non usare `prisma db push`.
+- Ogni nuova query deve filtrare per `id_Utente`. Ogni nuova action deve verificare la sessione e chiamare `logAudit`, come richiesto dai test di invarianti.
+- I commenti citano ID di audit. I rilievi aperti sono in `CODE_REVIEW_ARCHITECT.md` (`SEC-`, `ARCH-`, `ERR-`...) e in `CODERABBIT_REVIEW.md` (`CR-`). Quando risolvi un rilievo, aggiorna il suo stato in quel file e aggiungi una nota sul fix. Gli ID più vecchi citati nel codice vengono da report di audit ormai rimossi.
+- Non toccare `certs/`, `.env*` né i segreti. Non puntare mai e2e o seed a un DB non locale.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

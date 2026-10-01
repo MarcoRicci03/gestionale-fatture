@@ -12,6 +12,8 @@ import {
   FileType,
   LogOut,
   History,
+  SendHorizontal,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ const navItems: NavItem[] = [
   { href: "/patients", label: "Pazienti", icon: Users },
   { href: "/payers", label: "Paganti", icon: UserCheck },
   { href: "/invoices", label: "Fatture", icon: FileText },
+  { href: "/sistema-ts", label: "Sistema TS", icon: SendHorizontal },
   { href: "/users", label: "Utenti", icon: Settings, admin: true },
   { href: "/audit-log", label: "Audit log", icon: History, admin: true },
 ];
@@ -79,7 +82,7 @@ export function SidebarContent({ session, collapsed = false }: SidebarContentPro
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             collapsed && "justify-center gap-0 px-2",
-            pathname === "/settings/pdf" || pathname.startsWith("/settings/")
+            pathname === "/settings/pdf"
               ? "bg-sidebar-primary text-sidebar-primary-foreground"
               : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           )}
@@ -87,6 +90,22 @@ export function SidebarContent({ session, collapsed = false }: SidebarContentPro
           <FileType className="h-5 w-5 shrink-0" />
           <div className={cn("flex flex-col", collapsed && "sr-only")}>
             <span className="leading-none">Impostazioni PDF</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/settings/sistema-ts"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            collapsed && "justify-center gap-0 px-2",
+            pathname === "/settings/sistema-ts"
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          )}
+        >
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <div className={cn("flex flex-col", collapsed && "sr-only")}>
+            <span className="leading-none">Impostazioni Sistema TS</span>
           </div>
         </Link>
 

@@ -161,4 +161,16 @@ describe("InvoiceDetailDialog", () => {
     expect(onOpenChange).toHaveBeenCalled();
     expect(onOpenChange.mock.calls[0][0]).toBe(false);
   });
+
+  it("mostra la data di pagamento se presente", () => {
+    renderDialog({
+      invoice: makeInvoice({
+        data: new Date("2026-01-10"),
+        data_pagamento: new Date("2026-02-15"),
+      }),
+    });
+
+    expect(screen.getByText("Data emissione")).toBeInTheDocument();
+    expect(screen.getByText(/Pagamento: 15\/02\/2026/i)).toBeInTheDocument();
+  });
 });

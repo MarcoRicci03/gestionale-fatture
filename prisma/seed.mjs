@@ -22,6 +22,7 @@ import { hash } from "bcryptjs";
 // schema, non questa costante, è la fonte di verità della policy. Un test
 // (scripts/verify-seed-password-policy.test.ts) verifica l'allineamento.
 const MIN_PASSWORD_LENGTH = 12;
+const MAX_PASSWORD_BYTES = 72;
 
 // Stesso cost factor di lib/auth/password.ts: il login del primo admin deve
 // avere lo stesso tempo di verifica di ogni altro utente.
@@ -42,6 +43,14 @@ async function main() {
   if (password.length < MIN_PASSWORD_LENGTH) {
     console.error(
       `[seed] SEED_ADMIN_PASSWORD deve avere almeno ${MIN_PASSWORD_LENGTH} caratteri.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  if (Buffer.byteLength(password, "utf8") > MAX_PASSWORD_BYTES) {
+    console.error(
+      `[seed] SEED_ADMIN_PASSWORD non può superare ${MAX_PASSWORD_BYTES} byte.`
     );
     process.exitCode = 1;
     return;

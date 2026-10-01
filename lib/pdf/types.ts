@@ -82,8 +82,9 @@ export type PdfSettingsInput = PdfLayout;
 // prezzo_totale/mesi[].prezzo arrivano già convertiti da Decimal a number
 // (vedi serializeInvoice in lib/data/invoices.ts): il tipo va allineato di
 // conseguenza, non ereditato direttamente dal client Prisma.
-export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale"> & {
+export type InvoiceWithRelations = Omit<Pagamento, "prezzo_totale" | "bollo"> & {
   prezzo_totale: number;
+  bollo: number;
   pagante: Pagante;
   paziente: Paziente;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];

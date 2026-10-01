@@ -30,7 +30,7 @@ export function PdfEditorPageSettingsPanel({
   onChangeMargins,
 }: PdfEditorPageSettingsPanelProps) {
   return (
-    <div className="rounded-lg border p-3">
+    <div className="rounded-lg border border-border bg-card p-3">
       <button
         type="button"
         className="flex w-full items-center justify-between text-sm font-medium"

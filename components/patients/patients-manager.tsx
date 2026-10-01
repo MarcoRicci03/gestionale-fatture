@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useState } from "react";
 import { PlusCircle, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -23,9 +21,17 @@ import { PatientForm } from "./patient-form";
 import { ArchivePatientButton } from "./archive-patient-button";
 import { RestorePatientButton } from "./restore-patient-button";
 import { HardDeletePatientButton } from "./hard-delete-patient-button";
-import { Tooltip } from "@/components/ui/tooltip";
+import { PatientDetailDialog } from "./patient-detail-dialog";
+import { PayerDetailDialog } from "@/components/invoices/payer-detail-dialog";
 import { SearchField } from "@/components/ui/search-field";
 import { ListPagination } from "@/components/ui/list-pagination";
+import { SelectionFloatingBar } from "@/components/ui/selection-floating-bar";
+import { useTableSelection } from "@/lib/hooks/use-table-selection";
+import { useManagerPagination } from "@/lib/hooks/use-manager-pagination";
+import {
+  formatArchiveInvoiceImpact,
+  getHardDeleteInvoiceBlockReason,
+} from "@/lib/archive/formatting";
 import { PATIENTS_PAGE_SIZE } from "@/lib/constants/patients";
 import type { Paziente, Pagante } from "@prisma/client";
 import type { ArchivedPatientRow } from "@/lib/data/patients";
@@ -36,6 +42,7 @@ type PatientsManagerProps = {
   patients: ActivePatient[];
   totalCount: number;
   page: number;
+  pageSize?: number;
   payers: Pagante[];
   archivedPatients: ArchivedPatientRow[];
   archivedTotalCount: number;
@@ -43,27 +50,17 @@ type PatientsManagerProps = {
   search: string;
 };
 
-function formatCurrency(amount: number) {
-  return amount.toLocaleString("it-IT", {
-    style: "currency",
-    currency: "EUR",
+function invoiceImpactLabel(row: ArchivedPatientRow): string | null {
+  return formatArchiveInvoiceImpact({
+    count: row.fattureCount,
+    totale: row.fattureTotale,
+    annoMin: row.fatturaAnnoMin,
+    annoMax: row.fatturaAnnoMax,
   });
 }
 
-function invoiceImpactLabel(row: ArchivedPatientRow): string | null {
-  if (row.fattureCount === 0) return null;
-  const years =
-    row.fatturaAnnoMin === row.fatturaAnnoMax
-      ? `${row.fatturaAnnoMin}`
-      : `${row.fatturaAnnoMin}-${row.fatturaAnnoMax}`;
-  const plural = row.fattureCount === 1 ? "" : "e";
-  return `${row.fattureCount} fattura${plural} collegata${plural} (${years}, ${formatCurrency(row.fattureTotale)})`;
-}
-
 function hardDeleteBlockReason(row: ArchivedPatientRow): string | null {
-  if (row.fattureCount === 0) return null;
-  const plural = row.fattureCount === 1 ? "" : "e";
-  return `Impossibile eliminare: ci sono ${row.fattureCount} fattura${plural} collegata${plural}. Le fatture non possono essere cancellate.`;
+  return getHardDeleteInvoiceBlockReason(row.fattureCount);
 }
 
 function payerLabel(payer: ArchivedPatientRow["pagante"]): string {
@@ -76,15 +73,13 @@ export function PatientsManager({
   patients,
   totalCount,
   page,
+  pageSize = PATIENTS_PAGE_SIZE,
   payers,
   archivedPatients,
   archivedTotalCount,
   archivedPage,
   search,
 }: PatientsManagerProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-
   const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<ActivePatient | null>(
@@ -95,38 +90,33 @@ export function PatientsManager({
   );
   const [viewingPayer, setViewingPayer] = useState<Pagante | null>(null);
 
-  // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
-  // dello stato più recente verso cui si è navigato, aggiornato
-  // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
-  // cambiano), per evitare che due navigazioni ravvicinate (es. il flush del
-  // debounce di ricerca seguito a ruota da un click di paginazione)
-  // leggano entrambe closure stale e la seconda perda silenziosamente la
-  // patch della prima.
-  const latestListStateRef = useRef({ search, page, archivedPage });
-  useEffect(() => {
-    latestListStateRef.current = { search, page, archivedPage };
-  }, [search, page, archivedPage]);
+  const currentItems = view === "active" ? patients : archivedPatients;
+  const {
+    selectedIds,
+    selectAllRef,
+    toggleSelected,
+    toggleSelectAll,
+    clearSelection,
+  } = useTableSelection({ items: currentItems });
 
-  function navigate(next: { search: string; page: number; archivedPage: number }) {
-    latestListStateRef.current = next;
-    const params = new URLSearchParams();
-    if (next.search) params.set("q", next.search);
-    if (next.page > 1) params.set("page", String(next.page));
-    if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (search !== prevSearch) {
+    setPrevSearch(search);
+    clearSelection();
   }
 
-  const handleSearchChange = (nextSearch: string) => {
-    navigate({ search: nextSearch, page: 1, archivedPage: 1 });
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    navigate({ ...latestListStateRef.current, page: nextPage });
-  };
-
-  const handleArchivedPageChange = (nextArchivedPage: number) => {
-    navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
-  };
+  const {
+    handleSearchChange,
+    handlePageChange,
+    handleArchivedPageChange,
+    handlePageSizeChange,
+  } = useManagerPagination({
+    search,
+    page,
+    archivedPage,
+    pageSize,
+    defaultPageSize: PATIENTS_PAGE_SIZE,
+  });
 
   const handleOpenNew = () => {
     setEditingPatient(null);
@@ -197,10 +187,24 @@ export function PatientsManager({
           </p>
         ) : (
           <>
-            <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
+            <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card md:block">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        ref={selectAllRef}
+                        className="h-4 w-4 rounded border-input"
+                        checked={
+                          patients.length > 0 &&
+                          patients.every((p) => selectedIds.has(p.id))
+                        }
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        aria-label="Seleziona tutti i pazienti visibili"
+                      />
+                    </TableHead>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>Pagante</TableHead>
@@ -210,6 +214,18 @@ export function PatientsManager({
                 <TableBody>
                   {patients.map((patient) => (
                     <TableRow key={patient.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          role="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={selectedIds.has(patient.id)}
+                          onChange={(e) =>
+                            toggleSelected(patient.id, e.target.checked)
+                          }
+                          aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         {patient.cognome}
                       </TableCell>
@@ -219,28 +235,28 @@ export function PatientsManager({
                           ? `${patient.pagante.cognome} ${patient.pagante.nome}`
                           : "-"}
                       </TableCell>
-                      <TableCell className="flex justify-end gap-1">
-                        <Tooltip content="Visualizza dettagli paziente">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenView(patient)}
+                            title="Visualizza dettagli paziente"
                             aria-label="Visualizza dettagli paziente"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                        </Tooltip>
-                        <Tooltip content="Modifica paziente">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenEdit(patient)}
+                            title="Modifica paziente"
                             aria-label="Modifica paziente"
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                        </Tooltip>
-                        <ArchivePatientButton id={patient.id} />
+                          <ArchivePatientButton id={patient.id} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -250,39 +266,49 @@ export function PatientsManager({
 
             <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
               {patients.map((patient) => (
-                <li key={patient.id} className="rounded-lg border p-4 space-y-3">
-                  <div>
-                    <p className="font-medium">
-                      {patient.cognome} {patient.nome}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Pagante:{" "}
-                      {patient.pagante
-                        ? `${patient.pagante.cognome} ${patient.pagante.nome}`
-                        : "-"}
-                    </p>
+                <li key={patient.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      checked={selectedIds.has(patient.id)}
+                      onChange={(e) =>
+                        toggleSelected(patient.id, e.target.checked)
+                      }
+                      aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                    />
+                    <div>
+                      <p className="font-medium">
+                        {patient.cognome} {patient.nome}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Pagante:{" "}
+                        {patient.pagante
+                          ? `${patient.pagante.cognome} ${patient.pagante.nome}`
+                          : "-"}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 border-t pt-3">
-                    <Tooltip content="Visualizza dettagli paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(patient)}
-                        aria-label="Visualizza dettagli paziente"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica paziente">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(patient)}
-                        aria-label="Modifica paziente"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(patient)}
+                      title="Visualizza dettagli paziente"
+                      aria-label="Visualizza dettagli paziente"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(patient)}
+                      title="Modifica paziente"
+                      aria-label="Modifica paziente"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <ArchivePatientButton id={patient.id} />
                   </div>
                 </li>
@@ -293,11 +319,13 @@ export function PatientsManager({
               <ListPagination
                 page={page}
                 totalCount={totalCount}
-                pageSize={PATIENTS_PAGE_SIZE}
+                pageSize={pageSize}
                 itemLabel="pazienti"
                 onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
               />
             </div>
+
           </>
         )
       ) : archivedTotalCount === 0 ? (
@@ -308,10 +336,24 @@ export function PatientsManager({
         </p>
       ) : (
         <>
-          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border md:block">
+          <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card md:block">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      ref={selectAllRef}
+                      className="h-4 w-4 rounded border-input"
+                      checked={
+                        archivedPatients.length > 0 &&
+                        archivedPatients.every((p) => selectedIds.has(p.id))
+                      }
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      aria-label="Seleziona tutti i pazienti visibili"
+                    />
+                  </TableHead>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Pagante</TableHead>
@@ -322,6 +364,18 @@ export function PatientsManager({
               <TableBody>
                 {archivedPatients.map((patient) => (
                   <TableRow key={patient.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={selectedIds.has(patient.id)}
+                        onChange={(e) =>
+                          toggleSelected(patient.id, e.target.checked)
+                        }
+                        aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       {patient.cognome}
                     </TableCell>
@@ -335,12 +389,14 @@ export function PatientsManager({
                         </p>
                       )}
                     </TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <RestorePatientButton id={patient.id} />
-                      <HardDeletePatientButton
-                        id={patient.id}
-                        disabledReason={hardDeleteBlockReason(patient)}
-                      />
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <RestorePatientButton id={patient.id} />
+                        <HardDeletePatientButton
+                          id={patient.id}
+                          disabledReason={hardDeleteBlockReason(patient)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -350,22 +406,34 @@ export function PatientsManager({
 
           <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto md:hidden">
             {archivedPatients.map((patient) => (
-              <li key={patient.id} className="rounded-lg border p-4 space-y-3">
-                <div>
-                  <p className="font-medium">
-                    {patient.cognome} {patient.nome}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Pagante: {payerLabel(patient.pagante)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {invoiceImpactLabel(patient) ?? "Nessuna fattura collegata"}
-                  </p>
-                  {hardDeleteBlockReason(patient) && (
-                    <p className="text-sm text-destructive">
-                      {hardDeleteBlockReason(patient)}
+              <li key={patient.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    role="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-input"
+                    checked={selectedIds.has(patient.id)}
+                    onChange={(e) =>
+                      toggleSelected(patient.id, e.target.checked)
+                    }
+                    aria-label={`Seleziona paziente ${patient.cognome} ${patient.nome}`}
+                  />
+                  <div>
+                    <p className="font-medium">
+                      {patient.cognome} {patient.nome}
                     </p>
-                  )}
+                    <p className="text-sm text-muted-foreground">
+                      Pagante: {payerLabel(patient.pagante)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {invoiceImpactLabel(patient) ?? "Nessuna fattura collegata"}
+                    </p>
+                    {hardDeleteBlockReason(patient) && (
+                      <p className="text-sm text-destructive">
+                        {hardDeleteBlockReason(patient)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 border-t pt-3">
                   <RestorePatientButton id={patient.id} />
@@ -382,13 +450,20 @@ export function PatientsManager({
             <ListPagination
               page={archivedPage}
               totalCount={archivedTotalCount}
-              pageSize={PATIENTS_PAGE_SIZE}
-              itemLabel="pazienti"
+              pageSize={pageSize}
+              itemLabel="pazienti archiviati"
               onPageChange={handleArchivedPageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
+
         </>
       )}
+      <SelectionFloatingBar
+        count={selectedIds.size}
+        totalLabel={`${selectedIds.size} ${selectedIds.size === 1 ? "elemento selezionato in totale" : "elementi selezionati in totale"}`}
+        onClear={clearSelection}
+      />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -406,123 +481,16 @@ export function PatientsManager({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!viewingPatient}
+      <PatientDetailDialog
+        patient={viewingPatient}
         onOpenChange={(isOpen) => !isOpen && setViewingPatient(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Paziente</DialogTitle>
-            <DialogDescription>
-              Visualizza le informazioni del paziente e del pagante associato.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingPatient && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Cognome</p>
-                  <p className="font-medium">{viewingPatient.cognome}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{viewingPatient.nome}</p>
-                </div>
-              </div>
+        onViewPayer={setViewingPayer}
+      />
 
-              {viewingPatient.pagante ? (
-                <div className="rounded-lg border p-3 space-y-2">
-                  <p className="font-medium">Pagante associato</p>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cognome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.cognome}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nome</p>
-                      <p className="font-medium">
-                        {viewingPatient.pagante.nome}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Indirizzo</p>
-                    <p>
-                      {viewingPatient.pagante.via}, {viewingPatient.pagante.citta}{" "}
-                      {viewingPatient.pagante.cap}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">CF</p>
-                      <p>{viewingPatient.pagante.cf ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">P.IVA</p>
-                      <p>{viewingPatient.pagante.piva ?? "-"}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewingPayer(viewingPatient.pagante)}
-                  >
-                    Vedi dettagli pagante
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Nessun pagante associato.</p>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!viewingPayer}
+      <PayerDetailDialog
+        payer={viewingPayer}
         onOpenChange={(isOpen) => !isOpen && setViewingPayer(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Dettagli Pagante</DialogTitle>
-            <DialogDescription>
-              Visualizza le informazioni complete del pagante associato.
-            </DialogDescription>
-          </DialogHeader>
-          {viewingPayer && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Cognome</p>
-                  <p className="font-medium">{viewingPayer.cognome}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Nome</p>
-                  <p className="font-medium">{viewingPayer.nome}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Indirizzo</p>
-                <p>
-                  {viewingPayer.via}, {viewingPayer.citta} {viewingPayer.cap}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Codice Fiscale</p>
-                  <p>{viewingPayer.cf ?? "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Partita IVA</p>
-                  <p>{viewingPayer.piva ?? "-"}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }

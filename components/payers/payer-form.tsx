@@ -39,6 +39,7 @@ export function PayerForm({ payer, onSuccess }: PayerFormProps) {
       cap: payer?.cap ?? "",
       cf: payer?.cf ?? "",
       piva: payer?.piva ?? "",
+      propagaFattureInAttesa: false,
     },
   });
 
@@ -144,6 +145,28 @@ export function PayerForm({ payer, onSuccess }: PayerFormProps) {
           )}
         </div>
       </div>
+
+      {payer && (
+        <div className="rounded-md border border-border p-3 bg-muted/20">
+          <label className="flex items-start gap-2.5 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              {...register("propagaFattureInAttesa")}
+              className="h-4 w-4 mt-0.5 rounded border-input text-primary focus:ring-primary"
+            />
+            <span>
+              <strong className="font-semibold text-foreground">
+                Aggiorna i dati anche sulle fatture non ancora inviate (DA_INVIARE)
+              </strong>
+              <span className="block text-muted-foreground mt-0.5">
+                Seleziona questa spunta solo se stai correggendo un refuso anagrafico.
+                Lasciala deselezionata se questo cliente ha cambiato intestatario (es. passaggio madre/padre)
+                e vuoi mantenere i dati precedenti per le fatture già emesse.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       {errors.root && (
         <p className="text-sm text-destructive" role="alert">

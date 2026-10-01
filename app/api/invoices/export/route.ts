@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { invoiceExportSchema, MAX_EXPORT_INVOICES } from "@/lib/validations/invoice-export";
 import { buildInvoiceWhere } from "@/lib/invoices/list-query";
 import { buildInvoicesWorkbook } from "@/lib/excel/invoices-export";
+import { serializeInvoiceNumbers } from "@/lib/invoices/serialize";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 
@@ -90,11 +91,7 @@ export async function POST(request: Request) {
     return new Response("Nessuna fattura trovata", { status: 404 });
   }
 
-  const serializedInvoices = invoices.map((invoice) => ({
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  }));
+  const serializedInvoices = invoices.map(serializeInvoiceNumbers);
 
   const buffer = await buildInvoicesWorkbook(serializedInvoices, columns);
 

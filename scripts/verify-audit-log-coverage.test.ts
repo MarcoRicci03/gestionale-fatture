@@ -15,7 +15,9 @@ const ACTIONS_DIR = join(__dirname, "..", "lib", "actions");
 const AUDIT_CALLS = ["logAudit(", "logAuditOrThrow("];
 // Uniche funzioni esportate da lib/actions/*.ts che sono sola lettura (non
 // mutano nulla): esentate perché non hanno nulla da auditare.
-const READ_ONLY_ACTIONS = new Set(["getNextInvoiceNumberForYear"]);
+const READ_ONLY_ACTIONS = new Set([
+  "getNextInvoiceNumberForYear",
+]);
 
 function extractFunctionBody(source: string, startIndex: number): string {
   const openBrace = source.indexOf("{", startIndex);

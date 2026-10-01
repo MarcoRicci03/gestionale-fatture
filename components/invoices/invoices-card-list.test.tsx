@@ -134,4 +134,24 @@ describe("InvoicesCardList", () => {
     const link = screen.getByRole("link", { name: "Scarica PDF" });
     expect(link).toHaveAttribute("href", "/api/invoices/123/pdf");
   });
+
+  it("mostra badge 'Da inviare' per fatture con incasso passato o nullo", () => {
+    renderCardList({ invoices: [makeInvoice({ stato_ts: "DA_INVIARE", data: new Date("2026-01-01"), data_pagamento: null })] });
+    expect(screen.getByText("Da inviare")).toBeInTheDocument();
+  });
+
+  it("mostra badge 'Da inviare (futura)' per fatture con incasso futuro", () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 10);
+    renderCardList({
+      invoices: [
+        makeInvoice({
+          stato_ts: "DA_INVIARE",
+          data: new Date("2026-01-01"),
+          data_pagamento: futureDate,
+        }),
+      ],
+    });
+    expect(screen.getByText("Da inviare (futura)")).toBeInTheDocument();
+  });
 });

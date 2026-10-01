@@ -5,11 +5,23 @@ import { EMPTY_INVOICE_FILTERS, currentMonthInvoiceFilters } from "@/components/
 const TODAY = new Date(2026, 6, 15); // 15 luglio 2026
 
 describe("parseInvoiceListQuery", () => {
-  it("nessun parametro: applica il default mese corrente e pagina 1", () => {
+  it("nessun parametro: applica il default mese corrente, pagina 1 e pageSize 25", () => {
     const result = parseInvoiceListQuery({}, TODAY);
     expect(result.filters).toEqual(currentMonthInvoiceFilters(TODAY));
     expect(result.page).toBe(1);
+    expect(result.pageSize).toBe(25);
   });
+
+  it("pageSize valido: usato così com'è", () => {
+    expect(parseInvoiceListQuery({ pageSize: "10" }, TODAY).pageSize).toBe(10);
+    expect(parseInvoiceListQuery({ pageSize: "50" }, TODAY).pageSize).toBe(50);
+  });
+
+  it("pageSize non valido o non ammesso: fallback a 25", () => {
+    expect(parseInvoiceListQuery({ pageSize: "15" }, TODAY).pageSize).toBe(25);
+    expect(parseInvoiceListQuery({ pageSize: "invalid" }, TODAY).pageSize).toBe(25);
+  });
+
 
   it("f=1 con tutti i campi vuoti: filtri esplicitamente vuoti, NON il default mese corrente", () => {
     const result = parseInvoiceListQuery({ f: "1" }, TODAY);

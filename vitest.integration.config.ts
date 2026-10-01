@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // Config separata per i test di integrazione DB (QUA-04): a differenza di
@@ -9,6 +10,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    // lib/data/* importa "server-only": vedi vitest.server-only-stub.ts.
+    alias: {
+      "server-only": fileURLToPath(new URL("./vitest.server-only-stub.ts", import.meta.url)),
+    },
   },
   test: {
     environment: "node",

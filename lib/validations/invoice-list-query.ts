@@ -3,7 +3,8 @@ import {
   currentMonthInvoiceFilters,
   type InvoiceFilters,
 } from "@/components/invoices/invoice-filters";
-import { pageSchema } from "@/lib/utils/pagination";
+import { pageSchema, parsePageSize } from "@/lib/utils/pagination";
+import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 
 export const invoiceFiltersSchema = z.object({
   dataDa: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]),
@@ -27,7 +28,7 @@ function firstValue(value: string | string[] | undefined): string {
 export function parseInvoiceListQuery(
   raw: RawSearchParams,
   today: Date
-): { filters: InvoiceFilters; page: number } {
+): { filters: InvoiceFilters; page: number; pageSize: number } {
   let filters: InvoiceFilters;
   if (raw.f !== undefined) {
     const parsed = invoiceFiltersSchema.safeParse({
@@ -45,5 +46,8 @@ export function parseInvoiceListQuery(
   const parsedPage = pageSchema.safeParse(firstValue(raw.page));
   const page = parsedPage.success ? parsedPage.data : 1;
 
-  return { filters, page };
+  const pageSize = parsePageSize(firstValue(raw.pageSize), INVOICES_PAGE_SIZE);
+
+  return { filters, page, pageSize };
 }
+

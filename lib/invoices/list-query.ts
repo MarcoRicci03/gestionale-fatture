@@ -2,8 +2,6 @@ import type { Prisma, ModalitaPagamento } from "@prisma/client";
 import { parseDateInput } from "@/lib/utils/date";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 
-export { lastValidPage } from "@/lib/utils/pagination";
-
 const VALID_MOD_PAG: readonly string[] = ["CONTANTI", "CARTA", "BONIFICO"];
 
 function isModalitaPagamento(value: string): value is ModalitaPagamento {

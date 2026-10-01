@@ -14,8 +14,10 @@ import {
 } from "@/lib/validations/user";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
-export type UserActionState = { success: true } | { error: string };
+export type UserActionState = ActionResult;
 
 // Senza questo limite, una sessione admin compromessa potrebbe resettare in
 // loop la password di ogni utente. Soglia più larga di changePassword perché
@@ -33,14 +35,14 @@ export async function createUser(
 
   const parsed = userCreateSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const { username, nome, cognome, password, isAdmin, abilitato } = parsed.data;
 
   const existing = await prisma.utente.findUnique({ where: { username } });
   if (existing) {
-    return { error: "Username già in uso" };
+    return { success: false, error: "Username già in uso" };
   }
 
   let createdUserId: number;
@@ -63,10 +65,10 @@ export async function createUser(
     createdUserId = created.id;
   } catch (error) {
     if (isUniqueViolationOnField(error, "username")) {
-      return { error: "Username già in uso" };
+      return { success: false, error: "Username già in uso" };
     }
     console.error("createUser error", error);
-    return { error: "Errore durante la creazione dell'utente" };
+    return { success: false, error: "Errore durante la creazione dell'utente" };
   }
 
   await logAudit({
@@ -88,54 +90,87 @@ export async function updateUser(
 ): Promise<UserActionState> {
   const session = await requireAdmin();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   if (session.id === id) {
-    return { error: "Non puoi modificare il tuo account da qui" };
+    return { success: false, error: "Non puoi modificare il tuo account da qui" };
   }
 
   const parsed = userUpdateSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const { username, nome, cognome, isAdmin, abilitato } = parsed.data;
 
   const existing = await prisma.utente.findUnique({ where: { username } });
   if (existing && existing.id !== id) {
-    return { error: "Username già in uso" };
-  }
-
-  // Se questo aggiornamento toglierebbe a `id` lo stato di admin abilitato,
-  // deve restare almeno un altro admin abilitato nel sistema — altrimenti
-  // /users e /audit-log diventano irraggiungibili (requireAdmin fa redirect)
-  // senza alcun percorso applicativo di recupero. `id !== session.id` è già
-  // garantito sopra, quindi l'admin che sta agendo (se ancora attivo) viene
-  // sempre conteggiato qui.
-  if (!isAdmin || !abilitato) {
-    const adminAttivi = await prisma.utente.count({
-      where: { isAdmin: true, abilitato: true, NOT: { id } },
-    });
-    if (adminAttivi === 0) {
-      return { error: "Deve restare almeno un amministratore abilitato" };
-    }
+    return { success: false, error: "Username già in uso" };
   }
 
   try {
-    await prisma.utente.update({
-      where: { id },
-      data: {
-        username,
-        nome: nome || null,
-        cognome: cognome || null,
-        isAdmin,
-        abilitato,
-      },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.utente.findUnique({
+        where: { id },
+        select: { username: true, isAdmin: true, abilitato: true },
+      });
+      if (!current) {
+        throw new Error("USER_NOT_FOUND");
+      }
+
+      // Se questo aggiornamento toglierebbe a `id` lo stato di admin abilitato,
+      // deve restare almeno un altro admin abilitato nel sistema — altrimenti
+      // /users e /audit-log diventano irraggiungibili (requireAdmin fa redirect)
+      // senza alcun percorso applicativo di recupero. `id !== session.id` è già
+      // garantito sopra, quindi l'admin che sta agendo (se ancora attivo) viene
+      // sempre conteggiato qui.
+      if (!isAdmin || !abilitato) {
+        // SEC-07: acquisiamo un lock FOR UPDATE deterministico (ordinato per id per
+        // prevenire deadlock) su tutti gli admin abilitati prima del conteggio e della modifica.
+        // In questo modo due richieste concorrenti non possono verificare contemporaneamente
+        // che ci sia un altro admin e poi procedere entrambe alla revoca/disabilitazione.
+        await tx.$queryRaw`SELECT id FROM "utenti" WHERE "isAdmin" = true AND "abilitato" = true ORDER BY id FOR UPDATE`;
+        const adminAttivi = await tx.utente.count({
+          where: { isAdmin: true, abilitato: true, NOT: { id } },
+        });
+        if (adminAttivi === 0) {
+          throw new Error("LAST_ADMIN_GUARD");
+        }
+      }
+
+      // SEC-08: revoca immediata delle sessioni se l'account viene disabilitato,
+      // se perde i privilegi di amministratore, o se cambia l'username.
+      const shouldRevokeSessions =
+        !abilitato ||
+        (current.isAdmin && !isAdmin) ||
+        current.username !== username;
+
+      await tx.utente.update({
+        where: { id },
+        data: {
+          username,
+          nome: nome || null,
+          cognome: cognome || null,
+          isAdmin,
+          abilitato,
+          ...(shouldRevokeSessions ? { tokenVersion: { increment: 1 } } : {}),
+        },
+      });
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+      return { success: false, error: "Utente non trovato" };
+    }
+    if (error instanceof Error && error.message === "LAST_ADMIN_GUARD") {
+      return { success: false, error: "Deve restare almeno un amministratore abilitato" };
+    }
     if (isUniqueViolationOnField(error, "username")) {
-      return { error: "Username già in uso" };
+      return { success: false, error: "Username già in uso" };
     }
     console.error("updateUser error", error);
-    return { error: "Errore durante l'aggiornamento dell'utente" };
+    return { success: false, error: "Errore durante l'aggiornamento dell'utente" };
   }
 
   await logAudit({
@@ -157,21 +192,26 @@ export async function resetUserPassword(
 ): Promise<UserActionState> {
   const session = await requireAdmin();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   if (session.id === id) {
-    return { error: "Non puoi resettare la tua password da qui" };
+    return { success: false, error: "Non puoi resettare la tua password da qui" };
   }
 
   const rateLimit = resetPasswordLimiter.consume(String(session.id));
   if (!rateLimit.allowed) {
     const retryAfterMinutes = Math.ceil((rateLimit.retryAfterSeconds ?? 0) / 60);
     return {
+      success: false,
       error: `Troppi reset password consecutivi. Riprova tra ${retryAfterMinutes} minuti.`,
     };
   }
 
   const parsed = resetPasswordSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   try {
@@ -189,7 +229,7 @@ export async function resetUserPassword(
     });
   } catch (error) {
     console.error("resetUserPassword error", error);
-    return { error: "Errore durante il reset della password" };
+    return { success: false, error: "Errore durante il reset della password" };
   }
 
   await logAudit({
@@ -210,32 +250,53 @@ export async function toggleUserEnabled(
 ): Promise<UserActionState> {
   const session = await requireAdmin();
 
-  if (session.id === id) {
-    return { error: "Non puoi disabilitare il tuo account" };
+  if (!isValidId(id) || typeof abilitato !== "boolean") {
+    return { success: false, error: "Richiesta non valida" };
   }
 
-  // Stessa guardia di updateUser: se si sta disabilitando `id` e nessun
-  // altro admin abilitato resterebbe, blocca. Se `id` non è admin questo
-  // conteggio non lo riguarda (adminAttivi include comunque l'admin che sta
-  // agendo, se ancora attivo), quindi non impedisce mai di disabilitare un
-  // utente normale.
-  if (!abilitato) {
-    const adminAttivi = await prisma.utente.count({
-      where: { isAdmin: true, abilitato: true, NOT: { id } },
-    });
-    if (adminAttivi === 0) {
-      return { error: "Deve restare almeno un amministratore abilitato" };
-    }
+  if (session.id === id) {
+    return { success: false, error: "Non puoi disabilitare il tuo account" };
   }
 
   try {
-    await prisma.utente.update({
-      where: { id },
-      data: { abilitato },
+    await prisma.$transaction(async (tx) => {
+      // Stessa guardia di updateUser: se si sta disabilitando `id` e nessun
+      // altro admin abilitato resterebbe, blocca. Se `id` non è admin questo
+      // conteggio non lo riguarda (adminAttivi include comunque l'admin che sta
+      // agendo, se ancora attivo), quindi non impedisce mai di disabilitare un
+      // utente normale.
+      if (!abilitato) {
+        // SEC-07: acquisiamo un lock FOR UPDATE deterministico (ordinato per id per
+        // prevenire deadlock) su tutti gli admin abilitati prima del conteggio e della modifica.
+        // In questo modo due richieste concorrenti non possono verificare contemporaneamente
+        // che ci sia un altro admin e poi procedere entrambe alla revoca/disabilitazione.
+        await tx.$queryRaw`SELECT id FROM "utenti" WHERE "isAdmin" = true AND "abilitato" = true ORDER BY id FOR UPDATE`;
+        const adminAttivi = await tx.utente.count({
+          where: { isAdmin: true, abilitato: true, NOT: { id } },
+        });
+        if (adminAttivi === 0) {
+          throw new Error("LAST_ADMIN_GUARD");
+        }
+      }
+
+      await tx.utente.update({
+        where: { id },
+        data: {
+          abilitato,
+          // SEC-08: quando un account viene disabilitato (!abilitato), incrementiamo
+          // tokenVersion per invalidare immediatamente ogni sessione JWT attiva.
+          // Se in seguito l'account viene riabilitato, vecchi token (potenzialmente
+          // compromessi) non tornano attivi e l'utente deve riautenticarsi.
+          ...(!abilitato ? { tokenVersion: { increment: 1 } } : {}),
+        },
+      });
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "LAST_ADMIN_GUARD") {
+      return { success: false, error: "Deve restare almeno un amministratore abilitato" };
+    }
     console.error("toggleUserEnabled error", error);
-    return { error: "Errore durante l'aggiornamento dello stato" };
+    return { success: false, error: "Errore durante l'aggiornamento dello stato" };
   }
 
   await logAudit({

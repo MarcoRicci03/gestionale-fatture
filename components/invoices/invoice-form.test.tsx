@@ -124,3 +124,141 @@ describe("InvoiceForm — LOG-02: autocompilazione città/CAP dal pagante", () =
     expect(screen.getByLabelText("CAP")).toHaveValue("00100");
   });
 });
+
+describe("InvoiceForm — Blocco fatture già trasmesse a Sistema TS", () => {
+  it("mostra banner di avviso e disabilita submit per fattura in stato INVIATA", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({ stato_ts: "INVIATA" })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura è già stata trasmessa al Sistema TS/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aggiorna fattura" })
+    ).toBeDisabled();
+  });
+
+  it("mostra banner di avviso e disabilita submit per fattura in stato DA_CANCELLARE_SU_TS", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({ stato_ts: "DA_CANCELLARE_SU_TS" })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura è già stata trasmessa al Sistema TS/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aggiorna fattura" })
+    ).toBeDisabled();
+  });
+});
+
+describe("InvoiceForm — Opzione data di pagamento differita", () => {
+  it("in creazione la checkbox è attiva per default e il campo data pagamento è nascosto", () => {
+    render(
+      <InvoiceForm
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={1}
+      />
+    );
+
+    const checkbox = screen.getByLabelText(
+      /La data di pagamento coincide con la data di emissione/i
+    );
+    expect(checkbox).toBeChecked();
+    expect(screen.queryByLabelText(/Data incasso \/ pagamento effettivo/i)).not.toBeInTheDocument();
+  });
+
+  it("deselezionando la checkbox appare il campo data incasso / pagamento effettivo", async () => {
+    const user = userEvent.setup();
+    render(
+      <InvoiceForm
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={1}
+      />
+    );
+
+    const checkbox = screen.getByLabelText(
+      /La data di pagamento coincide con la data di emissione/i
+    );
+    await user.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+
+    expect(screen.getByLabelText(/Data incasso \/ pagamento effettivo/i)).toBeInTheDocument();
+  });
+
+  it("in modifica con data_pagamento differita, la checkbox è deselezionata e la data è precompilata", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({
+          data: new Date("2026-01-10"),
+          data_pagamento: new Date("2026-02-15"),
+        })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    const checkbox = screen.getByLabelText(
+      /La data di pagamento coincide con la data di emissione/i
+    );
+    expect(checkbox).not.toBeChecked();
+    const paymentDateInput = screen.getByLabelText(/Data incasso \/ pagamento effettivo/i);
+    expect(paymentDateInput).toHaveValue("2026-02-15");
+  });
+});
+
+describe("InvoiceForm — Blocco modifiche per fatture inviate / annullate su Sistema TS", () => {
+  it("mostra il banner di avviso e disabilita il submit se la fattura è in stato ANNULLATA_TS", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({
+          stato_ts: "ANNULLATA_TS",
+        })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura risulta annullata sul Sistema TS/i)
+    ).toBeInTheDocument();
+
+    const submitBtn = screen.getByRole("button", { name: /Aggiorna fattura/i });
+    expect(submitBtn).toBeDisabled();
+  });
+
+  it("mostra il banner di avviso e disabilita il submit se la fattura è in stato IN_TRASMISSIONE", () => {
+    render(
+      <InvoiceForm
+        invoice={makeSavedInvoice({
+          stato_ts: "IN_TRASMISSIONE",
+        })}
+        payers={basePayers}
+        patients={basePatients}
+        nextInvoiceNumber={6}
+      />
+    );
+
+    expect(
+      screen.getByText(/Questa fattura è attualmente in fase di trasmissione al Sistema TS/i)
+    ).toBeInTheDocument();
+
+    const submitBtn = screen.getByRole("button", { name: /Aggiorna fattura/i });
+    expect(submitBtn).toBeDisabled();
+  });
+});

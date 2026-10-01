@@ -35,8 +35,13 @@ export function parseClientIpFromHeaders(headersList: HeaderReader): string {
 
   const forwardedFor = headersList.get("x-forwarded-for");
   if (forwardedFor) {
-    const first = forwardedFor.split(",")[0]?.trim();
-    if (first) return first;
+    const parts = forwardedFor
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts[parts.length - 1];
+    }
   }
 
   const realIp = headersList.get("x-real-ip");

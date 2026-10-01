@@ -2,7 +2,7 @@
 
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { PAGE_W, PAGE_H, clamp } from "@/lib/pdf/canvas-geometry";
-import type { Blocco, ImpostazioniPdf } from "@/lib/pdf/types";
+import type { Blocco, PdfLayout } from "@/lib/pdf/types";
 
 function makeId() {
   return crypto.randomUUID();
@@ -21,7 +21,7 @@ type UsePdfEditorKeyboardShortcutsOptions = {
   removeBlock: (id: string) => void;
   undo: () => void;
   redo: () => void;
-  pushSettings: (next: ImpostazioniPdf | ((prev: ImpostazioniPdf) => ImpostazioniPdf)) => void;
+  pushSettings: (next: PdfLayout | ((prev: PdfLayout) => PdfLayout)) => void;
   setAutoFit: Dispatch<SetStateAction<boolean>>;
   setZoom: Dispatch<SetStateAction<number>>;
 };

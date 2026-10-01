@@ -5,9 +5,9 @@ account vede solo i propri paganti, pazienti e fatture). Next.js 16 (App
 Router, Turbopack) + PostgreSQL via Prisma, autenticazione custom via JWT in
 cookie (nessun provider esterno).
 
-Per l'architettura in dettaglio vedi [`CLAUDE.md`](./CLAUDE.md) e
-[`AGENTS.md`](./AGENTS.md) — pensati per un assistente AI, ma sono la
-documentazione più aggiornata anche per chi sviluppa.
+Per l'architettura in dettaglio vedi [`CLAUDE.md`](./CLAUDE.md) — pensato
+per un assistente AI, ma è la documentazione più aggiornata anche per chi
+sviluppa.
 
 ## Prerequisiti
 

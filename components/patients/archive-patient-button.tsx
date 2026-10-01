@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { archivePatient } from "@/lib/actions/patients";
 
 export function ArchivePatientButton({ id }: { id: number }) {
@@ -25,19 +24,18 @@ export function ArchivePatientButton({ id }: { id: number }) {
 
   return (
     <>
-      <Tooltip content="Archivia paziente">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => {
-            setError(null);
-            setOpen(true);
-          }}
-          aria-label="Archivia paziente"
-        >
-          <Archive className="h-4 w-4 text-destructive" />
-        </Button>
-      </Tooltip>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        title="Archivia paziente"
+        aria-label="Archivia paziente"
+      >
+        <Archive className="h-4 w-4 text-destructive" />
+      </Button>
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tooltip } from "@/components/ui/tooltip";
 import { hardDeletePatient } from "@/lib/actions/patients";
 
 type HardDeletePatientButtonProps = {
@@ -22,6 +21,7 @@ export function HardDeletePatientButton({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const disabled = !!disabledReason;
+  const title = disabled ? (disabledReason ?? undefined) : "Elimina definitivamente paziente";
 
   const handleConfirm = () => {
     startTransition(async () => {
@@ -43,6 +43,7 @@ export function HardDeletePatientButton({
         setError(null);
         setOpen(true);
       }}
+      title={title}
       aria-label="Elimina definitivamente paziente"
     >
       <Trash2 className="h-4 w-4 text-destructive" />
@@ -51,11 +52,7 @@ export function HardDeletePatientButton({
 
   return (
     <>
-      <Tooltip
-        content={disabled ? disabledReason : "Elimina definitivamente paziente"}
-      >
-        {disabled ? <span className="inline-flex">{triggerButton}</span> : triggerButton}
-      </Tooltip>
+      {disabled ? <span className="inline-flex" title={title}>{triggerButton}</span> : triggerButton}
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

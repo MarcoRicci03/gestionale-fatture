@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { INVOICE_MITTENTE_SELECT } from "@/lib/data/invoice-mittente-select";
@@ -5,12 +6,19 @@ import {
   PAYER_OPTION_SELECT,
   PATIENT_OPTION_SELECT,
 } from "@/lib/data/invoice-contact-options-select";
-import { buildInvoiceWhere, lastValidPage } from "@/lib/invoices/list-query";
+import { buildInvoiceWhere } from "@/lib/invoices/list-query";
+import { calculatePagination, clampPage } from "@/lib/utils/pagination";
+import { serializeInvoiceNumbers } from "@/lib/invoices/serialize";
 import { INVOICES_PAGE_SIZE } from "@/lib/constants/invoices";
 import type { InvoiceFilters } from "@/components/invoices/invoice-filters";
 import type { Prisma } from "@prisma/client";
 
-function findInvoicesPage(where: Prisma.PagamentoWhereInput, page: number) {
+function findInvoicesPage(
+  where: Prisma.PagamentoWhereInput,
+  page: number,
+  pageSize: number = INVOICES_PAGE_SIZE
+) {
+  const { skip, take } = calculatePagination(page, pageSize);
   return prisma.pagamento.findMany({
     where,
     include: { pagante: true, paziente: true, mesi: true },
@@ -21,12 +29,16 @@ function findInvoicesPage(where: Prisma.PagamentoWhereInput, page: number) {
     // criterio univoco, una riga può comparire su due pagine consecutive o
     // sparire del tutto mentre si pagina.
     orderBy: [{ data: "desc" }, { id: "desc" }],
-    skip: (page - 1) * INVOICES_PAGE_SIZE,
-    take: INVOICES_PAGE_SIZE,
+    skip,
+    take,
   });
 }
 
-export async function getInvoices(filters: InvoiceFilters, page: number) {
+export async function getInvoices(
+  filters: InvoiceFilters,
+  page: number,
+  pageSize: number = INVOICES_PAGE_SIZE
+) {
   const userId = await requireUserId();
   // Nessun filtro su pagante/paziente.archiviato: una fattura è un documento
   // fiscale e resta visibile anche se il pagante o il paziente collegato
@@ -34,7 +46,7 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
   // lib/actions/patients.ts).
   const where = buildInvoiceWhere(userId, filters);
   const [invoices, totalCount] = await Promise.all([
-    findInvoicesPage(where, page),
+    findInvoicesPage(where, page, pageSize),
     prisma.pagamento.count({ where }),
   ]);
 
@@ -47,16 +59,13 @@ export async function getInvoices(filters: InvoiceFilters, page: number) {
   // clampa alla pagina valida più vicina e si rifà la query solo in questo
   // caso raro (il percorso comune, `page` già in range, resta una singola
   // query in Promise.all sopra).
-  const clampedPage = Math.min(page, lastValidPage(totalCount, INVOICES_PAGE_SIZE));
+  const clampedPage = clampPage(page, totalCount, pageSize);
   const effectiveInvoices =
-    clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage);
+    clampedPage === page ? invoices : await findInvoicesPage(where, clampedPage, pageSize);
+
 
   return {
-    invoices: effectiveInvoices.map((invoice) => ({
-      ...invoice,
-      prezzo_totale: invoice.prezzo_totale.toNumber(),
-      mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-    })),
+    invoices: effectiveInvoices.map(serializeInvoiceNumbers),
     totalCount,
     page: clampedPage,
   };
@@ -101,11 +110,7 @@ export async function getInvoiceById(id: number) {
     },
   });
   if (!invoice) return null;
-  return {
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  };
+  return serializeInvoiceNumbers(invoice);
 }
 
 export async function getNextInvoiceNumberForUserYear(
@@ -206,6 +211,7 @@ export async function getAnnualRevenue(year: number) {
     where: {
       id_Utente: userId,
       data: yearRange(year),
+      stato_ts: { not: "ANNULLATA_TS" },
     },
     _sum: { prezzo_totale: true },
   });
@@ -221,24 +227,9 @@ export async function getMonthlyRevenue(year: number, month: number) {
         gte: new Date(year, month - 1, 1),
         lt: new Date(year, month, 1),
       },
+      stato_ts: { not: "ANNULLATA_TS" },
     },
     _sum: { prezzo_totale: true },
   });
   return result._sum.prezzo_totale?.toNumber() ?? 0;
-}
-
-export async function getLatestInvoices(limit: number) {
-  const userId = await requireUserId();
-  // Vedi nota in getInvoices: nessun filtro su archiviato.
-  const invoices = await prisma.pagamento.findMany({
-    where: { id_Utente: userId },
-    include: { pagante: true, paziente: true, mesi: true },
-    orderBy: { data: "desc" },
-    take: limit,
-  });
-  return invoices.map((invoice) => ({
-    ...invoice,
-    prezzo_totale: invoice.prezzo_totale.toNumber(),
-    mesi: invoice.mesi.map((m) => ({ ...m, prezzo: m.prezzo.toNumber() })),
-  }));
 }

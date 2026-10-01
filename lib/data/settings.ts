@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import { Prisma } from "@prisma/client";
 import type { ImpostazioniPdf as PrismaImpostazioniPdf } from "@prisma/client";
@@ -6,32 +7,13 @@ import { requireUserId } from "@/lib/auth/session";
 import { LAYOUT_DEFAULT } from "@/lib/pdf/layout-default";
 import type { ImpostazioniPdf, PdfLayout } from "@/lib/pdf/types";
 
-function now() {
-  return new Date();
-}
-
 function rowToImpostazioniPdf(row: PrismaImpostazioniPdf): ImpostazioniPdf {
   return { ...row, blocchi: row.blocchi as unknown as PdfLayout["blocchi"] };
 }
 
-export async function getPdfSettings(): Promise<ImpostazioniPdf> {
+export async function getPdfSettings(): Promise<PdfLayout> {
   const userId = await requireUserId();
-
-  const row = await prisma.impostazioniPdf.findUnique({
-    where: { id_Utente: userId },
-  });
-
-  if (!row) {
-    return {
-      ...LAYOUT_DEFAULT,
-      id: 0,
-      id_Utente: userId,
-      createdAt: now(),
-      updatedAt: now(),
-    };
-  }
-
-  return rowToImpostazioniPdf(row);
+  return getPdfSettingsForUser(userId);
 }
 
 export async function upsertPdfSettings(

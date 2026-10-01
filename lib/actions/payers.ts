@@ -4,19 +4,23 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
-import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { isUniqueViolationOnField, isForeignKeyViolation } from "@/lib/prisma-errors";
 import { payerSchema, type PayerFormData } from "@/lib/validations/payer";
 import { logAudit } from "@/lib/audit/log";
 import { AUDIT_ACTIONS } from "@/lib/audit/actions";
 import { canHardDeletePayer, findRestoreConflict } from "@/lib/archive/guards";
+import { propagaPaganteAlleBozze } from "@/lib/invoices/propaga-anagrafica";
+import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
-export type PayerActionState = { success: true } | { error: string };
+export type PayerActionState = ActionResult;
 
 function revalidatePayerViews() {
   revalidatePath("/payers");
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
   revalidatePath("/patients");
+  revalidatePath("/sistema-ts");
 }
 
 async function checkPayerUniqueTaxIds(
@@ -53,7 +57,7 @@ export async function createPayer(
 
   const parsed = payerSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const duplicateError = await checkPayerUniqueTaxIds(
@@ -62,7 +66,7 @@ export async function createPayer(
     parsed.data.piva
   );
   if (duplicateError) {
-    return { error: duplicateError };
+    return { success: false, error: duplicateError };
   }
 
   let createdPayerId: number;
@@ -82,13 +86,13 @@ export async function createPayer(
     createdPayerId = created.id;
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente" };
+      return { success: false, error: "Codice Fiscale già presente" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente" };
+      return { success: false, error: "Partita IVA già presente" };
     }
     console.error("createPayer error", error);
-    return { error: "Errore durante la creazione del pagante" };
+    return { success: false, error: "Errore durante la creazione del pagante" };
   }
 
   await logAudit({
@@ -109,9 +113,13 @@ export async function updatePayer(
 ): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const parsed = payerSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const duplicateError = await checkPayerUniqueTaxIds(
@@ -121,31 +129,49 @@ export async function updatePayer(
     id
   );
   if (duplicateError) {
-    return { error: duplicateError };
+    return { success: false, error: duplicateError };
   }
 
   try {
-    await prisma.pagante.update({
-      where: { id, id_Utente: userId, archiviato: false },
-      data: {
-        nome: parsed.data.nome,
-        cognome: parsed.data.cognome,
-        via: parsed.data.via,
-        citta: parsed.data.citta,
-        cap: parsed.data.cap,
-        cf: parsed.data.cf ?? null,
-        piva: parsed.data.piva ?? null,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.pagante.update({
+        where: { id, id_Utente: userId, archiviato: false },
+        data: {
+          nome: parsed.data.nome,
+          cognome: parsed.data.cognome,
+          via: parsed.data.via,
+          citta: parsed.data.citta,
+          cap: parsed.data.cap,
+          cf: parsed.data.cf ?? null,
+          piva: parsed.data.piva ?? null,
+        },
+      });
+
+      if (parsed.data.propagaFattureInAttesa) {
+        await propagaPaganteAlleBozze(tx, {
+          userId,
+          idPagante: id,
+          pagante: {
+            nome: parsed.data.nome,
+            cognome: parsed.data.cognome,
+            via: parsed.data.via,
+            citta: parsed.data.citta,
+            cap: parsed.data.cap,
+            cf: parsed.data.cf ?? null,
+            piva: parsed.data.piva ?? null,
+          },
+        });
+      }
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente" };
+      return { success: false, error: "Codice Fiscale già presente" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente" };
+      return { success: false, error: "Partita IVA già presente" };
     }
     console.error("updatePayer error", error);
-    return { error: "Errore durante l'aggiornamento del pagante" };
+    return { success: false, error: "Errore durante l'aggiornamento del pagante" };
   }
 
   await logAudit({
@@ -154,15 +180,22 @@ export async function updatePayer(
     entita: "Pagante",
     entitaId: id,
     ip: await getClientIp(),
+    meta: {
+      propagaFattureInAttesa: !!parsed.data.propagaFattureInAttesa,
+    },
   });
 
-  revalidatePath("/payers");
+  revalidatePayerViews();
   revalidatePath(`/payers/${id}/edit`);
   return { success: true };
 }
 
 export async function archivePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
+
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
 
   // Stesso controllo di stato di partenza di archivePatient/restorePatient/
   // restorePayer: senza, archiviare un pagante già archiviato "riesce" in
@@ -172,7 +205,7 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
     where: { id, id_Utente: userId, archiviato: false },
   });
   if (!payer) {
-    return { error: "Pagante non trovato tra gli attivi" };
+    return { success: false, error: "Pagante non trovato tra gli attivi" };
   }
 
   let pazientiArchiviati = 0;
@@ -196,7 +229,7 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
     });
   } catch (error) {
     console.error("archivePayer error", error);
-    return { error: "Errore durante l'archiviazione del pagante" };
+    return { success: false, error: "Errore durante l'archiviazione del pagante" };
   }
 
   await logAudit({
@@ -215,11 +248,15 @@ export async function archivePayer(id: number): Promise<PayerActionState> {
 export async function restorePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const payer = await prisma.pagante.findFirst({
     where: { id, id_Utente: userId, archiviato: true },
   });
   if (!payer) {
-    return { error: "Pagante non trovato tra gli archiviati" };
+    return { success: false, error: "Pagante non trovato tra gli archiviati" };
   }
 
   const activePayers = await prisma.pagante.findMany({
@@ -239,6 +276,7 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
       ? `${conflictingPayer.nome} ${conflictingPayer.cognome}`
       : `#${conflict.conflictingId}`;
     return {
+      success: false,
       error: `Impossibile ripristinare: esiste già un pagante attivo con lo stesso ${fieldLabel} (${name}). Modifica o archivia quel pagante prima di ripristinare.`,
     };
   }
@@ -271,13 +309,13 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
     });
   } catch (error) {
     if (isUniqueViolationOnField(error, "cf")) {
-      return { error: "Codice Fiscale già presente su un pagante attivo" };
+      return { success: false, error: "Codice Fiscale già presente su un pagante attivo" };
     }
     if (isUniqueViolationOnField(error, "piva")) {
-      return { error: "Partita IVA già presente su un pagante attivo" };
+      return { success: false, error: "Partita IVA già presente su un pagante attivo" };
     }
     console.error("restorePayer error", error);
-    return { error: "Errore durante il ripristino del pagante" };
+    return { success: false, error: "Errore durante il ripristino del pagante" };
   }
 
   await logAudit({
@@ -296,48 +334,73 @@ export async function restorePayer(id: number): Promise<PayerActionState> {
 export async function hardDeletePayer(id: number): Promise<PayerActionState> {
   const userId = await requireUserId();
 
-  const payer = await prisma.pagante.findFirst({
-    where: { id, id_Utente: userId, archiviato: true },
-  });
-  if (!payer) {
-    return { error: "Pagante non trovato tra gli archiviati" };
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
   }
 
-  const [fatture, pazientiNonArchiviati, pazientiArchiviatiCollegati] =
-    await Promise.all([
-      prisma.pagamento.count({
-        where: {
-          id_Utente: userId,
-          OR: [{ id_Pagante: id }, { paziente: { id_Pagante: id } }],
-        },
-      }),
-      prisma.paziente.count({
-        where: { id_Utente: userId, id_Pagante: id, archiviato: false },
-      }),
-      prisma.paziente.count({
-        where: { id_Utente: userId, id_Pagante: id, archiviato: true },
-      }),
-    ]);
-
-  if (!canHardDeletePayer({ fatture, pazientiNonArchiviati })) {
-    if (fatture > 0) {
-      return {
-        error: `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`,
-      };
-    }
-    return {
-      error: `Impossibile eliminare: ${pazientiNonArchiviati} paziente/i collegato/i non è/sono ancora archiviato/i. Archivia prima quei pazienti.`,
-    };
-  }
+  let pazientiArchiviatiCollegati = 0;
 
   try {
-    // Il cascade DB su pazienti.id_Pagante colpisce solo pazienti già
-    // archiviati e senza fatture (garantito dai conteggi sopra), mai un
-    // record che l'utente non ha esplicitamente archiviato.
-    await prisma.pagante.delete({ where: { id, id_Utente: userId } });
+    await prisma.$transaction(async (tx) => {
+      const payer = await tx.pagante.findFirst({
+        where: { id, id_Utente: userId, archiviato: true },
+      });
+      if (!payer) {
+        throw new Error("Pagante non trovato tra gli archiviati");
+      }
+
+      const [fatture, pazientiNonArchiviati, archiviatiCollegati] =
+        await Promise.all([
+          tx.pagamento.count({
+            where: {
+              id_Utente: userId,
+              OR: [{ id_Pagante: id }, { paziente: { id_Pagante: id } }],
+            },
+          }),
+          tx.paziente.count({
+            where: { id_Utente: userId, id_Pagante: id, archiviato: false },
+          }),
+          tx.paziente.count({
+            where: { id_Utente: userId, id_Pagante: id, archiviato: true },
+          }),
+        ]);
+
+      if (!canHardDeletePayer({ fatture, pazientiNonArchiviati })) {
+        if (fatture > 0) {
+          throw new Error(
+            `Impossibile eliminare: ci sono ${fatture} fattura/e collegata/e. Le fatture non possono essere cancellate.`
+          );
+        }
+        throw new Error(
+          `Impossibile eliminare: ${pazientiNonArchiviati} paziente/i collegato/i non è/sono ancora archiviato/i. Archivia prima quei pazienti.`
+        );
+      }
+
+      pazientiArchiviatiCollegati = archiviatiCollegati;
+
+      // Il cascade DB su pazienti.id_Pagante colpisce solo pazienti già
+      // archiviati e senza fatture (garantito dai conteggi sopra), mai un
+      // record che l'utente non ha esplicitamente archiviato.
+      await tx.pagante.delete({ where: { id, id_Utente: userId } });
+    });
   } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      return {
+        success: false,
+        error:
+          "Impossibile eliminare: sono presenti record (fatture o pazienti) collegati a questo pagante",
+      };
+    }
+    if (error instanceof Error) {
+      if (
+        error.message === "Pagante non trovato tra gli archiviati" ||
+        error.message.startsWith("Impossibile eliminare:")
+      ) {
+        return { success: false, error: error.message };
+      }
+    }
     console.error("hardDeletePayer error", error);
-    return { error: "Errore durante l'eliminazione definitiva del pagante" };
+    return { success: false, error: "Errore durante l'eliminazione definitiva del pagante" };
   }
 
   await logAudit({

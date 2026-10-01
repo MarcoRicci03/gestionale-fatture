@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { it, expect, beforeAll } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 // jose confronta il secret firmato con `instanceof Uint8Array`: sotto
 // l'ambiente jsdom di default, TextEncoder produce un Uint8Array di un realm
@@ -62,3 +64,30 @@ it("un token senza claim tokenVersion viene rifiutato", async () => {
   const payload = await verifySession(legacyToken);
   expect(payload).toBeNull();
 });
+
+it("toggleUserEnabled incrementa tokenVersion quando l'account viene disabilitato (SEC-08)", () => {
+  const source = readFileSync(join(__dirname, "..", "lib", "actions", "users.ts"), "utf-8");
+  const toggleFn = source.slice(source.indexOf("export async function toggleUserEnabled"));
+  expect(toggleFn).toMatch(/!abilitato\s*\?\s*\{\s*tokenVersion:\s*\{\s*increment:\s*1\s*\}\s*\}\s*:\s*\{\}/);
+});
+
+it("updateUser incrementa tokenVersion in caso di disabilitazione, revoca admin o cambio username (SEC-08)", () => {
+  const source = readFileSync(join(__dirname, "..", "lib", "actions", "users.ts"), "utf-8");
+  const updateFn = source.slice(
+    source.indexOf("export async function updateUser"),
+    source.indexOf("export async function resetUserPassword")
+  );
+  expect(updateFn).toMatch(/!abilitato/);
+  expect(updateFn).toMatch(/current\.isAdmin\s*&&\s*!isAdmin/);
+  expect(updateFn).toMatch(/current\.username\s*!==\s*username/);
+  expect(updateFn).toMatch(/tokenVersion:\s*\{\s*increment:\s*1\s*\}/);
+});
+
+it("logout incrementa tokenVersion in database per revoca lato server (SEC-08)", () => {
+  const source = readFileSync(join(__dirname, "..", "lib", "actions", "auth.ts"), "utf-8");
+  const logoutFn = source.slice(source.indexOf("export async function logout"));
+  expect(logoutFn).toMatch(/prisma\.utente\.update/);
+  expect(logoutFn).toMatch(/tokenVersion:\s*\{\s*increment:\s*1\s*\}/);
+});
+
+

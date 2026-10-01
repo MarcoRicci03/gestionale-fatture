@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseDateInput } from "@/lib/utils/date";
+import { parseDateInput, isValidCalendarDateString } from "@/lib/utils/date";
 import { MESI } from "@/lib/constants/mesi";
 import { BOLLO_CODICE_REGEX } from "@/lib/constants/bollo";
 import { roundCurrency } from "@/lib/utils/currency";
@@ -25,6 +25,9 @@ export const invoiceSchema = z
       z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida")
+        // P012: senza questo refine parseDateInput lancia su date come
+        // 2026-02-31 e safeParse propaga l'eccezione invece di fallire.
+        .refine(isValidCalendarDateString, "Data non valida")
         .transform((val) => parseDateInput(val)),
     ]),
     mod_pag: z
@@ -88,6 +91,25 @@ export const invoiceSchema = z
       ])
       .transform((val) => (val === "" ? undefined : val))
       .optional(),
+    natura_iva: z.enum(["N2.2", "N4"]).default("N2.2").optional(),
+    pagamento_tracciato: z.boolean().optional(),
+    flag_opposizione: z.boolean().default(false).optional(),
+    data_pagamento: z
+      .union([
+        z.literal(""),
+        z.date(),
+        z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida")
+          // P012: senza questo refine parseDateInput lancia su date come
+          // 2026-02-31 e safeParse propaga l'eccezione invece di fallire.
+          .refine(isValidCalendarDateString, "Data non valida")
+          .transform((val) => parseDateInput(val)),
+      ])
+      .transform((val) => (val === "" || val === undefined || val === null ? null : val))
+      .nullable()
+      .default(null)
+      .optional(),
   })
   .refine(
     (val) => {
@@ -97,6 +119,29 @@ export const invoiceSchema = z
     {
       message: `L'anno della fattura deve essere compreso tra ${ANNO_FATTURA_MIN} e l'anno prossimo`,
       path: ["data"],
+    }
+  )
+  .refine(
+    (val) => {
+      if (!val.data_pagamento) return true;
+      const emissione = new Date(val.data.getFullYear(), val.data.getMonth(), val.data.getDate());
+      const pagamento = new Date(val.data_pagamento.getFullYear(), val.data_pagamento.getMonth(), val.data_pagamento.getDate());
+      return pagamento.getTime() >= emissione.getTime();
+    },
+    {
+      message: "La data di pagamento deve essere uguale o successiva alla data di emissione della fattura",
+      path: ["data_pagamento"],
+    }
+  )
+  .refine(
+    (val) => {
+      if (!val.data_pagamento) return true;
+      const anno = val.data_pagamento.getFullYear();
+      return anno >= ANNO_FATTURA_MIN && anno <= new Date().getFullYear() + 1;
+    },
+    {
+      message: `L'anno della data di pagamento deve essere compreso tra ${ANNO_FATTURA_MIN} e l'anno prossimo`,
+      path: ["data_pagamento"],
     }
   );
 

@@ -50,7 +50,7 @@ function formatMeta(meta: AuditLogEntry["meta"]): string {
 // fino a AUDIT_LOG_PAGE_SIZE eventi per pagina la pagina non deve allungarsi
 // indefinitamente, la lista scrolla al suo interno mentre filtri e
 // intestazione restano fissi sopra.
-const SCROLL_AREA_CLASS = "max-h-[65vh] overflow-y-auto";
+const SCROLL_AREA_CLASS = "max-h-[65vh] overflow-auto";
 
 export function AuditLogManager({
   entries,
@@ -122,9 +122,9 @@ export function AuditLogManager({
         <p className="text-muted-foreground">Nessun evento corrisponde ai filtri selezionati.</p>
       ) : (
         <>
-          <div className={`hidden rounded-lg border md:block ${SCROLL_AREA_CLASS}`}>
+          <div className={`hidden rounded-lg border border-border bg-card md:block ${SCROLL_AREA_CLASS}`}>
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
                   <TableHead>Data e ora</TableHead>
                   <TableHead>Utente</TableHead>
@@ -158,7 +158,7 @@ export function AuditLogManager({
 
           <ul className={`space-y-3 rounded-lg md:hidden ${SCROLL_AREA_CLASS}`}>
             {entries.map((entry) => (
-              <li key={entry.id} className="rounded-lg border p-4 space-y-2">
+              <li key={entry.id} className="rounded-lg border border-border bg-card p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-medium">{formatAzione(entry.azione)}</p>
                   <p className="text-sm text-muted-foreground whitespace-nowrap">

@@ -82,7 +82,7 @@ describe("InvoicesManager", () => {
     const user = userEvent.setup();
     render(<InvoicesManager {...baseProps} years={[2025]} />);
     await user.click(screen.getByLabelText("Anno"));
-    await user.click(screen.getByRole("option", { name: "2025" }));
+    await user.click(await screen.findByRole("option", { name: "2025" }));
     expect(replace).toHaveBeenCalledWith("/invoices?f=1&anno=2025", { scroll: false });
   });
 
@@ -95,14 +95,14 @@ describe("InvoicesManager", () => {
 
   it("due cambi filtro ravvicinati senza re-render nel mezzo (RSC round-trip non ancora arrivato): il secondo replace() include ENTRAMBI i patch, non solo l'ultimo", async () => {
     const user = userEvent.setup();
-    // `filters` resta la prop iniziale per tutto il test (nessun rerender):
-    // simula esattamente lo scenario del bug, in cui il secondo cambio
+    // InvoicesManager usa latestFiltersRef per accumulare le patch sincrone:
+    // questo test verifica che la seconda navigazione non perda la prima se il
     // filtro arriva prima che il round-trip RSC del primo abbia aggiornato
     // la prop `filters` del Server Component.
     render(<InvoicesManager {...baseProps} years={[2025]} />);
 
     await user.click(screen.getByLabelText("Anno"));
-    await user.click(screen.getByRole("option", { name: "2025" }));
+    await user.click(await screen.findByRole("option", { name: "2025" }));
 
     fireEvent.change(screen.getByLabelText("Data da"), {
       target: { value: "2026-01-01" },
@@ -159,4 +159,92 @@ describe("InvoicesManager", () => {
     expect(within(dialog).getByText("1")).toBeInTheDocument();
     expect(within(dialog).queryByText("50")).not.toBeInTheDocument();
   });
+
+  it("mostra il riepilogo 'X elementi selezionati in totale' e persiste la selezione al cambio pagina", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <InvoicesManager
+        {...baseProps}
+        invoices={[makeInvoice(1), makeInvoice(2)]}
+        totalCount={50}
+        years={[2026]}
+        page={1}
+      />
+    );
+
+    const [checkbox1] = screen.getAllByRole("checkbox", {
+      name: "Seleziona fattura 1",
+    });
+    await user.click(checkbox1);
+
+    expect(screen.getByText("1 elemento selezionato in totale")).toBeInTheDocument();
+
+    // Simula passaggio a pagina 2: la selezione DEVE persistere
+    rerender(
+      <InvoicesManager
+        {...baseProps}
+        invoices={[makeInvoice(3), makeInvoice(4)]}
+        totalCount={50}
+        years={[2026]}
+        page={2}
+      />
+    );
+
+    expect(screen.getByText("1 elemento selezionato in totale")).toBeInTheDocument();
+
+    // Seleziona fattura 3 a pagina 2
+    const [checkbox3] = screen.getAllByRole("checkbox", {
+      name: "Seleziona fattura 3",
+    });
+    await user.click(checkbox3);
+
+    expect(screen.getByText("2 elementi selezionati in totale")).toBeInTheDocument();
+
+    // Torna a pagina 1: la fattura 1 deve risultare ancora selezionata
+    rerender(
+      <InvoicesManager
+        {...baseProps}
+        invoices={[makeInvoice(1), makeInvoice(2)]}
+        totalCount={50}
+        years={[2026]}
+        page={1}
+      />
+    );
+
+    const [checkbox1Again] = screen.getAllByRole("checkbox", {
+      name: "Seleziona fattura 1",
+    });
+    expect(checkbox1Again).toBeChecked();
+
+    // Click su "Deseleziona tutti"
+    await user.click(screen.getByRole("button", { name: "Deseleziona tutti" }));
+    expect(screen.queryByText(/elementi selezionati in totale/)).not.toBeInTheDocument();
+    expect(checkbox1Again).not.toBeChecked();
+  });
+
+  it("cambiare la dimensione pagina naviga con pageSize e resetta a pagina 1", async () => {
+    const user = userEvent.setup();
+    render(
+      <InvoicesManager
+        {...baseProps}
+        invoices={[makeInvoice(1), makeInvoice(2)]}
+        totalCount={50}
+        years={[2026]}
+        page={2}
+        pageSize={25}
+      />
+    );
+
+    const select = screen.getByLabelText("Elementi per pagina");
+    expect(select).toHaveValue("25");
+
+    await user.selectOptions(select, "10");
+
+    expect(replace).toHaveBeenCalledTimes(1);
+    const calledUrl = (replace.mock.calls[0] as [string, unknown])[0];
+    expect(calledUrl).toContain("pageSize=10");
+    // Non deve contenere page=2 perché deve essere resettato a pagina 1 (omesso quando 1)
+    expect(calledUrl).not.toContain("page=2");
+  });
 });
+

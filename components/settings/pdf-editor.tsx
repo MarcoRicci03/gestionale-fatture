@@ -29,14 +29,13 @@ import { PdfEditorBlockPropertiesPanel } from "@/components/settings/pdf-editor-
 import { PAGE_W, PAGE_H, clamp } from "@/lib/pdf/canvas-geometry";
 import type {
   Blocco,
-  ImpostazioniPdf,
   PdfLayout,
   PdfSettingsInput,
   TipoBlocco,
 } from "@/lib/pdf/types";
 
 type PdfEditorProps = {
-  initialSettings: ImpostazioniPdf;
+  initialSettings: PdfLayout;
   userId: number;
 };
 
@@ -44,7 +43,7 @@ function makeId() {
   return crypto.randomUUID();
 }
 
-export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
+export function PdfEditor({ initialSettings }: PdfEditorProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -53,7 +52,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
-  const onPdfLayoutNavigate = useCallback((nextSettings: ImpostazioniPdf) => {
+  const onPdfLayoutNavigate = useCallback((nextSettings: PdfLayout) => {
     setSelectedIds((prev) => {
       const validIds = new Set<string>();
       prev.forEach((id) => {
@@ -305,18 +304,11 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
   }, [settings]);
 
   const handleReset = useCallback(() => {
-    const now = new Date();
-    pushSettings({
-      ...LAYOUT_DEFAULT,
-      id: settings.id,
-      id_Utente: userId,
-      createdAt: now,
-      updatedAt: now,
-    });
+    pushSettings(LAYOUT_DEFAULT);
     setSelectedIds(new Set());
     stopEditing();
     setResetOpen(false);
-  }, [settings.id, userId, pushSettings, stopEditing]);
+  }, [pushSettings, stopEditing]);
 
   return (
     <div className="relative flex flex-col gap-4">
@@ -393,6 +385,8 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
             style={{
               width: PAGE_W,
               height: PAGE_H,
+              // Nota (SMELL-02): CSS `zoom` è supportato da tutti i browser moderni (incluso Firefox da v126).
+              // A differenza di transform: scale(), adatta automaticamente le dimensioni di layout e lo scroll del contenitore.
               zoom,
               flexShrink: 0,
             }}
@@ -513,7 +507,7 @@ export function PdfEditor({ initialSettings, userId }: PdfEditorProps) {
               removeBlock={removeBlock}
             />
           ) : (
-            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
               {previewMode
                 ? "Modalità anteprima: il layout viene mostrato con dati di esempio."
                 : selectedIds.size > 1

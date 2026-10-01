@@ -43,3 +43,26 @@ function extractSchemaMinLength(): number {
 it("la soglia minima del seed coincide con quella di passwordSchema", () => {
   expect(extractSeedMinLength()).toBe(extractSchemaMinLength());
 });
+
+function extractSeedMaxLength(): number {
+  const source = readFileSync(SEED_PATH, "utf-8");
+  const match = /MAX_PASSWORD_BYTES\s*=\s*(\d+)/.exec(source);
+  if (!match) {
+    throw new Error("MAX_PASSWORD_BYTES non trovata in prisma/seed.mjs");
+  }
+  return Number(match[1]);
+}
+
+function extractSchemaMaxLength(): number {
+  const source = readFileSync(USER_VALIDATION_PATH, "utf-8");
+  const match = /MAX_PASSWORD_BYTES\s*=\s*(\d+)/.exec(source);
+  if (!match) {
+    throw new Error("MAX_PASSWORD_BYTES non trovata in lib/validations/user.ts");
+  }
+  return Number(match[1]);
+}
+
+it("la soglia massima in byte del seed coincide con quella di user.ts", () => {
+  expect(extractSeedMaxLength()).toBe(extractSchemaMaxLength());
+  expect(extractSchemaMaxLength()).toBe(72);
+});

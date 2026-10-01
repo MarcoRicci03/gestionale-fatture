@@ -13,12 +13,12 @@ export default async function PayersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const rawParams = await searchParams;
-  const { search, page, archivedPage } = parsePayerListQuery(rawParams);
+  const { search, page, archivedPage, pageSize } = parsePayerListQuery(rawParams);
 
   const [{ payers, totalCount, page: currentPage }, archived] =
     await Promise.all([
-      getPayers(search, page),
-      getArchivedPayers(search, archivedPage),
+      getPayers(search, page, pageSize),
+      getArchivedPayers(search, archivedPage, pageSize),
     ]);
 
   return (
@@ -26,6 +26,7 @@ export default async function PayersPage({
       payers={payers}
       totalCount={totalCount}
       page={currentPage}
+      pageSize={pageSize}
       archivedPayers={archived.payers}
       archivedTotalCount={archived.totalCount}
       archivedPage={archived.page}
@@ -33,3 +34,4 @@ export default async function PayersPage({
     />
   );
 }
+

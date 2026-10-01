@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useState } from "react";
 import { PlusCircle, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,9 +22,16 @@ import { PayerForm } from "./payer-form";
 import { ArchivePayerButton } from "./archive-payer-button";
 import { RestorePayerButton } from "./restore-payer-button";
 import { HardDeletePayerButton } from "./hard-delete-payer-button";
-import { Tooltip } from "@/components/ui/tooltip";
 import { SearchField } from "@/components/ui/search-field";
 import { ListPagination } from "@/components/ui/list-pagination";
+import { SelectionFloatingBar } from "@/components/ui/selection-floating-bar";
+import { useTableSelection } from "@/lib/hooks/use-table-selection";
+import { useManagerPagination } from "@/lib/hooks/use-manager-pagination";
+import {
+  formatArchiveInvoiceImpact,
+  getHardDeleteInvoiceBlockReason,
+  getHardDeletePatientsBlockReason,
+} from "@/lib/archive/formatting";
 import { PAYERS_PAGE_SIZE } from "@/lib/constants/payers";
 import type { Pagante, Paziente } from "@prisma/client";
 import type { ArchivedPayerRow } from "@/lib/data/payers";
@@ -36,39 +42,26 @@ type PayersManagerProps = {
   payers: ActivePayer[];
   totalCount: number;
   page: number;
+  pageSize?: number;
   archivedPayers: ArchivedPayerRow[];
   archivedTotalCount: number;
   archivedPage: number;
   search: string;
 };
 
-function formatCurrency(amount: number) {
-  return amount.toLocaleString("it-IT", {
-    style: "currency",
-    currency: "EUR",
+function invoiceImpactLabel(row: ArchivedPayerRow): string | null {
+  return formatArchiveInvoiceImpact({
+    count: row.fattureCount,
+    totale: row.fattureTotale,
+    annoMin: row.fatturaAnnoMin,
+    annoMax: row.fatturaAnnoMax,
   });
 }
 
-function invoiceImpactLabel(row: ArchivedPayerRow): string | null {
-  if (row.fattureCount === 0) return null;
-  const years =
-    row.fatturaAnnoMin === row.fatturaAnnoMax
-      ? `${row.fatturaAnnoMin}`
-      : `${row.fatturaAnnoMin}-${row.fatturaAnnoMax}`;
-  const plural = row.fattureCount === 1 ? "" : "e";
-  return `${row.fattureCount} fattura${plural} collegata${plural} (${years}, ${formatCurrency(row.fattureTotale)})`;
-}
-
 function hardDeleteBlockReason(row: ArchivedPayerRow): string | null {
-  if (row.fattureCount > 0) {
-    const plural = row.fattureCount === 1 ? "" : "e";
-    return `Impossibile eliminare: ci sono ${row.fattureCount} fattura${plural} collegata${plural}. Le fatture non possono essere cancellate.`;
-  }
-  if (row.pazientiNonArchiviati > 0) {
-    const plural = row.pazientiNonArchiviati === 1 ? "" : "i";
-    return `Impossibile eliminare: ${row.pazientiNonArchiviati} paziente${plural} collegato${plural} non ${row.pazientiNonArchiviati === 1 ? "è" : "sono"} ancora archiviato${plural}. Archivialo prima di procedere.`;
-  }
-  return null;
+  const invoiceReason = getHardDeleteInvoiceBlockReason(row.fattureCount);
+  if (invoiceReason) return invoiceReason;
+  return getHardDeletePatientsBlockReason(row.pazientiNonArchiviati);
 }
 
 function restoreConflictLabel(row: ArchivedPayerRow): string | null {
@@ -77,55 +70,49 @@ function restoreConflictLabel(row: ArchivedPayerRow): string | null {
   return `Ripristino bloccato: esiste già un pagante attivo con lo stesso ${fieldLabel}.`;
 }
 
+
 export function PayersManager({
   payers,
   totalCount,
   page,
+  pageSize = PAYERS_PAGE_SIZE,
   archivedPayers,
   archivedTotalCount,
   archivedPage,
   search,
 }: PayersManagerProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-
   const [view, setView] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [editingPayer, setEditingPayer] = useState<ActivePayer | null>(null);
   const [viewingPayer, setViewingPayer] = useState<ActivePayer | null>(null);
 
-  // Stesso pattern di latestFiltersRef in InvoicesManager: tiene traccia
-  // dello stato più recente verso cui si è navigato, aggiornato
-  // sincronamente ad ogni chiamata a navigate() (non solo quando le prop
-  // cambiano), per evitare che due navigazioni ravvicinate (es. il flush del
-  // debounce di ricerca seguito a ruota da un click di paginazione)
-  // leggano entrambe closure stale e la seconda perda silenziosamente la
-  // patch della prima.
-  const latestListStateRef = useRef({ search, page, archivedPage });
-  useEffect(() => {
-    latestListStateRef.current = { search, page, archivedPage };
-  }, [search, page, archivedPage]);
+  const currentItems = view === "active" ? payers : archivedPayers;
+  const {
+    selectedIds,
+    selectAllRef,
+    toggleSelected,
+    toggleSelectAll,
+    clearSelection,
+  } = useTableSelection({ items: currentItems });
 
-  function navigate(next: { search: string; page: number; archivedPage: number }) {
-    latestListStateRef.current = next;
-    const params = new URLSearchParams();
-    if (next.search) params.set("q", next.search);
-    if (next.page > 1) params.set("page", String(next.page));
-    if (next.archivedPage > 1) params.set("archivedPage", String(next.archivedPage));
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  const [prevSearch, setPrevSearch] = useState(search);
+  if (search !== prevSearch) {
+    setPrevSearch(search);
+    clearSelection();
   }
 
-  const handleSearchChange = (nextSearch: string) => {
-    navigate({ search: nextSearch, page: 1, archivedPage: 1 });
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    navigate({ ...latestListStateRef.current, page: nextPage });
-  };
-
-  const handleArchivedPageChange = (nextArchivedPage: number) => {
-    navigate({ ...latestListStateRef.current, archivedPage: nextArchivedPage });
-  };
+  const {
+    handleSearchChange,
+    handlePageChange,
+    handleArchivedPageChange,
+    handlePageSizeChange,
+  } = useManagerPagination({
+    search,
+    page,
+    archivedPage,
+    pageSize,
+    defaultPageSize: PAYERS_PAGE_SIZE,
+  });
 
   const handleOpenNew = () => {
     setEditingPayer(null);
@@ -196,10 +183,24 @@ export function PayersManager({
           </p>
         ) : (
           <>
-            <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
+            <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                   <TableRow>
+                    <TableHead className="w-8">
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        ref={selectAllRef}
+                        className="h-4 w-4 rounded border-input"
+                        checked={
+                          payers.length > 0 &&
+                          payers.every((p) => selectedIds.has(p.id))
+                        }
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        aria-label="Seleziona tutti i paganti visibili"
+                      />
+                    </TableHead>
                     <TableHead>Cognome</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>Città</TableHead>
@@ -212,34 +213,46 @@ export function PayersManager({
                 <TableBody>
                   {payers.map((payer) => (
                     <TableRow key={payer.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          role="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={selectedIds.has(payer.id)}
+                          onChange={(e) =>
+                            toggleSelected(payer.id, e.target.checked)
+                          }
+                          aria-label={`Seleziona pagante ${payer.cognome} ${payer.nome}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{payer.cognome}</TableCell>
                       <TableCell>{payer.nome}</TableCell>
                       <TableCell>{payer.citta}</TableCell>
                       <TableCell>{payer.cap}</TableCell>
                       <TableCell>{payer.cf ?? "-"}</TableCell>
                       <TableCell>{payer.piva ?? "-"}</TableCell>
-                      <TableCell className="flex justify-end gap-1">
-                        <Tooltip content="Visualizza dettagli pagante">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenView(payer)}
+                            title="Visualizza dettagli pagante"
                             aria-label="Visualizza dettagli pagante"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                        </Tooltip>
-                        <Tooltip content="Modifica pagante">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleOpenEdit(payer)}
+                            title="Modifica pagante"
                             aria-label="Modifica pagante"
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                        </Tooltip>
-                        <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
+                          <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -249,40 +262,50 @@ export function PayersManager({
 
             <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
               {payers.map((payer) => (
-                <li key={payer.id} className="rounded-lg border p-4 space-y-3">
-                  <div>
-                    <p className="font-medium">
-                      {payer.cognome} {payer.nome}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {payer.citta} {payer.cap}
-                    </p>
+                <li key={payer.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      checked={selectedIds.has(payer.id)}
+                      onChange={(e) =>
+                        toggleSelected(payer.id, e.target.checked)
+                      }
+                      aria-label={`Seleziona pagante ${payer.cognome} ${payer.nome}`}
+                    />
+                    <div>
+                      <p className="font-medium">
+                        {payer.cognome} {payer.nome}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {payer.citta} {payer.cap}
+                      </p>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                     <p>CF: {payer.cf ?? "-"}</p>
                     <p>P.IVA: {payer.piva ?? "-"}</p>
                   </div>
                   <div className="flex items-center gap-1 border-t pt-3">
-                    <Tooltip content="Visualizza dettagli pagante">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenView(payer)}
-                        aria-label="Visualizza dettagli pagante"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Modifica pagante">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenEdit(payer)}
-                        aria-label="Modifica pagante"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenView(payer)}
+                      title="Visualizza dettagli pagante"
+                      aria-label="Visualizza dettagli pagante"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(payer)}
+                      title="Modifica pagante"
+                      aria-label="Modifica pagante"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <ArchivePayerButton id={payer.id} pazienti={payer.pazienti} />
                   </div>
                 </li>
@@ -293,11 +316,13 @@ export function PayersManager({
               <ListPagination
                 page={page}
                 totalCount={totalCount}
-                pageSize={PAYERS_PAGE_SIZE}
+                pageSize={pageSize}
                 itemLabel="paganti"
                 onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
               />
             </div>
+
           </>
         )
       ) : archivedTotalCount === 0 ? (
@@ -308,10 +333,24 @@ export function PayersManager({
         </p>
       ) : (
         <>
-          <div className="hidden flex-1 min-h-56 overflow-y-auto rounded-lg border lg:block">
+          <div className="hidden flex-1 min-h-56 overflow-auto rounded-lg border border-border bg-card lg:block">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                 <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      role="checkbox"
+                      ref={selectAllRef}
+                      className="h-4 w-4 rounded border-input"
+                      checked={
+                        archivedPayers.length > 0 &&
+                        archivedPayers.every((p) => selectedIds.has(p.id))
+                      }
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      aria-label="Seleziona tutti i paganti visibili"
+                    />
+                  </TableHead>
                   <TableHead>Cognome</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>CF</TableHead>
@@ -323,6 +362,18 @@ export function PayersManager({
               <TableBody>
                 {archivedPayers.map((payer) => (
                   <TableRow key={payer.id}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        role="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={selectedIds.has(payer.id)}
+                        onChange={(e) =>
+                          toggleSelected(payer.id, e.target.checked)
+                        }
+                        aria-label={`Seleziona pagante ${payer.cognome} ${payer.nome}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{payer.cognome}</TableCell>
                     <TableCell>{payer.nome}</TableCell>
                     <TableCell>{payer.cf ?? "-"}</TableCell>
@@ -336,15 +387,17 @@ export function PayersManager({
                         <p className="text-destructive">{hardDeleteBlockReason(payer)}</p>
                       )}
                     </TableCell>
-                    <TableCell className="flex justify-end gap-1">
-                      <RestorePayerButton
-                        id={payer.id}
-                        pazientiArchiviati={payer.pazientiArchiviati}
-                      />
-                      <HardDeletePayerButton
-                        id={payer.id}
-                        disabledReason={hardDeleteBlockReason(payer)}
-                      />
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <RestorePayerButton
+                          id={payer.id}
+                          pazientiArchiviati={payer.pazientiArchiviati}
+                        />
+                        <HardDeletePayerButton
+                          id={payer.id}
+                          disabledReason={hardDeleteBlockReason(payer)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -354,24 +407,36 @@ export function PayersManager({
 
           <ul className="flex-1 min-h-56 space-y-3 overflow-y-auto lg:hidden">
             {archivedPayers.map((payer) => (
-              <li key={payer.id} className="rounded-lg border p-4 space-y-3">
-                <div>
-                  <p className="font-medium">
-                    {payer.cognome} {payer.nome}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {invoiceImpactLabel(payer) ?? "Nessuna fattura collegata"}
-                  </p>
-                  {restoreConflictLabel(payer) && (
-                    <p className="text-sm text-destructive">
-                      {restoreConflictLabel(payer)}
+              <li key={payer.id} className="rounded-lg border border-border bg-card p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    role="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-input"
+                    checked={selectedIds.has(payer.id)}
+                    onChange={(e) =>
+                      toggleSelected(payer.id, e.target.checked)
+                    }
+                    aria-label={`Seleziona pagante ${payer.cognome} ${payer.nome}`}
+                  />
+                  <div>
+                    <p className="font-medium">
+                      {payer.cognome} {payer.nome}
                     </p>
-                  )}
-                  {hardDeleteBlockReason(payer) && (
-                    <p className="text-sm text-destructive">
-                      {hardDeleteBlockReason(payer)}
+                    <p className="text-sm text-muted-foreground">
+                      {invoiceImpactLabel(payer) ?? "Nessuna fattura collegata"}
                     </p>
-                  )}
+                    {restoreConflictLabel(payer) && (
+                      <p className="text-sm text-destructive">
+                        {restoreConflictLabel(payer)}
+                      </p>
+                    )}
+                    {hardDeleteBlockReason(payer) && (
+                      <p className="text-sm text-destructive">
+                        {hardDeleteBlockReason(payer)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <p>CF: {payer.cf ?? "-"}</p>
@@ -395,13 +460,20 @@ export function PayersManager({
             <ListPagination
               page={archivedPage}
               totalCount={archivedTotalCount}
-              pageSize={PAYERS_PAGE_SIZE}
-              itemLabel="paganti"
+              pageSize={pageSize}
+              itemLabel="paganti archiviati"
               onPageChange={handleArchivedPageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
+
         </>
       )}
+      <SelectionFloatingBar
+        count={selectedIds.size}
+        totalLabel={`${selectedIds.size} ${selectedIds.size === 1 ? "elemento selezionato in totale" : "elementi selezionati in totale"}`}
+        onClear={clearSelection}
+      />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -455,7 +527,7 @@ export function PayersManager({
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Pazienti associati</p>
                 {viewingPayer.pazienti.length > 0 ? (
                   <ul className="divide-y">

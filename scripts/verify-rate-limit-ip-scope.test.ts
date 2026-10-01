@@ -89,10 +89,12 @@ describe("resolveClientIp", () => {
 });
 
 describe("parseClientIpFromHeaders", () => {
-  it("usa il primo IP della catena X-Forwarded-For", () => {
+  it("usa l'ultimo IP della catena X-Forwarded-For per prevenire IP spoofing (SEC-03)", () => {
+    // Se un client inietta un IP fasullo, il reverse proxy accoda l'IP reale in fondo:
+    // l'applicazione deve leggere l'ultimo elemento della catena.
     const headersWithForwardedChain = {
       get: (name: string) =>
-        name === "x-forwarded-for" ? "198.51.100.5, 10.0.0.1" : null,
+        name === "x-forwarded-for" ? "1.2.3.4, 198.51.100.5" : null,
     };
     expect(parseClientIpFromHeaders(headersWithForwardedChain)).toBe("198.51.100.5");
   });

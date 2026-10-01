@@ -1,3 +1,4 @@
+import "server-only";
 import type { Prisma } from "@prisma/client";
 
 // Whitelist esplicita, stesso pattern di lib/data/user-select.ts. A

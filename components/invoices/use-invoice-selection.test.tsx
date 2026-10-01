@@ -59,7 +59,7 @@ describe("useInvoiceSelection", () => {
     expect(result.current.selectedIds.size).toBe(0);
   });
 
-  it("azzera la selezione quando `page` cambia (reset durante il render)", () => {
+  it("NON azzera la selezione quando `page` cambia (persistenza tra pagine)", () => {
     const invoices = makeInvoices([1, 2, 3]);
     const { result, rerender } = renderHook(
       ({ filters, page }: { filters: InvoiceFilters; page: number }) =>
@@ -71,8 +71,23 @@ describe("useInvoiceSelection", () => {
     expect(result.current.selectedIds.has(2)).toBe(true);
 
     rerender({ filters: EMPTY_INVOICE_FILTERS, page: 2 });
+    expect(result.current.selectedIds.has(2)).toBe(true);
+    expect(result.current.selectedIds.size).toBe(1);
+  });
+
+  it("clearSelection svuota la selezione", () => {
+    const invoices = makeInvoices([1, 2, 3]);
+    const { result } = renderHook(() =>
+      useInvoiceSelection({ invoices, filters: EMPTY_INVOICE_FILTERS, page: 1 })
+    );
+
+    act(() => result.current.toggleSelected(2, true));
+    expect(result.current.selectedIds.size).toBe(1);
+
+    act(() => result.current.clearSelection());
     expect(result.current.selectedIds.size).toBe(0);
   });
+
 
   it("non azzera la selezione se `filters`/`page` restano gli stessi riferimenti", () => {
     const invoices = makeInvoices([1, 2, 3]);

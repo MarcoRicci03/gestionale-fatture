@@ -11,6 +11,7 @@ export type RateLimitResult = {
 
 export type RateLimiter = {
   consume(key: string): RateLimitResult;
+  reset(key?: string): void;
 };
 
 type WindowRecord = {
@@ -22,8 +23,14 @@ export function createRateLimiter(options: {
   maxRequests: number;
   windowMs: number;
   sweepProbability?: number;
+  maxEntries?: number;
 }): RateLimiter {
-  const { maxRequests, windowMs, sweepProbability = 0.01 } = options;
+  const {
+    maxRequests,
+    windowMs,
+    sweepProbability = 0.01,
+    maxEntries = 5000,
+  } = options;
   const records = new Map<string, WindowRecord>();
 
   function isExpired(record: WindowRecord, now: number): boolean {
@@ -45,24 +52,60 @@ export function createRateLimiter(options: {
         sweepExpired(now);
       }
 
-      const record = records.get(key);
-      if (!record || isExpired(record, now)) {
-        records.set(key, { count: 1, windowStart: now });
+      const existingRecord = records.get(key);
+      if (existingRecord && !isExpired(existingRecord, now)) {
+        if (existingRecord.count >= maxRequests) {
+          return {
+            allowed: false,
+            retryAfterSeconds: Math.max(
+              0,
+              Math.ceil((existingRecord.windowStart + windowMs - now) / 1000)
+            ),
+          };
+        }
+
+        existingRecord.count += 1;
         return { allowed: true };
       }
 
-      if (record.count >= maxRequests) {
-        return {
-          allowed: false,
-          retryAfterSeconds: Math.max(
-            0,
-            Math.ceil((record.windowStart + windowMs - now) / 1000)
-          ),
-        };
+      // Tetto di memoria (SEC-04). CR-06: a mappa piena si espelle la voce più
+      // vecchia NON bloccata. Espellere una chiave bloccata ne azzererebbe il
+      // limite, e chi controlla molte chiavi potrebbe farlo di proposito;
+      // perdere una voce sotto soglia regala al più maxRequests - 1 richieste.
+      // Se sono tutte bloccate, la chiave nuova viene rifiutata finché la
+      // prima finestra non scade.
+      if (!existingRecord && records.size >= maxEntries) {
+        sweepExpired(now);
+        if (records.size >= maxEntries) {
+          let evictable: string | undefined;
+          let earliestWindowEnd = Infinity;
+          for (const [candidateKey, record] of records) {
+            if (record.count < maxRequests) {
+              evictable = candidateKey;
+              break;
+            }
+            earliestWindowEnd = Math.min(earliestWindowEnd, record.windowStart + windowMs);
+          }
+          if (evictable === undefined) {
+            return {
+              allowed: false,
+              retryAfterSeconds: Math.max(1, Math.ceil((earliestWindowEnd - now) / 1000)),
+            };
+          }
+          records.delete(evictable);
+        }
       }
 
-      record.count += 1;
+      records.set(key, { count: 1, windowStart: now });
       return { allowed: true };
+    },
+
+    reset(key?: string): void {
+      if (key !== undefined) {
+        records.delete(key);
+      } else {
+        records.clear();
+      }
     },
   };
 }

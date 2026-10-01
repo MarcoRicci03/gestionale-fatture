@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 // SEC-08: proxy.ts genera un nonce per-richiesta e lo usa nella CSP su
 // script-src (con 'strict-dynamic', senza 'unsafe-inline'), solo in
-// produzione — vedi PIANO_FIX_CSP_NONCE.md. Stesso pattern di
+// produzione. Stesso pattern di
 // verify-proxy-head-method.test.ts: si costruisce una NextRequest reale e si
 // chiama proxy() direttamente, senza un server Next.js in esecuzione.
 //

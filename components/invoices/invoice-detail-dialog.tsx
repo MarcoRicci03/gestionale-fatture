@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getTotaleConBollo } from "@/lib/fiscal/bollo";
 import type { Pagante, Paziente } from "@prisma/client";
 import type { InvoiceListItem } from "./types";
 
@@ -58,10 +58,15 @@ export function InvoiceDetailDialog({
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Data</p>
+                <p className="text-sm text-muted-foreground">Data emissione</p>
                 <p className="font-medium">
                   {formatDateDisplay(invoice.data)}
                 </p>
+                {invoice.data_pagamento && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pagamento: {formatDateDisplay(invoice.data_pagamento)}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Mesi</p>
@@ -99,7 +104,7 @@ export function InvoiceDetailDialog({
             </div>
 
             {invoice.pagante && resolvedAnagrafica && (
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Pagante</p>
                 <p>
                   {resolvedAnagrafica.pagante.cognome} {resolvedAnagrafica.pagante.nome}
@@ -123,7 +128,7 @@ export function InvoiceDetailDialog({
             )}
 
             {invoice.paziente && resolvedAnagrafica && (
-              <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
                 <p className="font-medium">Paziente</p>
                 <p>
                   {resolvedAnagrafica.paziente.cognome} {resolvedAnagrafica.paziente.nome}

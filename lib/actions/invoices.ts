@@ -8,7 +8,7 @@ import { requireUserId } from "@/lib/auth/session";
 import { getClientIp } from "@/lib/auth/client-ip";
 import { getPdfSettingsForUser } from "@/lib/data/settings";
 import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice";
-import { isUniqueViolationOnField } from "@/lib/prisma-errors";
+import { isUniqueViolationOnField, isRecordNotFoundError } from "@/lib/prisma-errors";
 import {
   getNextInvoiceNumberForUserYear,
   getChronologyNeighbors,
@@ -19,21 +19,31 @@ import {
 } from "@/lib/invoices/chronology";
 import { buildSnapshotAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
 import { buildInvoiceChangeDiff } from "@/lib/invoices/change-diff";
-import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
-import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import {
+  FATTURA_GIA_INVIATA_TS_ERROR,
+  ANAGRAFICA_FATTURA_TS_ERROR,
+  FATTURA_ANNULLATA_TS_DELETE_ERROR,
+  FATTURA_ANNULLATA_TS_EDIT_ERROR,
+} from "@/lib/invoices/errors";
 
 const BOLLO_CODICE_DUPLICATO_ERROR =
   "Il codice della marca da bollo è già stato utilizzato su un'altra fattura";
-
-function isBolloCodiceUniqueViolation(error: unknown): boolean {
-  return isUniqueViolationOnField(error, "bolloCodice");
-}
+import { logAudit, logAuditOrThrow } from "@/lib/audit/log";
+import { AUDIT_ACTIONS } from "@/lib/audit/actions";
+import { calcolaTotaliFattura } from "@/lib/fiscal/bollo";
+import { annullaFatturaTs } from "./sistema-ts";
+import type { ActionResult } from "@/lib/types/actions";
+import { isValidId } from "@/lib/validations/id";
 
 function isInvoiceNumberUniqueViolation(error: unknown): boolean {
   return isUniqueViolationOnField(error, "n_fattura");
 }
 
-export type InvoiceActionState = { success: true } | { error: string };
+function isBolloCodiceUniqueViolation(error: unknown): boolean {
+  return isUniqueViolationOnField(error, "bolloCodice");
+}
+
+export type InvoiceActionState = ActionResult;
 
 async function isInvoiceNumberTaken(
   userId: number,
@@ -118,6 +128,11 @@ export async function getNextInvoiceNumberForYear(
   excludeId?: number
 ): Promise<number> {
   const userId = await requireUserId();
+  // P016: restituisce un numero, non un ActionResult: parametri non validi
+  // diventano un errore, gestito dal .catch del form fattura.
+  if (!Number.isInteger(year) || (excludeId !== undefined && !isValidId(excludeId))) {
+    throw new Error("Parametri non validi");
+  }
   return getNextInvoiceNumberForUserYear(userId, year, excludeId);
 }
 
@@ -128,13 +143,14 @@ export async function createInvoice(
 
   const parsed = invoiceSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   const {
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
+    data_pagamento,
     mod_pag,
     sedute,
     commento,
@@ -143,6 +159,9 @@ export async function createInvoice(
     citta,
     cap,
     bolloCodice,
+    natura_iva,
+    pagamento_tracciato,
+    flag_opposizione,
   } = parsed.data;
 
   const relationResult = await validateInvoiceRelations(
@@ -151,13 +170,14 @@ export async function createInvoice(
     id_Paziente
   );
   if ("error" in relationResult) {
-    return { error: relationResult.error };
+    return { success: false, error: relationResult.error };
   }
   const { payer, patient } = relationResult;
 
   const year = invoiceDate.getFullYear();
   if (await isInvoiceNumberTaken(userId, n_fattura, year)) {
     return {
+      success: false,
       error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
     };
   }
@@ -165,16 +185,20 @@ export async function createInvoice(
   const { previous, next } = await getChronologyNeighbors(userId, year, n_fattura);
   const chronologyConflict = findChronologyConflict(invoiceDate, previous, next);
   if (chronologyConflict) {
-    return { error: formatChronologyConflictMessage(chronologyConflict) };
+    return { success: false, error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
   if (bolloCodice && (await isBolloCodiceTaken(userId, bolloCodice))) {
-    return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 
   const prezzo_totale = mesi.reduce(
     (somma, m) => somma.add(new Prisma.Decimal(m.prezzo)),
     new Prisma.Decimal(0)
+  );
+
+  const bollo = new Prisma.Decimal(
+    calcolaTotaliFattura(prezzo_totale.toNumber(), bolloCodice).bolloImporto
   );
 
   let createdInvoiceId: number;
@@ -191,6 +215,7 @@ export async function createInvoice(
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        data_pagamento: data_pagamento ?? null,
         anno: year,
         prezzo_totale,
         mod_pag,
@@ -200,6 +225,11 @@ export async function createInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        natura_iva: natura_iva || "N2.2",
+        pagamento_tracciato: pagamento_tracciato ?? (mod_pag !== "CONTANTI"),
+        flag_opposizione: flag_opposizione ?? false,
+        bollo,
+        stato_ts: "DA_INVIARE",
         snapshotAnagrafica: buildSnapshotAnagrafica(
           payer,
           patient
@@ -213,14 +243,16 @@ export async function createInvoice(
     createdInvoiceId = created.id;
   } catch (error) {
     if (isBolloCodiceUniqueViolation(error)) {
-      return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+      return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
     }
     if (isInvoiceNumberUniqueViolation(error)) {
       return {
+        success: false,
         error: `Il numero fattura ${n_fattura} è già stato utilizzato nell'anno ${year}`,
       };
     }
-    return { error: "Errore durante la creazione della fattura" };
+    console.error("createInvoice error", error);
+    return { success: false, error: "Errore durante la creazione della fattura" };
   }
 
   await logAudit({
@@ -242,9 +274,13 @@ export async function updateInvoice(
 ): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const parsed = invoiceSchema.safeParse(data);
   if (!parsed.success) {
-    return { error: "Dati non validi" };
+    return { success: false, error: "Dati non validi" };
   }
 
   // n_fattura/anno non sono più modificabili dopo la creazione. Servono i
@@ -255,6 +291,7 @@ export async function updateInvoice(
     select: {
       n_fattura: true,
       anno: true,
+      stato_ts: true,
       id_Pagante: true,
       id_Paziente: true,
       data: true,
@@ -268,13 +305,26 @@ export async function updateInvoice(
     },
   });
   if (!existing) {
-    return { error: "Fattura non trovata" };
+    return { success: false, error: "Fattura non trovata" };
+  }
+
+  if (existing.stato_ts === "ANNULLATA_TS") {
+    return { success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR };
+  }
+
+  if (
+    existing.stato_ts === "INVIATA" ||
+    existing.stato_ts === "DA_CANCELLARE_SU_TS" ||
+    existing.stato_ts === "IN_TRASMISSIONE"
+  ) {
+    return { success: false, error: FATTURA_GIA_INVIATA_TS_ERROR };
   }
 
   const {
     id_Pagante,
     id_Paziente,
     data: invoiceDate,
+    data_pagamento,
     mod_pag,
     sedute,
     commento,
@@ -283,17 +333,22 @@ export async function updateInvoice(
     citta,
     cap,
     bolloCodice,
+    natura_iva,
+    pagamento_tracciato,
+    flag_opposizione,
   } = parsed.data;
 
   const year = invoiceDate.getFullYear();
 
   if (n_fattura !== existing.n_fattura) {
     return {
+      success: false,
       error: "Non è possibile modificare il numero di una fattura già emessa",
     };
   }
   if (year !== existing.anno) {
     return {
+      success: false,
       error: "Non è possibile modificare l'anno di una fattura già emessa",
     };
   }
@@ -305,7 +360,7 @@ export async function updateInvoice(
     { id_Pagante: existing.id_Pagante, id_Paziente: existing.id_Paziente }
   );
   if ("error" in relationResult) {
-    return { error: relationResult.error };
+    return { success: false, error: relationResult.error };
   }
   const { payer, patient } = relationResult;
 
@@ -328,11 +383,11 @@ export async function updateInvoice(
   );
   const chronologyConflict = findChronologyConflict(invoiceDate, previous, next);
   if (chronologyConflict) {
-    return { error: formatChronologyConflictMessage(chronologyConflict) };
+    return { success: false, error: formatChronologyConflictMessage(chronologyConflict) };
   }
 
   if (bolloCodice && (await isBolloCodiceTaken(userId, bolloCodice, id))) {
-    return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
   }
 
   const prezzo_totale = mesi.reduce(
@@ -340,13 +395,20 @@ export async function updateInvoice(
     new Prisma.Decimal(0)
   );
 
+  const bollo = new Prisma.Decimal(
+    calcolaTotaliFattura(prezzo_totale.toNumber(), bolloCodice).bolloImporto
+  );
+
   try {
     await prisma.pagamento.update({
-      where: { id, id_Utente: userId },
+      // CR-04: ricontrolla lo stato nella scrittura (stesso schema di ERR-04 in
+      // deleteInvoice): se nel frattempo un invio l'ha bloccata/trasmessa, P2025.
+      where: { id, id_Utente: userId, stato_ts: "DA_INVIARE" },
       data: {
         id_Pagante,
         id_Paziente,
         data: invoiceDate,
+        data_pagamento: data_pagamento ?? null,
         anno: year,
         prezzo_totale,
         mod_pag,
@@ -356,6 +418,10 @@ export async function updateInvoice(
         citta,
         cap,
         bolloCodice: bolloCodice ?? null,
+        natura_iva: natura_iva || "N2.2",
+        pagamento_tracciato: pagamento_tracciato ?? (mod_pag !== "CONTANTI"),
+        flag_opposizione: flag_opposizione ?? false,
+        bollo,
         ...(anagraficaCambiata
           ? {
               snapshotAnagrafica: buildSnapshotAnagrafica(
@@ -371,10 +437,14 @@ export async function updateInvoice(
       },
     });
   } catch (error) {
-    if (isBolloCodiceUniqueViolation(error)) {
-      return { error: BOLLO_CODICE_DUPLICATO_ERROR };
+    if (isRecordNotFoundError(error)) {
+      return { success: false, error: FATTURA_GIA_INVIATA_TS_ERROR };
     }
-    return { error: "Errore durante l'aggiornamento della fattura" };
+    if (isBolloCodiceUniqueViolation(error)) {
+      return { success: false, error: BOLLO_CODICE_DUPLICATO_ERROR };
+    }
+    console.error("updateInvoice error", error);
+    return { success: false, error: "Errore durante l'aggiornamento della fattura" };
   }
 
   const modifiche = buildInvoiceChangeDiff(
@@ -421,6 +491,10 @@ export async function updateInvoice(
 export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   // La riga sparisce fisicamente: i dati della fattura vengono conservati nel
   // meta dell'evento di audit, unica traccia superstite. Niente anagrafica di
   // pagante/paziente (SEC-04): un admin multi-studio non è titolare del
@@ -429,7 +503,33 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
   const invoice = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
   });
-  if (!invoice) return { error: "Fattura non trovata" };
+  if (!invoice) return { success: false, error: "Fattura non trovata" };
+
+  if (invoice.stato_ts === "IN_TRASMISSIONE") {
+    return {
+      success: false,
+      error:
+        "La fattura è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
+    };
+  }
+
+  if (invoice.stato_ts === "ANNULLATA_TS") {
+    return {
+      success: false,
+      error: FATTURA_ANNULLATA_TS_DELETE_ERROR,
+    };
+  }
+
+  if (invoice.stato_ts === "INVIATA" || invoice.stato_ts === "DA_CANCELLARE_SU_TS") {
+    const cancelResult = await annullaFatturaTs(id);
+    if (!cancelResult.success) {
+      return { success: false, error: cancelResult.error };
+    }
+    revalidatePath("/invoices");
+    revalidatePath("/dashboard");
+    revalidatePath("/sistema-ts");
+    return { success: true };
+  }
 
   const ip = await getClientIp();
 
@@ -441,7 +541,15 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
     // fattura che l'unica copia dei suoi dati. logAuditOrThrow (a differenza
     // di logAudit) propaga l'errore invece di inghiottirlo.
     await prisma.$transaction(async (tx) => {
-      await tx.pagamento.delete({ where: { id, id_Utente: userId } });
+      // ERR-04: vincola atomicamente stato_ts: "DA_INVIARE" nella delete per prevenire race condition (TOCTOU)
+      // nel caso in cui un invio batch concorrente porti la fattura in IN_TRASMISSIONE dopo il controllo iniziale.
+      await tx.pagamento.delete({
+        where: {
+          id,
+          id_Utente: userId,
+          stato_ts: "DA_INVIARE",
+        },
+      });
       await logAuditOrThrow(
         {
           azione: AUDIT_ACTIONS.INVOICE_DELETE,
@@ -462,8 +570,15 @@ export async function deleteInvoice(id: number): Promise<InvoiceActionState> {
       );
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return {
+        success: false,
+        error:
+          "La fattura è stata modificata o è attualmente in fase di trasmissione al Sistema TS e non può essere eliminata.",
+      };
+    }
     console.error("deleteInvoice error", error);
-    return { error: "Errore durante l'eliminazione della fattura" };
+    return { success: false, error: "Errore durante l'eliminazione della fattura" };
   }
 
   revalidatePath("/invoices");
@@ -476,12 +591,28 @@ export async function refreshInvoiceAnagrafica(
 ): Promise<InvoiceActionState> {
   const userId = await requireUserId();
 
+  if (!isValidId(id)) {
+    return { success: false, error: "Richiesta non valida" };
+  }
+
   const invoice = await prisma.pagamento.findFirst({
     where: { id, id_Utente: userId },
     include: { pagante: true, paziente: true },
   });
   if (!invoice) {
-    return { error: "Fattura non trovata" };
+    return { success: false, error: "Fattura non trovata" };
+  }
+
+  if (invoice.stato_ts === "ANNULLATA_TS") {
+    return { success: false, error: FATTURA_ANNULLATA_TS_EDIT_ERROR };
+  }
+
+  if (
+    invoice.stato_ts === "INVIATA" ||
+    invoice.stato_ts === "DA_CANCELLARE_SU_TS" ||
+    invoice.stato_ts === "IN_TRASMISSIONE"
+  ) {
+    return { success: false, error: ANAGRAFICA_FATTURA_TS_ERROR };
   }
 
   try {
@@ -489,7 +620,8 @@ export async function refreshInvoiceAnagrafica(
     // questa azione esiste apposta per sostituire lo snapshot congelato
     // con lo stato attuale, su scelta esplicita dell'utente.
     await prisma.pagamento.update({
-      where: { id, id_Utente: userId },
+      // CR-04: la fattura potrebbe essere partita per il Sistema TS dopo il controllo.
+      where: { id, id_Utente: userId, stato_ts: "DA_INVIARE" },
       data: {
         snapshotAnagrafica: buildSnapshotAnagrafica(
           invoice.pagante,
@@ -498,8 +630,11 @@ export async function refreshInvoiceAnagrafica(
       },
     });
   } catch (error) {
+    if (isRecordNotFoundError(error)) {
+      return { success: false, error: ANAGRAFICA_FATTURA_TS_ERROR };
+    }
     console.error("refreshInvoiceAnagrafica error", error);
-    return { error: "Errore durante l'aggiornamento dell'anagrafica" };
+    return { success: false, error: "Errore durante l'aggiornamento dell'anagrafica" };
   }
 
   await logAudit({

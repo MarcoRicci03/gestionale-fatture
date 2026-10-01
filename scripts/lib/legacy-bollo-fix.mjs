@@ -9,7 +9,7 @@
 // seriale del bollo sia mai stato tracciato (bolloCodice sempre NULL). Nel
 // gestionale attuale prezzo_totale è invece sempre l'importo puro, e i 2€
 // vengono sommati solo in visualizzazione quando bolloCodice è valorizzato
-// (lib/invoices/bollo-total.ts). Questo modulo isola la logica pura,
+// (lib/fiscal/bollo.ts). Questo modulo isola la logica pura,
 // testabile senza un database, usata dallo script di correzione una tantum.
 
 const SOGLIA_BOLLO = 77.47;

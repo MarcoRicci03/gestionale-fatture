@@ -12,12 +12,18 @@ const userCommonSchema = {
   abilitato: z.boolean(),
 } as const;
 
+export const MAX_PASSWORD_BYTES = 72;
+
 // Condiviso da userCreateSchema, resetPasswordSchema e changePasswordSchema:
-// 12 caratteri minimi (non 8) e rifiuto di una deny-list di password comuni
-// note (vedi lib/auth/common-passwords.ts).
+// 12 caratteri minimi (non 8), massimo 72 caratteri e 72 byte (limite standard bcrypt),
+// e rifiuto di una deny-list di password comuni note (vedi lib/auth/common-passwords.ts).
 export const passwordSchema = z
   .string()
   .min(12, "La password deve avere almeno 12 caratteri")
+  .max(72, "La password non può superare 72 caratteri")
+  .refine((val) => Buffer.byteLength(val, "utf8") <= MAX_PASSWORD_BYTES, {
+    message: "La password non può superare 72 byte",
+  })
   .refine((value) => !isCommonWeakPassword(value), {
     message: "Questa password è troppo comune, scegline una più sicura",
   });
@@ -37,7 +43,10 @@ export const resetPasswordSchema = z.object({
 
 export const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, "Inserisci la password attuale"),
+    currentPassword: z
+      .string()
+      .min(1, "Inserisci la password attuale")
+      .max(100, "La password attuale non può superare 100 caratteri"),
     newPassword: passwordSchema,
     confirmPassword: z.string().min(1, "Conferma la nuova password"),
   })

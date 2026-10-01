@@ -1,8 +1,9 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { AUDIT_LOG_SELECT, type AuditLogEntry } from "./audit-log-select";
 import { buildAuditLogWhere, type AuditLogFilters } from "@/lib/audit/list-query";
-import { lastValidPage } from "@/lib/utils/pagination";
+import { calculatePagination, clampPage } from "@/lib/utils/pagination";
 import { AUDIT_LOG_PAGE_SIZE } from "@/lib/constants/audit-log";
 import type { Prisma } from "@prisma/client";
 
@@ -14,14 +15,15 @@ function findAuditLogPage(
   where: Prisma.AuditLogWhereInput,
   page: number
 ): Promise<AuditLogEntry[]> {
+  const { skip, take } = calculatePagination(page, AUDIT_LOG_PAGE_SIZE);
   return prisma.auditLog.findMany({
     where,
     select: AUDIT_LOG_SELECT,
     // `id` come tiebreaker: createdAt non è univoco (più eventi nello stesso
     // istante), stesso motivo di `id` in findInvoicesPage.
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    skip: (page - 1) * AUDIT_LOG_PAGE_SIZE,
-    take: AUDIT_LOG_PAGE_SIZE,
+    skip,
+    take,
   });
 }
 
@@ -41,7 +43,7 @@ export async function getAuditLog(
   // retention nel frattempo, o URL manomesso) rifà la query una sola volta
   // sulla pagina valida più vicina, invece di mostrare "nessun evento" pur
   // essendocene.
-  const clampedPage = Math.min(page, lastValidPage(totalCount, AUDIT_LOG_PAGE_SIZE));
+  const clampedPage = clampPage(page, totalCount, AUDIT_LOG_PAGE_SIZE);
   const effectiveEntries =
     clampedPage === page ? entries : await findAuditLogPage(where, clampedPage);
 

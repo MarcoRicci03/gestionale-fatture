@@ -25,6 +25,7 @@ import type { InvoiceFilters } from "./invoice-filters";
 import { useInvoiceFilters } from "./use-invoice-filters";
 import { useInvoiceSelection } from "./use-invoice-selection";
 import { ExportInvoicesDialog } from "./export-invoices-dialog";
+import { SelectionFloatingBar } from "@/components/ui/selection-floating-bar";
 import type { Pagante, Paziente } from "@prisma/client";
 import type {
   PayerOption,
@@ -36,6 +37,7 @@ type InvoicesManagerProps = {
   invoices: InvoiceListItem[];
   totalCount: number;
   page: number;
+  pageSize?: number;
   years: number[];
   filters: InvoiceFilters;
   payers: PayerOption[];
@@ -47,14 +49,16 @@ export function InvoicesManager({
   invoices,
   totalCount,
   page,
+  pageSize = INVOICES_PAGE_SIZE,
   years,
   filters,
   payers,
   patients,
   nextInvoiceNumber,
 }: InvoicesManagerProps) {
-  const { handleFiltersChange, handleReset, handlePageChange } =
-    useInvoiceFilters({ filters });
+  const { handleFiltersChange, handleReset, handlePageChange, handlePageSizeChange } =
+    useInvoiceFilters({ filters, pageSize });
+
 
   const [open, setOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceListItem | null>(null);
@@ -70,7 +74,7 @@ export function InvoicesManager({
   const [isPending, startTransition] = useTransition();
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const { selectedIds, selectAllRef, toggleSelected, toggleSelectAll } =
+  const { selectedIds, selectAllRef, toggleSelected, toggleSelectAll, clearSelection } =
     useInvoiceSelection({ invoices, filters, page });
 
   const handleOpenNew = () => {
@@ -172,11 +176,19 @@ export function InvoicesManager({
             <ListPagination
               page={page}
               totalCount={totalCount}
-              pageSize={INVOICES_PAGE_SIZE}
+              pageSize={pageSize}
               itemLabel="fatture"
               onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
+
+          <SelectionFloatingBar
+            count={selectedIds.size}
+            totalLabel={`${selectedIds.size} ${selectedIds.size === 1 ? "elemento selezionato in totale" : "elementi selezionati in totale"}`}
+            onClear={clearSelection}
+          />
+
           </div>
           )}
         </div>

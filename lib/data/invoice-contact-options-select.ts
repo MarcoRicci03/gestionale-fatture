@@ -1,3 +1,4 @@
+import "server-only";
 import type { Prisma } from "@prisma/client";
 
 // Whitelist esplicita per le tendine pagante/paziente del form fattura

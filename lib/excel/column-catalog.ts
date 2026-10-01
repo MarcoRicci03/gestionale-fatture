@@ -1,16 +1,31 @@
-import type { FatturaMese, Pagamento, Pagante, Paziente } from "@prisma/client";
+import type {
+  FatturaMese,
+  Pagamento,
+  Pagante,
+  Paziente,
+  StatoTs,
+} from "@prisma/client";
 import { formatDateDisplay } from "@/lib/utils/date";
 import { SOGLIA_BOLLO } from "@/lib/constants/bollo";
 import { resolveAnagrafica } from "@/lib/invoices/anagrafica-snapshot";
-import { getBolloImporto, getTotaleConBollo } from "@/lib/invoices/bollo-total";
+import { getBolloImporto, getTotaleConBollo } from "@/lib/fiscal/bollo";
+
+export const STATO_TS_LABELS: Record<StatoTs, string> = {
+  DA_INVIARE: "Da inviare",
+  IN_TRASMISSIONE: "In trasmissione",
+  INVIATA: "Inviata",
+  DA_CANCELLARE_SU_TS: "Da cancellare",
+  ANNULLATA_TS: "Annullata",
+};
 
 // Stessa forma prodotta da getInvoices()/getInvoiceById() (lib/data/invoices.ts):
 // Decimal già convertiti a number, relazioni incluse. pagante/paziente non
 // null: id_Pagante/id_Paziente su Pagamento sono FK obbligatorie (non
 // opzionali), quindi con `include` sono sempre risolte — stessa forma di
 // InvoiceWithRelations in lib/pdf/types.ts.
-export type ExportableInvoice = Omit<Pagamento, "prezzo_totale"> & {
+export type ExportableInvoice = Omit<Pagamento, "prezzo_totale" | "bollo"> & {
   prezzo_totale: number;
+  bollo?: number | null;
   mesi: (Omit<FatturaMese, "prezzo"> & { prezzo: number })[];
   pagante: Pagante;
   paziente: Paziente;
@@ -58,13 +73,19 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     key: "prezzo_totale",
     label: "Importo totale",
     category: "fattura",
-    getValue: (i) => i.prezzo_totale,
+    getValue: (i) => (i.stato_ts === "ANNULLATA_TS" ? 0 : i.prezzo_totale),
   },
   {
     key: "mod_pag",
     label: "Modalità pagamento",
     category: "fattura",
     getValue: (i) => i.mod_pag,
+  },
+  {
+    key: "stato_ts",
+    label: "Stato TS",
+    category: "fattura",
+    getValue: (i) => STATO_TS_LABELS[i.stato_ts] ?? i.stato_ts,
   },
   { key: "citta", label: "Città", category: "fattura", getValue: (i) => i.citta },
   { key: "cap", label: "CAP", category: "fattura", getValue: (i) => i.cap },
@@ -156,19 +177,28 @@ export const EXPORT_COLUMNS: ExportColumn[] = [
     key: "bollo_dovuto",
     label: "Bollo dovuto",
     category: "dettaglio",
-    getValue: (i) => (i.prezzo_totale > SOGLIA_BOLLO ? "Sì" : "No"),
+    getValue: (i) =>
+      i.stato_ts === "ANNULLATA_TS"
+        ? "No (annullata)"
+        : i.prezzo_totale > SOGLIA_BOLLO
+          ? "Sì"
+          : "No",
   },
   {
     key: "bollo_importo",
     label: "Importo marca da bollo",
     category: "dettaglio",
-    getValue: (i) => getBolloImporto(i.bolloCodice),
+    getValue: (i) =>
+      i.stato_ts === "ANNULLATA_TS" ? 0 : getBolloImporto(i.bolloCodice),
   },
   {
     key: "prezzo_totale_con_bollo",
     label: "Totale con bollo",
     category: "dettaglio",
-    getValue: (i) => getTotaleConBollo(i.prezzo_totale, i.bolloCodice),
+    getValue: (i) =>
+      i.stato_ts === "ANNULLATA_TS"
+        ? 0
+        : getTotaleConBollo(i.prezzo_totale, i.bolloCodice),
   },
 ];
 

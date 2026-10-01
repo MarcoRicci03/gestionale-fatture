@@ -16,13 +16,17 @@ export default async function globalSetup() {
 
   const { prisma } = await import("@/lib/prisma");
   const { hashPassword } = await import("@/lib/auth/password");
-  const { TEST_USER } = await import("./fixtures/test-user");
+  const { E2E_USERS } = await import("./fixtures/test-user");
 
-  const passwordHash = await hashPassword(TEST_USER.password);
-  await prisma.utente.upsert({
-    where: { username: TEST_USER.username },
-    update: { passwordHash, abilitato: true },
-    create: { username: TEST_USER.username, passwordHash },
-  });
+  // Gli utenti e2e vengono riportati a uno stato noto a ogni esecuzione:
+  // abilitati, password di test, nessun cambio password richiesto.
+  for (const user of E2E_USERS) {
+    const passwordHash = await hashPassword(user.password);
+    await prisma.utente.upsert({
+      where: { username: user.username },
+      update: { passwordHash, abilitato: true, isAdmin: user.isAdmin, mustChangePassword: false },
+      create: { username: user.username, passwordHash, isAdmin: user.isAdmin },
+    });
+  }
   await prisma.$disconnect();
 }

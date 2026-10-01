@@ -26,6 +26,7 @@
 # misc
 .DS_Store
 *.pem
+*.key
 
 # debug
 npm-debug.log*
@@ -43,6 +44,12 @@ yarn-error.log*
 rclone.conf
 !rclone.conf.example
 
+# certificati e chiavi crittografiche Sistema TS: non tracciare su git
+certs/*
+certs/*.key
+!certs/.gitkeep
+!certs/SanitelCF.cer
+
 # vercel
 .vercel
 
@@ -57,7 +64,9 @@ next-env.d.ts
 
 .impeccable/
 .claude/
+.agents/
 docs/
 .superpowers/
 
-ROADMAP_FIX.md
+ROADMAP_FIX.mdgraphify-out/
+graphify-out/
