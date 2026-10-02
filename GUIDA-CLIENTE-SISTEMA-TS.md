@@ -15,11 +15,28 @@ Per poter comunicare con il Ministero, è necessario inserire le tue credenziali
    - **Nome Utente**: il tuo Codice Fiscale da professionista sanitario.
    - **Password**: la tua password di accesso al portale Sistema TS.
    - **Pincode**: il codice PIN numerico di sicurezza rilasciato dal Ministero insieme alle credenziali.
-   - **Natura IVA predefinita**: impostata automaticamente su `N2.2` (prestazioni sanitarie esenti da IVA ai sensi dell'art. 10 DPR 633/72).
+   - **Natura IVA predefinita**: impostata automaticamente su `N2.2` (operazioni non soggette, regime forfettario). Se operi in regime ordinario con prestazioni sanitarie esenti ai sensi dell'art. 10 DPR 633/72, scegli `N4`.
    - *(Opzionale)* **Codice Regione / ASL / Struttura**: solo se richiesto per la tua convenzione specifica o se operi all'interno di una struttura accreditata (altrimenti lascia vuoto o sui valori di default `000`).
 3. Clicca su **Salva Impostazioni**.
 
 > 🔒 **Nota sulla Sicurezza**: Tutte le tue credenziali (password e pincode) vengono salvate nel database con **cifratura di grado bancario AES-256-GCM**. Nessuno (neppure gli amministratori del sistema) può leggerle in chiaro.
+
+### Ambiente di test e ambiente di produzione (per chi gestisce il server)
+
+L'ambiente a cui il gestionale invia non si sceglie dall'app ma dalle variabili d'ambiente del server (`.env.prod`):
+
+- **Senza variabili `SISTEMATS_*`** il gestionale usa l'**ambiente di test** di Sogei: gli invii non hanno valore fiscale. È l'impostazione predefinita, da usare per le prove con le credenziali di test.
+- **Per l'ambiente di produzione** vanno impostati i quattro indirizzi di produzione e `SISTEMATS_ALLOW_PRODUCTION=true`. Senza quest'ultima, un indirizzo che non sia di test viene rifiutato, così non si invia in produzione per errore.
+
+| Variabile | Ambiente di test (predefinito) | Ambiente di produzione |
+|---|---|---|
+| `SISTEMATS_ENDPOINT_INVIO` | `https://invioSS730pTest.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort` | `https://invioSS730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort` |
+| `SISTEMATS_ENDPOINT_ESITO` | `https://invioSS730pTest.sanita.finanze.it/EsitoStatoInviiWEB/EsitoInvioDatiSpesa730Service` | `https://invioSS730p.sanita.finanze.it/EsitoStatoInviiWEB/EsitoInvioDatiSpesa730Service` |
+| `SISTEMATS_ENDPOINT_RICEVUTA` | `https://invioSS730pTest.sanita.finanze.it/Ricevute730ServiceWeb/ricevutePdf` | `https://invioSS730p.sanita.finanze.it/Ricevute730ServiceWeb/ricevutePdf` |
+| `SISTEMATS_ENDPOINT_ERRORI` | `https://invioSS730pTest.sanita.finanze.it/EsitoStatoInviiWEB/DettaglioErrori730Service` | `https://invioSS730p.sanita.finanze.it/EsitoStatoInviiWEB/DettaglioErrori730Service` |
+| `SISTEMATS_ALLOW_PRODUCTION` | (non impostata) | `true` |
+
+Indirizzi tratti dalla documentazione Sogei. Dopo ogni modifica a `.env.prod` il container va riavviato (`docker compose -f docker-compose.prod.yml --env-file .env.prod up -d`). Al passaggio in produzione vanno aggiornate anche le credenziali in **Impostazioni ➔ Sistema TS**: quelle di test e quelle reali sono diverse.
 
 ---
 
