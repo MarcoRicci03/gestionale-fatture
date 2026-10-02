@@ -86,9 +86,9 @@ ping_healthcheck() {
   fi
 
   if [ "$ok" = "1" ]; then
-    url="$BACKUP_HEALTHCHECK_PING_URL"
+    url="{$BACKUP_HEALTHCHECK_PING_URL}?status=up&msg=OK"
   else
-    url="$BACKUP_HEALTHCHECK_PING_URL/fail"
+    url="{$BACKUP_HEALTHCHECK_PING_URL/fail}?status=down&msg=FALLITO"
   fi
 
   if ! curl -fsS -m 10 --retry 3 -o /dev/null "$url"; then

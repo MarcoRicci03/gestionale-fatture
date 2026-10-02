@@ -108,6 +108,8 @@ services:
     cpus: 0.5
     networks:
       - internal
+    extra_hosts:
+      - "uptime-kuma.kusy:192.168.0.101"
 
   audit-log-retention:
     image: gestionale-fatture-app
